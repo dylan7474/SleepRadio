@@ -59,12 +59,14 @@ data class RadioStation(
     val description: String,
 ) {
     companion object {
-        /** Curated starter set. User-added stations come in a later chunk. */
+        /** Curated starter set; the user adds their own via manual entry or the
+         *  online directory (Radio Browser). BBC HLS "pool" ids rotate every few
+         *  months — if Radio 4 stops, re-add it from the directory. */
         val bundled: List<RadioStation> = listOf(
             RadioStation(
                 id = "bbc_radio_4",
                 name = "BBC Radio 4",
-                streamUrl = "http://as-hls-ww-live.akamaized.net/pool_904/live/ww/bbc_radio_fourfm/bbc_radio_fourfm.isml/bbc_radio_fourfm-audio%3d96000.norewind.m3u8",
+                streamUrl = "http://as-hls-ww-live.akamaized.net/pool_55057080/live/ww/bbc_radio_fourfm/bbc_radio_fourfm.isml/bbc_radio_fourfm-audio=320000.norewind.m3u8",
                 description = "Speech, news & drama",
             ),
             RadioStation(

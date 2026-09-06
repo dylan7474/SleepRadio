@@ -23,6 +23,7 @@ import org.dylanjones.sleepradio.core.data.AMBIENT_PATTERN_SLOTS
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
+import org.dylanjones.sleepradio.core.data.RadioDirectory
 import org.dylanjones.sleepradio.core.data.RadioStation
 import org.dylanjones.sleepradio.core.data.SettingsRepository
 import org.dylanjones.sleepradio.core.data.SlotRepository
@@ -42,7 +43,13 @@ data class PlayerUiState(
     /** Music-folder albums from the user-chosen SAF tree (the only music source). */
     val folderAlbums: List<FolderAlbum> = emptyList(),
     val musicFolderChosen: Boolean = false,
+    /** Bundled + user-added radio stations. */
     val stations: List<RadioStation> = emptyList(),
+    /** Which of [stations] are user-added (deletable). */
+    val customStationIds: Set<String> = emptySet(),
+    /** Results of the last online-directory search. */
+    val directoryResults: List<RadioStation> = emptyList(),
+    val directorySearching: Boolean = false,
     val audiobooks: List<Audiobook> = emptyList(),
     val audiobooksFolderChosen: Boolean = false,
     val playback: PlaybackState = PlaybackState(),
@@ -95,7 +102,10 @@ class PlayerViewModel @Inject constructor(
             PlayerUiState(
                 folderAlbums = l.folderAlbums,
                 musicFolderChosen = l.musicTreeUri != null,
-                stations = RadioStation.bundled,
+                stations = RadioStation.bundled + l.customStations,
+                customStationIds = l.customStations.mapTo(HashSet()) { it.id },
+                directoryResults = l.directoryResults,
+                directorySearching = l.directorySearching,
                 audiobooks = l.audiobooks,
                 audiobooksFolderChosen = l.audiobooksTreeUri != null,
                 playback = pb,
@@ -154,6 +164,9 @@ class PlayerViewModel @Inject constructor(
         // Sleep-timer: seed the duration, mirror the running timer into UI state.
         settings.sleepDurationMin
             .onEach { min -> local.update { it.copy(sleepDurationMin = min) } }
+            .launchIn(viewModelScope)
+        settings.customStations
+            .onEach { list -> local.update { it.copy(customStations = list) } }
             .launchIn(viewModelScope)
         playback.sleepTimer
             .onEach { st -> local.update { it.copy(sleepTimer = st) } }
@@ -217,6 +230,50 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { slots.assign(slot) }
         local.value = local.value.copy(pickerForSlot = null)
         playSlot(slot)
+    }
+
+    // --- custom radio stations & online directory ---
+
+    /** Add a station from the manual "name + URL" form. */
+    fun addManualStation(name: String, url: String) {
+        val n = name.trim()
+        var u = url.trim()
+        if (u.isBlank()) return
+        if (!u.contains("://")) u = "http://$u"
+        val station = RadioStation(
+            id = "custom_${u.hashCode().toUInt().toString(16)}",
+            name = n.ifBlank { u.substringAfter("://").substringBefore("/") },
+            streamUrl = u,
+            description = "Added by you",
+        )
+        viewModelScope.launch { settings.addCustomStation(station) }
+    }
+
+    fun removeStation(id: String) {
+        viewModelScope.launch { settings.removeCustomStation(id) }
+    }
+
+    fun searchDirectory(query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) {
+            local.update { it.copy(directoryResults = emptyList(), directorySearching = false) }
+            return
+        }
+        local.update { it.copy(directorySearching = true) }
+        viewModelScope.launch {
+            val results = RadioDirectory.search(q)
+            local.update { it.copy(directoryResults = results, directorySearching = false) }
+        }
+    }
+
+    fun clearDirectory() {
+        local.update { it.copy(directoryResults = emptyList(), directorySearching = false) }
+    }
+
+    /** Directory result tapped: remember it, assign to [index], and play. */
+    fun addAndAssignStation(index: Int, station: RadioStation) {
+        viewModelScope.launch { settings.addCustomStation(station) }
+        assignStationToSlot(index, station)
     }
 
     fun assignFolderAlbumToSlot(index: Int, album: FolderAlbum) {
@@ -349,5 +406,8 @@ class PlayerViewModel @Inject constructor(
         val sleepDurationMin: Int = 30,
         val sleepTimer: SleepTimerState = SleepTimerState(),
         val ambientPatterns: List<AmbientPattern?> = List(AMBIENT_PATTERN_SLOTS) { null },
+        val customStations: List<RadioStation> = emptyList(),
+        val directoryResults: List<RadioStation> = emptyList(),
+        val directorySearching: Boolean = false,
     )
 }

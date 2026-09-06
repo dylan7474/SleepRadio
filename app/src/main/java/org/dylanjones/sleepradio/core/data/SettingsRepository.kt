@@ -4,6 +4,8 @@ import kotlinx.coroutines.flow.Flow
 import org.dylanjones.sleepradio.core.audio.AmbientPattern
 import org.dylanjones.sleepradio.core.design.SkinId
 
+// RadioStation lives in this package (SourceModels.kt).
+
 /** Number of saveable ambient PATTERN slots. */
 const val AMBIENT_PATTERN_SLOTS = 3
 
@@ -43,4 +45,12 @@ interface SettingsRepository {
     val sleepDurationMin: Flow<Int>
 
     suspend fun setSleepDurationMin(minutes: Int)
+
+    /** User-added radio stations (manual entry or from the online directory),
+     *  in the order they were added. */
+    val customStations: Flow<List<RadioStation>>
+
+    suspend fun addCustomStation(station: RadioStation)
+
+    suspend fun removeCustomStation(id: String)
 }

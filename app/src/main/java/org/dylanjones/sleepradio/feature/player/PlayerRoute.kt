@@ -5,6 +5,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,10 +21,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,7 +42,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -94,6 +103,8 @@ fun PlayerRoute(
     var menuOpen by remember { mutableStateOf(false) }
     var ambientDialogOpen by remember { mutableStateOf(false) }
     var sleepDialogOpen by remember { mutableStateOf(false) }
+    var addStationOpen by remember { mutableStateOf(false) }
+    var directoryOpen by remember { mutableStateOf(false) }
 
     val actions = PlayerActions(
         onMenu = { menuOpen = true },
@@ -163,17 +174,43 @@ fun PlayerRoute(
         state.pickerForSlot?.let { slotIndex ->
             SourcePickerDialog(
                 stations = state.stations,
+                customStationIds = state.customStationIds,
                 folderAlbums = state.folderAlbums,
                 musicFolderChosen = state.musicFolderChosen,
                 audiobooks = state.audiobooks,
                 audiobooksFolderChosen = state.audiobooksFolderChosen,
                 onPickStation = { playerViewModel.assignStationToSlot(slotIndex, it) },
+                onRemoveStation = playerViewModel::removeStation,
+                onAddManual = { addStationOpen = true },
+                onBrowseDirectory = { directoryOpen = true },
                 onPickFolderAlbum = { playerViewModel.assignFolderAlbumToSlot(slotIndex, it) },
                 onPickAudiobook = { playerViewModel.assignAudiobookToSlot(slotIndex, it) },
                 onChooseAudiobooksFolder = { audiobooksFolderLauncher.launch(null) },
                 onChooseMusicFolder = { musicFolderLauncher.launch(null) },
                 onDismiss = playerViewModel::dismissPicker,
             )
+
+            if (addStationOpen) {
+                AddStationDialog(
+                    onAdd = { name, url -> playerViewModel.addManualStation(name, url) },
+                    onDismiss = { addStationOpen = false },
+                )
+            }
+            if (directoryOpen) {
+                DirectoryDialog(
+                    results = state.directoryResults,
+                    searching = state.directorySearching,
+                    onSearch = playerViewModel::searchDirectory,
+                    onPick = {
+                        playerViewModel.addAndAssignStation(slotIndex, it)
+                        directoryOpen = false
+                    },
+                    onDismiss = {
+                        directoryOpen = false
+                        playerViewModel.clearDirectory()
+                    },
+                )
+            }
         }
     }
 }
@@ -226,11 +263,15 @@ private fun SkinChoiceCard(title: String, subtitle: String, onClick: () -> Unit)
 @Composable
 private fun SourcePickerDialog(
     stations: List<RadioStation>,
+    customStationIds: Set<String>,
     folderAlbums: List<FolderAlbum>,
     musicFolderChosen: Boolean,
     audiobooks: List<Audiobook>,
     audiobooksFolderChosen: Boolean,
     onPickStation: (RadioStation) -> Unit,
+    onRemoveStation: (String) -> Unit,
+    onAddManual: () -> Unit,
+    onBrowseDirectory: () -> Unit,
     onPickFolderAlbum: (FolderAlbum) -> Unit,
     onPickAudiobook: (Audiobook) -> Unit,
     onChooseAudiobooksFolder: () -> Unit,
@@ -245,8 +286,22 @@ private fun SourcePickerDialog(
         text = {
             LazyColumn(Modifier.heightIn(max = 460.dp)) {
                 item { SectionHeader("INTERNET RADIO") }
+                item {
+                    PickerRow("＋  Add a station manually…", "Enter a name and stream URL", onAddManual)
+                    HorizontalDivider()
+                }
+                item {
+                    PickerRow("⌕  Browse the online directory…", "Search radio-browser.info", onBrowseDirectory)
+                    HorizontalDivider()
+                }
                 items(stations, key = { it.id }) { station ->
-                    PickerRow(station.name, station.description) { onPickStation(station) }
+                    StationRow(
+                        name = station.name,
+                        description = station.description,
+                        deletable = station.id in customStationIds,
+                        onClick = { onPickStation(station) },
+                        onRemove = { onRemoveStation(station.id) },
+                    )
                     HorizontalDivider()
                 }
 
@@ -473,4 +528,137 @@ private fun PickerRow(primary: String, secondary: String, onClick: () -> Unit) {
         Text(primary, fontWeight = FontWeight.SemiBold, maxLines = 1)
         Text(secondary, fontSize = 12.sp, maxLines = 1, textAlign = TextAlign.Start)
     }
+}
+
+@Composable
+private fun StationRow(
+    name: String,
+    description: String,
+    deletable: Boolean,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            Modifier
+                .weight(1f)
+                .clickable(onClick = onClick)
+                .padding(vertical = 12.dp),
+        ) {
+            Text(
+                name,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(description, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (deletable) {
+            TextButton(onClick = onRemove) { Text("Remove") }
+        }
+    }
+}
+
+@Composable
+private fun AddStationDialog(
+    onAdd: (name: String, url: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = {
+            TextButton(
+                enabled = url.isNotBlank(),
+                onClick = { onAdd(name, url); onDismiss() },
+            ) { Text("Add") }
+        },
+        title = { Text("Add a station") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.padding(6.dp))
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("Stream URL") },
+                    placeholder = { Text("http://…") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { if (url.isNotBlank()) { onAdd(name, url); onDismiss() } },
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun DirectoryDialog(
+    results: List<RadioStation>,
+    searching: Boolean,
+    onSearch: (String) -> Unit,
+    onPick: (RadioStation) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text("Online directory") },
+        text = {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        label = { Text("Search stations") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { onSearch(query) }) { Text("Go") }
+                }
+                Spacer(Modifier.padding(4.dp))
+                when {
+                    searching -> Row(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) { CircularProgressIndicator() }
+
+                    results.isEmpty() -> Text(
+                        "Type a station name and tap Go.",
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(vertical = 12.dp),
+                    )
+
+                    else -> LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                        items(results, key = { it.id }) { station ->
+                            PickerRow(station.name, station.description) { onPick(station) }
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            }
+        },
+    )
 }

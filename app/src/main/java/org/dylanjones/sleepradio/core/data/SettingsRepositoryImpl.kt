@@ -72,12 +72,53 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_SLEEP_MIN] = minutes.coerceIn(1, 600) }
     }
 
+    override val customStations: Flow<List<RadioStation>> =
+        dataStore.data.map { prefs -> decodeStations(prefs[KEY_CUSTOM_STATIONS]) }
+
+    override suspend fun addCustomStation(station: RadioStation) {
+        dataStore.edit { prefs ->
+            val list = decodeStations(prefs[KEY_CUSTOM_STATIONS])
+                .filterNot { it.id == station.id || it.streamUrl == station.streamUrl } + station
+            prefs[KEY_CUSTOM_STATIONS] = encodeStations(list)
+        }
+    }
+
+    override suspend fun removeCustomStation(id: String) {
+        dataStore.edit { prefs ->
+            val list = decodeStations(prefs[KEY_CUSTOM_STATIONS]).filterNot { it.id == id }
+            prefs[KEY_CUSTOM_STATIONS] = encodeStations(list)
+        }
+    }
+
     private companion object {
         val KEY_SKIN = stringPreferencesKey("skin_id")
         val KEY_AUDIOBOOKS_TREE = stringPreferencesKey("audiobooks_tree_uri")
         val KEY_MUSIC_TREE = stringPreferencesKey("music_tree_uri")
         val KEY_AMBIENT = stringPreferencesKey("ambient_current")
         val KEY_SLEEP_MIN = intPreferencesKey("sleep_duration_min")
+        val KEY_CUSTOM_STATIONS = stringPreferencesKey("custom_stations")
+
+        // Records separated by '\n', fields within a record by unit separator.
+        private const val FS = '\u001F'
+
+        fun encodeStations(list: List<RadioStation>): String = list.joinToString("\n") {
+            listOf(it.id, it.name, it.streamUrl, it.description)
+                .joinToString(FS.toString()) { f -> f.replace('\n', ' ').replace(FS, ' ') }
+        }
+
+        fun decodeStations(raw: String?): List<RadioStation> {
+            if (raw.isNullOrBlank()) return emptyList()
+            return raw.split('\n').mapNotNull { line ->
+                val p = line.split(FS)
+                if (p.size < 3 || p[0].isBlank() || p[2].isBlank()) return@mapNotNull null
+                RadioStation(
+                    id = p[0],
+                    name = p[1],
+                    streamUrl = p[2],
+                    description = p.getOrElse(3) { "" },
+                )
+            }
+        }
 
         fun patternKey(index: Int) = stringPreferencesKey("ambient_pattern_$index")
 
