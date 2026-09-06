@@ -19,7 +19,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import org.dylanjones.sleepradio.core.audio.AudioChannel
+import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.di.MainDispatcher
 import org.dylanjones.sleepradio.media.Track
 import javax.inject.Inject
@@ -48,6 +52,7 @@ data class PlaybackState(
 class PlaybackConnection @Inject constructor(
     @ApplicationContext context: Context,
     @MainDispatcher mainDispatcher: CoroutineDispatcher,
+    private val mixer: MixerController,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
 
@@ -71,8 +76,17 @@ class PlaybackConnection @Inject constructor(
         future = f
         f.addListener({
             controller = f.get().apply { addListener(listener) }
+            applyMainGain()
             pushSnapshot()
         }, ContextCompat.getMainExecutor(context))
+
+        // Apply VOL / BAL to Channel A's output whenever the mixer changes.
+        mixer.state.onEach { applyMainGain() }.launchIn(scope)
+    }
+
+    private fun applyMainGain() {
+        val gain = mixer.state.value.effectiveGain(AudioChannel.MAIN)
+        controller?.volume = gain.coerceIn(0f, 1f)
     }
 
     fun playTracks(tracks: List<Track>, startIndex: Int = 0) {

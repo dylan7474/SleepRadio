@@ -40,6 +40,9 @@ private val noopActions = PlayerActions(
     onNext = {},
     onPrevious = {},
     onSeek = {},
+    onVolumeChange = {},
+    onBalanceChange = {},
+    onSleepFractionChange = {},
 )
 
 @Preview(name = "Neon", widthDp = 412, heightDp = 980)

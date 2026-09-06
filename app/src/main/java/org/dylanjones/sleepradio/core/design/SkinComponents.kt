@@ -1,5 +1,10 @@
 package org.dylanjones.sleepradio.core.design
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -189,6 +195,18 @@ fun TransportCluster(
     modifier: Modifier = Modifier,
 ) {
     val c = LocalAppSkin.current.colors
+
+    val pulse = rememberInfiniteTransition(label = "ring")
+    val glow by pulse.animateFloat(
+        initialValue = if (isPlaying) 0.15f else 0.28f,
+        targetValue = if (isPlaying) 0.55f else 0.28f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "glow",
+    )
+
     androidx.compose.foundation.layout.Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally),
@@ -196,23 +214,34 @@ fun TransportCluster(
     ) {
         CircleGlyphButton("⏮", onPrevious, enabled = hasPrevious)
         Box(
-            Modifier
-                .size(74.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(c.accent.copy(alpha = 0.35f), Color.Transparent),
-                    ),
-                )
-                .border(2.dp, c.accent, CircleShape)
-                .clickable(onClick = onPlayPause),
+            Modifier.size(84.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = if (isPlaying) "⏸" else "▶",
-                color = c.textPrimary,
-                fontSize = 26.sp,
+            Box(
+                Modifier
+                    .size(84.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(c.glow.copy(alpha = glow), Color.Transparent),
+                        ),
+                    ),
             )
+            Box(
+                Modifier
+                    .size(70.dp)
+                    .clip(CircleShape)
+                    .background(c.panelTop)
+                    .border(2.dp, c.accent, CircleShape)
+                    .clickable(onClick = onPlayPause),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (isPlaying) "⏸" else "▶",
+                    color = c.textPrimary,
+                    fontSize = 26.sp,
+                )
+            }
         }
         CircleGlyphButton("⏭", onNext, enabled = hasNext)
     }

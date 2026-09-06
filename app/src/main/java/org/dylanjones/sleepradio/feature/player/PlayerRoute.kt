@@ -75,6 +75,9 @@ fun PlayerRoute(
         onNext = playerViewModel::next,
         onPrevious = playerViewModel::previous,
         onSeek = playerViewModel::seekTo,
+        onVolumeChange = playerViewModel::onVolumeChange,
+        onBalanceChange = playerViewModel::onBalanceChange,
+        onSleepFractionChange = playerViewModel::onSleepFractionChange,
     )
 
     SkinBackground(skin) {

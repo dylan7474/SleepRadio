@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.dylanjones.sleepradio.core.audio.MixerController
+import org.dylanjones.sleepradio.core.design.sleepMinutesFor
 import org.dylanjones.sleepradio.media.Album
 import org.dylanjones.sleepradio.media.MusicRepository
 import org.dylanjones.sleepradio.playback.PlaybackConnection
@@ -35,11 +37,15 @@ data class PlayerUiState(
     val nowPlayingAlbumId: Long? = null,
     val presets: List<PresetSlot?> = List(PRESET_COUNT) { null },
     val pickerForSlot: Int? = null,
-    /** VOL knob 0..1 — static in Phase 2, wired to the mixer in Phase 3. */
+    /** VOL knob 0..1 — master gain, applied to Channel A output. */
     val volume: Float = 0.8f,
-    /** BAL knob 0..1 (0 = main, 1 = noise) — static in Phase 2. */
+    /** BAL knob 0..1 (0 = main, 1 = noise) — equal-power A↔B crossfade. */
     val balance: Float = 0.5f,
-)
+    /** Sleep-duration slider 0..1 (15–60 min). Wired to the timer in Phase 6. */
+    val sleepFraction: Float = 1f / 3f,
+) {
+    val sleepMinutes: Int get() = sleepMinutesFor(sleepFraction)
+}
 
 const val PRESET_COUNT = 4
 
@@ -48,6 +54,7 @@ class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val musicRepository: MusicRepository,
     private val playback: PlaybackConnection,
+    private val mixer: MixerController,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(
@@ -55,7 +62,7 @@ class PlayerViewModel @Inject constructor(
     )
 
     val uiState: StateFlow<PlayerUiState> =
-        combine(local, playback.state) { l, pb ->
+        combine(local, playback.state, mixer.state) { l, pb, mx ->
             PlayerUiState(
                 hasAudioPermission = l.hasAudioPermission,
                 isLoadingLibrary = l.isLoadingLibrary,
@@ -64,6 +71,9 @@ class PlayerViewModel @Inject constructor(
                 nowPlayingAlbumId = l.nowPlayingAlbumId,
                 presets = l.presets,
                 pickerForSlot = l.pickerForSlot,
+                volume = mx.masterGain,
+                balance = mx.crossfade,
+                sleepFraction = l.sleepFraction,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayerUiState())
 
@@ -118,6 +128,12 @@ class PlayerViewModel @Inject constructor(
     fun previous() = playback.previous()
     fun seekTo(positionMs: Long) = playback.seekTo(positionMs)
 
+    fun onVolumeChange(value: Float) = mixer.setVolume(value)
+    fun onBalanceChange(value: Float) = mixer.setBalance(value)
+    fun onSleepFractionChange(value: Float) {
+        local.value = local.value.copy(sleepFraction = value.coerceIn(0f, 1f))
+    }
+
     private fun loadLibrary() {
         if (local.value.isLoadingLibrary) return
         local.value = local.value.copy(isLoadingLibrary = true)
@@ -138,5 +154,6 @@ class PlayerViewModel @Inject constructor(
         val nowPlayingAlbumId: Long? = null,
         val presets: List<PresetSlot?> = List(PRESET_COUNT) { null },
         val pickerForSlot: Int? = null,
+        val sleepFraction: Float = 1f / 3f,
     )
 }

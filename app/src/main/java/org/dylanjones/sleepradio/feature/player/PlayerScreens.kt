@@ -31,10 +31,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.dylanjones.sleepradio.core.design.LocalAppSkin
+import org.dylanjones.sleepradio.core.design.RotaryKnob
 import org.dylanjones.sleepradio.core.design.SkinPanel
 import org.dylanjones.sleepradio.core.design.SkinTile
 import org.dylanjones.sleepradio.core.design.StaticKnob
 import org.dylanjones.sleepradio.core.design.TransportCluster
+import org.dylanjones.sleepradio.core.design.VerticalSlider
 import org.dylanjones.sleepradio.core.design.Wordmark
 
 /** UI callbacks shared by both skinned screens. */
@@ -46,6 +48,9 @@ class PlayerActions(
     val onNext: () -> Unit,
     val onPrevious: () -> Unit,
     val onSeek: (Long) -> Unit,
+    val onVolumeChange: (Float) -> Unit,
+    val onBalanceChange: (Float) -> Unit,
+    val onSleepFractionChange: (Float) -> Unit,
 )
 
 private val placeholderFreqs = listOf("94.7", "101.3", "88.5", "106.1")
@@ -96,7 +101,7 @@ fun NeonPlayerScreen(
                 SkinTile(onClick = {}, modifier = Modifier.weight(1f)) {
                     TileTitle("SLEEP")
                     Text("🌙", fontSize = 20.sp)
-                    TileSub("30 MIN")
+                    TileSub("${state.sleepMinutes} MIN")
                 }
                 SkinTile(onClick = {}, modifier = Modifier.weight(1f)) {
                     TileTitle("NOISE")
@@ -120,8 +125,8 @@ fun NeonPlayerScreen(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            StaticKnob("VOL", state.volume)
-            StaticKnob("BAL", state.balance)
+            RotaryKnob("VOL", state.volume, actions.onVolumeChange)
+            RotaryKnob("BAL", state.balance, actions.onBalanceChange)
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -219,7 +224,12 @@ fun IndustrialPlayerScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                DurationSliderPlaceholder(Modifier.width(56.dp).height(150.dp))
+                DurationControl(
+                    fraction = state.sleepFraction,
+                    minutes = state.sleepMinutes,
+                    onChange = actions.onSleepFractionChange,
+                    modifier = Modifier.width(56.dp),
+                )
                 StaticKnob(
                     label = "AURAL PATTERNS",
                     value = 0.5f,
@@ -263,24 +273,22 @@ fun IndustrialPlayerScreen(
 }
 
 @Composable
-private fun DurationSliderPlaceholder(modifier: Modifier) {
+private fun DurationControl(
+    fraction: Float,
+    minutes: Int,
+    onChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val c = LocalAppSkin.current.colors
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(c.tileFace)
-                .border(1.dp, c.panelStroke, RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                Modifier
-                    .width(6.dp)
-                    .fillMaxSize()
-                    .padding(vertical = 12.dp)
-                    .background(c.accent.copy(alpha = 0.5f)),
-            )
-        }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        Text("$minutes", color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        VerticalSlider(
+            value = fraction,
+            onValueChange = onChange,
+            modifier = Modifier
+                .width(40.dp)
+                .height(140.dp),
+        )
         Text("DURATION", color = c.textDim, fontSize = 9.sp)
     }
 }
