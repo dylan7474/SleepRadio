@@ -98,47 +98,49 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_SLEEP_MIN = intPreferencesKey("sleep_duration_min")
         val KEY_CUSTOM_STATIONS = stringPreferencesKey("custom_stations")
 
-        // Records separated by '\n', fields within a record by unit separator.
-        private const val FS = '\u001F'
-
-        fun encodeStations(list: List<RadioStation>): String = list.joinToString("\n") {
-            listOf(it.id, it.name, it.streamUrl, it.description)
-                .joinToString(FS.toString()) { f -> f.replace('\n', ' ').replace(FS, ' ') }
-        }
-
-        fun decodeStations(raw: String?): List<RadioStation> {
-            if (raw.isNullOrBlank()) return emptyList()
-            return raw.split('\n').mapNotNull { line ->
-                val p = line.split(FS)
-                if (p.size < 3 || p[0].isBlank() || p[2].isBlank()) return@mapNotNull null
-                RadioStation(
-                    id = p[0],
-                    name = p[1],
-                    streamUrl = p[2],
-                    description = p.getOrElse(3) { "" },
-                )
-            }
-        }
-
         fun patternKey(index: Int) = stringPreferencesKey("ambient_pattern_$index")
+    }
+}
 
-        /** "noiseEnabled|noiseColor|binaural|binauralLevel" */
-        fun encodePattern(p: AmbientPattern): String =
-            "${p.noiseEnabled}|${p.noiseColor.name}|${p.binaural.name}|${p.binauralLevel}"
+// --- DataStore string codecs (file-level so they're unit-testable) ---
 
-        fun decodePattern(raw: String?): AmbientPattern? {
-            val parts = raw?.split('|') ?: return null
-            if (parts.size != 4) return null
-            return try {
-                AmbientPattern(
-                    noiseEnabled = parts[0].toBooleanStrict(),
-                    noiseColor = NoiseColor.valueOf(parts[1]),
-                    binaural = BinauralPreset.valueOf(parts[2]),
-                    binauralLevel = parts[3].toFloat().coerceIn(0f, 1f),
-                )
-            } catch (_: IllegalArgumentException) {
-                null
-            }
-        }
+/** Records separated by '\n', fields within a record by the unit-separator char. */
+private const val FS = '\u001F'
+
+internal fun encodeStations(list: List<RadioStation>): String = list.joinToString("\n") {
+    listOf(it.id, it.name, it.streamUrl, it.description)
+        .joinToString(FS.toString()) { f -> f.replace('\n', ' ').replace(FS, ' ') }
+}
+
+internal fun decodeStations(raw: String?): List<RadioStation> {
+    if (raw.isNullOrBlank()) return emptyList()
+    return raw.split('\n').mapNotNull { line ->
+        val p = line.split(FS)
+        if (p.size < 3 || p[0].isBlank() || p[2].isBlank()) return@mapNotNull null
+        RadioStation(
+            id = p[0],
+            name = p[1],
+            streamUrl = p[2],
+            description = p.getOrElse(3) { "" },
+        )
+    }
+}
+
+/** "noiseEnabled|noiseColor|binaural|binauralLevel" */
+internal fun encodePattern(p: AmbientPattern): String =
+    "${p.noiseEnabled}|${p.noiseColor.name}|${p.binaural.name}|${p.binauralLevel}"
+
+internal fun decodePattern(raw: String?): AmbientPattern? {
+    val parts = raw?.split('|') ?: return null
+    if (parts.size != 4) return null
+    return try {
+        AmbientPattern(
+            noiseEnabled = parts[0].toBooleanStrict(),
+            noiseColor = NoiseColor.valueOf(parts[1]),
+            binaural = BinauralPreset.valueOf(parts[2]),
+            binauralLevel = parts[3].toFloat().coerceIn(0f, 1f),
+        )
+    } catch (_: IllegalArgumentException) {
+        null
     }
 }
