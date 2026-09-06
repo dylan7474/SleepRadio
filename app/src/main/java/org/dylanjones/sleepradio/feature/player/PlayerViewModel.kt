@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.data.Audiobook
@@ -87,21 +88,23 @@ class PlayerViewModel @Inject constructor(
     private var lastProgressSaveMs = 0L
 
     init {
+        // Compute the library list first, THEN publish it in a single atomic
+        // update. Doing `local.value = local.value.copy(x = suspendingCall())`
+        // captures a stale `local.value` receiver across the suspension point,
+        // so the audiobook and music collectors racing here would clobber each
+        // other's lists.
         settings.audiobooksTreeUri.onEach { uri ->
-            local.value = local.value.copy(audiobooksTreeUri = uri)
-            local.value = local.value.copy(
-                audiobooks = uri?.let { runCatching { audiobookRepository.listBooks(it) }.getOrDefault(emptyList()) }
-                    ?: emptyList(),
-            )
+            val books = uri?.let {
+                runCatching { audiobookRepository.listBooks(it) }.getOrDefault(emptyList())
+            } ?: emptyList()
+            local.update { it.copy(audiobooksTreeUri = uri, audiobooks = books) }
         }.launchIn(viewModelScope)
 
         settings.musicTreeUri.onEach { uri ->
-            local.value = local.value.copy(musicTreeUri = uri)
-            local.value = local.value.copy(
-                folderAlbums = uri?.let {
-                    runCatching { musicRepository.folderAlbums(it) }.getOrDefault(emptyList())
-                } ?: emptyList(),
-            )
+            val albums = uri?.let {
+                runCatching { musicRepository.folderAlbums(it) }.getOrDefault(emptyList())
+            } ?: emptyList()
+            local.update { it.copy(musicTreeUri = uri, folderAlbums = albums) }
         }.launchIn(viewModelScope)
 
         // Persist audiobook progress while it plays.

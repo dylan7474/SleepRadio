@@ -3,6 +3,7 @@ package org.dylanjones.sleepradio.playback
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -24,15 +25,19 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        // Ask for Shoutcast/Icecast (ICY) in-stream metadata so radio stations
-        // report the current "Artist - Track". Media3 merges IcyInfo.title into
-        // Player.mediaMetadata and broadcasts it to the MediaController.
+        // For http(s) streams, ask for Shoutcast/Icecast (ICY) in-stream
+        // metadata so radio stations report the current "Artist - Track" —
+        // Media3 merges IcyInfo.title into Player.mediaMetadata. Wrap it in a
+        // DefaultDataSource.Factory so content:// / file:// URIs (local music,
+        // audiobooks) still resolve to ContentDataSource / FileDataSource
+        // instead of being forced through HTTP.
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("SleepRadio/1.0 (Android)")
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(mapOf("Icy-MetaData" to "1"))
+        val dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
         val player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(dataSourceFactory))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)

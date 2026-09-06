@@ -2,6 +2,7 @@ package org.dylanjones.sleepradio.media
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
@@ -21,6 +22,10 @@ class AudiobookRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
+    private companion object {
+        const val TAG = "AudiobookRepository"
+    }
+
     private val audioExtensions =
         setOf("mp3", "m4a", "m4b", "aac", "ogg", "oga", "opus", "flac", "wav", "mka")
 
@@ -41,7 +46,7 @@ class AudiobookRepository @Inject constructor(
                     }
                 }
 
-                child.isFile && child.isAudio() -> {
+                child.isAudio() -> {
                     books += Audiobook(
                         id = child.uri.toString(),
                         title = (child.name ?: "Untitled").substringBeforeLast('.'),
@@ -50,6 +55,7 @@ class AudiobookRepository @Inject constructor(
                 }
             }
         }
+        Log.d(TAG, "listBooks($treeUri): ${books.size} books")
         books.sortedBy { it.title.lowercase() }
     }
 
