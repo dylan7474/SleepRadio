@@ -5,9 +5,12 @@ import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
+import androidx.documentfile.provider.DocumentFile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import org.dylanjones.sleepradio.core.data.Chapter
+import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.di.IoDispatcher
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -130,5 +133,75 @@ class MusicRepository @Inject constructor(
             }
         }
         out
+    }
+
+    // --- SAF music folder (an alternative to the MediaStore library) ---
+
+    private val audioExtensions =
+        setOf("mp3", "m4a", "m4b", "aac", "ogg", "oga", "opus", "flac", "wav", "mka", "wma")
+
+    /** Any folder under [treeUri] that directly contains audio files is an "album". */
+    suspend fun folderAlbums(treeUri: String): List<FolderAlbum> = withContext(io) {
+        val root = DocumentFile.fromTreeUri(context, Uri.parse(treeUri))
+        val out = ArrayList<FolderAlbum>()
+        if (root != null) {
+            val rootName = root.name ?: ""
+            val pending = ArrayDeque<Triple<DocumentFile, Int, String>>()
+            pending.add(Triple(root, 0, ""))
+            while (pending.isNotEmpty()) {
+                val (dir, depth, parentName) = pending.removeFirst()
+                val children = dir.listFiles()
+                val count = children.count { it.isFile && isAudioFile(it) }
+                if (count > 0) {
+                    val artist = if (parentName.isNotBlank() && parentName != rootName) parentName else ""
+                    out += FolderAlbum(dir.uri.toString(), dir.name ?: "Music", artist, count)
+                }
+                if (depth < 3) {
+                    for (child in children) {
+                        if (child.isDirectory) pending.add(Triple(child, depth + 1, dir.name ?: parentName))
+                    }
+                }
+            }
+        }
+        out.sortedBy { it.artist.lowercase() + " " + it.title.lowercase() }
+    }
+
+    /** Sorted audio files directly inside the folder-album [albumId] under [treeUri]. */
+    suspend fun folderTracks(treeUri: String, albumId: String): List<Chapter> = withContext(io) {
+        val root = DocumentFile.fromTreeUri(context, Uri.parse(treeUri))
+        var target: DocumentFile? = null
+        if (root != null) {
+            val pending = ArrayDeque<Pair<DocumentFile, Int>>()
+            pending.add(root to 0)
+            while (pending.isNotEmpty() && target == null) {
+                val (dir, depth) = pending.removeFirst()
+                if (dir.uri.toString() == albumId) {
+                    target = dir
+                } else if (depth < 3) {
+                    for (child in dir.listFiles()) {
+                        if (child.isDirectory) pending.add(child to depth + 1)
+                    }
+                }
+            }
+        }
+        val folder = target
+        if (folder == null) {
+            emptyList()
+        } else {
+            folder.listFiles()
+                .filter { it.isFile && isAudioFile(it) }
+                .sortedBy { (it.name ?: "").lowercase() }
+                .mapIndexed { i, f ->
+                    Chapter(i, (f.name ?: "Track ${i + 1}").substringBeforeLast('.'), f.uri.toString())
+                }
+        }
+    }
+
+    private fun isAudioFile(file: DocumentFile): Boolean {
+        val name = file.name ?: return false
+        val ext = name.substringAfterLast('.', "").lowercase()
+        if (ext in audioExtensions) return true
+        val type = file.type
+        return type != null && type.startsWith("audio/")
     }
 }

@@ -166,6 +166,7 @@ fun PlayerScreen(
 
 private fun SourceType.badge(): String = when (this) {
     SourceType.ALBUM -> "ALBUM"
+    SourceType.MUSIC_FOLDER -> "ALBUM"
     SourceType.AUDIOBOOK -> "BOOK"
     SourceType.RADIO -> "RADIO"
 }

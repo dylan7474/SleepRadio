@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.dylanjones.sleepradio.core.data.Audiobook
+import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.RadioStation
 import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.SkinId
@@ -70,17 +71,30 @@ fun PlayerRoute(
         }
     }
 
-    val folderLauncher = rememberLauncherForActivityResult(
+    fun persistTreeGrant(uri: android.net.Uri) {
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+    }
+
+    val audiobooksFolderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
     ) { uri ->
         if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
-            }
+            persistTreeGrant(uri)
             playerViewModel.onAudiobooksFolderChosen(uri.toString())
+        }
+    }
+
+    val musicFolderLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) {
+            persistTreeGrant(uri)
+            playerViewModel.onMusicFolderChosen(uri.toString())
         }
     }
 
@@ -128,13 +142,17 @@ fun PlayerRoute(
             SourcePickerDialog(
                 stations = state.stations,
                 albums = state.albums,
+                folderAlbums = state.folderAlbums,
+                musicFolderChosen = state.musicFolderChosen,
                 audiobooks = state.audiobooks,
                 audiobooksFolderChosen = state.audiobooksFolderChosen,
                 hasMusicAccess = state.hasAudioPermission,
                 onPickStation = { playerViewModel.assignStationToSlot(slotIndex, it) },
                 onPickAlbum = { playerViewModel.assignAlbumToSlot(slotIndex, it) },
+                onPickFolderAlbum = { playerViewModel.assignFolderAlbumToSlot(slotIndex, it) },
                 onPickAudiobook = { playerViewModel.assignAudiobookToSlot(slotIndex, it) },
-                onChooseFolder = { folderLauncher.launch(null) },
+                onChooseAudiobooksFolder = { audiobooksFolderLauncher.launch(null) },
+                onChooseMusicFolder = { musicFolderLauncher.launch(null) },
                 onGrantMusicAccess = {
                     permissionLauncher.launch(Manifest.permission.READ_MEDIA_AUDIO)
                     playerViewModel.retryLibraryLoad()
@@ -194,13 +212,17 @@ private fun SkinChoiceCard(title: String, subtitle: String, onClick: () -> Unit)
 private fun SourcePickerDialog(
     stations: List<RadioStation>,
     albums: List<Album>,
+    folderAlbums: List<FolderAlbum>,
+    musicFolderChosen: Boolean,
     audiobooks: List<Audiobook>,
     audiobooksFolderChosen: Boolean,
     hasMusicAccess: Boolean,
     onPickStation: (RadioStation) -> Unit,
     onPickAlbum: (Album) -> Unit,
+    onPickFolderAlbum: (FolderAlbum) -> Unit,
     onPickAudiobook: (Audiobook) -> Unit,
-    onChooseFolder: () -> Unit,
+    onChooseAudiobooksFolder: () -> Unit,
+    onChooseMusicFolder: () -> Unit,
     onGrantMusicAccess: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -222,7 +244,7 @@ private fun SourcePickerDialog(
                     PickerRow(
                         primary = if (audiobooksFolderChosen) "Change audiobooks folder…" else "Choose audiobooks folder…",
                         secondary = "Pick a folder of book folders",
-                        onClick = onChooseFolder,
+                        onClick = onChooseAudiobooksFolder,
                     )
                     HorizontalDivider()
                 }
@@ -244,12 +266,42 @@ private fun SourcePickerDialog(
                     HorizontalDivider()
                 }
 
-                item { SectionHeader("ALBUMS ON THIS DEVICE") }
+                item { SectionHeader("MUSIC — FROM A FOLDER") }
+                item {
+                    PickerRow(
+                        primary = if (musicFolderChosen) "Change music folder…" else "Choose music folder…",
+                        secondary = "Any subfolder with audio files is an album",
+                        onClick = onChooseMusicFolder,
+                    )
+                    HorizontalDivider()
+                }
+                if (musicFolderChosen && folderAlbums.isEmpty()) {
+                    item {
+                        Text(
+                            "No albums found in that folder.",
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                        )
+                    }
+                }
+                items(folderAlbums, key = { "folder_${it.id}" }) { album ->
+                    PickerRow(
+                        primary = album.title,
+                        secondary = listOfNotNull(
+                            album.artist.ifBlank { null },
+                            "${album.trackCount} tracks",
+                        ).joinToString(" · "),
+                        onClick = { onPickFolderAlbum(album) },
+                    )
+                    HorizontalDivider()
+                }
+
+                item { SectionHeader("MUSIC — DEVICE LIBRARY") }
                 if (!hasMusicAccess) {
                     item {
                         PickerRow(
                             primary = "Grant access to music",
-                            secondary = "Needed to list on-device albums",
+                            secondary = "Needed to list the device music library",
                             onClick = onGrantMusicAccess,
                         )
                         HorizontalDivider()
@@ -257,7 +309,7 @@ private fun SourcePickerDialog(
                 } else if (albums.isEmpty()) {
                     item {
                         Text(
-                            "No albums found on this device.",
+                            "No albums found in the device library.",
                             fontSize = 12.sp,
                             modifier = Modifier.padding(vertical = 12.dp),
                         )

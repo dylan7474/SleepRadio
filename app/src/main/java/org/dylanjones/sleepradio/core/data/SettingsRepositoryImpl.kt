@@ -35,8 +35,16 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_AUDIOBOOKS_TREE] = uri }
     }
 
+    override val musicTreeUri: Flow<String?> =
+        dataStore.data.map { it[KEY_MUSIC_TREE] }
+
+    override suspend fun setMusicTreeUri(uri: String) {
+        dataStore.edit { it[KEY_MUSIC_TREE] = uri }
+    }
+
     private companion object {
         val KEY_SKIN = stringPreferencesKey("skin_id")
         val KEY_AUDIOBOOKS_TREE = stringPreferencesKey("audiobooks_tree_uri")
+        val KEY_MUSIC_TREE = stringPreferencesKey("music_tree_uri")
     }
 }

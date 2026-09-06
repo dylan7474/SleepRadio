@@ -111,6 +111,34 @@ class PlaybackConnection @Inject constructor(
         c.play()
     }
 
+    /** Play a folder-album: its audio files as an ordinary queue. */
+    fun playFolderAlbum(files: List<Chapter>, albumTitle: String) {
+        val c = controller ?: return
+        if (files.isEmpty()) return
+        isRadio = false
+        isAudiobook = false
+        bookId = null
+        c.setPlaybackParameters(PlaybackParameters(1f))
+        val items = files.map { f ->
+            MediaItem.Builder()
+                .setUri(f.uri)
+                .setMediaId(f.uri)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(f.title)
+                        .setArtist(albumTitle)
+                        .setAlbumTitle(albumTitle)
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
+                        .build(),
+                )
+                .build()
+        }
+        c.setMediaItems(items, 0, 0L)
+        c.prepare()
+        c.play()
+    }
+
     /** Play an audiobook: chapters as a queue, restoring [startChapter] / [startPositionMs]. */
     fun playAudiobook(
         book: String,

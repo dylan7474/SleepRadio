@@ -19,4 +19,9 @@ interface SettingsRepository {
     val audiobooksTreeUri: Flow<String?>
 
     suspend fun setAudiobooksTreeUri(uri: String)
+
+    /** Persisted SAF tree URI for a music root folder, or null. */
+    val musicTreeUri: Flow<String?>
+
+    suspend fun setMusicTreeUri(uri: String)
 }

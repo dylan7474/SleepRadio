@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.data.Audiobook
+import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
 import org.dylanjones.sleepradio.core.data.RadioStation
 import org.dylanjones.sleepradio.core.data.SettingsRepository
@@ -41,6 +42,8 @@ data class PlayerUiState(
     val hasAudioPermission: Boolean = false,
     val isLoadingLibrary: Boolean = false,
     val albums: List<Album> = emptyList(),
+    val folderAlbums: List<FolderAlbum> = emptyList(),
+    val musicFolderChosen: Boolean = false,
     val stations: List<RadioStation> = emptyList(),
     val audiobooks: List<Audiobook> = emptyList(),
     val audiobooksFolderChosen: Boolean = false,
@@ -80,6 +83,8 @@ class PlayerViewModel @Inject constructor(
                 hasAudioPermission = l.hasAudioPermission,
                 isLoadingLibrary = l.isLoadingLibrary,
                 albums = l.albums,
+                folderAlbums = l.folderAlbums,
+                musicFolderChosen = l.musicTreeUri != null,
                 stations = RadioStation.bundled,
                 audiobooks = l.audiobooks,
                 audiobooksFolderChosen = l.audiobooksTreeUri != null,
@@ -103,6 +108,15 @@ class PlayerViewModel @Inject constructor(
             local.value = local.value.copy(
                 audiobooks = uri?.let { runCatching { audiobookRepository.listBooks(it) }.getOrDefault(emptyList()) }
                     ?: emptyList(),
+            )
+        }.launchIn(viewModelScope)
+
+        settings.musicTreeUri.onEach { uri ->
+            local.value = local.value.copy(musicTreeUri = uri)
+            local.value = local.value.copy(
+                folderAlbums = uri?.let {
+                    runCatching { musicRepository.folderAlbums(it) }.getOrDefault(emptyList())
+                } ?: emptyList(),
             )
         }.launchIn(viewModelScope)
 
@@ -134,6 +148,10 @@ class PlayerViewModel @Inject constructor(
 
     fun onAudiobooksFolderChosen(treeUri: String) {
         viewModelScope.launch { settings.setAudiobooksTreeUri(treeUri) }
+    }
+
+    fun onMusicFolderChosen(treeUri: String) {
+        viewModelScope.launch { settings.setMusicTreeUri(treeUri) }
     }
 
     /** Tap a preset slot: play it if assigned, otherwise open the picker for it. */
@@ -187,6 +205,19 @@ class PlayerViewModel @Inject constructor(
         playSlot(slot)
     }
 
+    fun assignFolderAlbumToSlot(index: Int, album: FolderAlbum) {
+        val slot = SourceSlot(
+            index = index,
+            type = SourceType.MUSIC_FOLDER,
+            refId = album.id,
+            label = album.title,
+            sublabel = album.artist.ifBlank { "${album.trackCount} tracks" },
+        )
+        viewModelScope.launch { slots.assign(slot) }
+        local.value = local.value.copy(pickerForSlot = null)
+        playSlot(slot)
+    }
+
     fun assignAudiobookToSlot(index: Int, book: Audiobook) {
         val slot = SourceSlot(
             index = index,
@@ -211,6 +242,14 @@ class PlayerViewModel @Inject constructor(
                 val tracks = musicRepository.tracksForAlbum(id)
                 if (tracks.isEmpty()) return@launch
                 playback.playTracks(tracks)
+                local.value = local.value.copy(nowPlayingRef = slot.refId)
+            }
+
+            SourceType.MUSIC_FOLDER -> viewModelScope.launch {
+                val tree = local.value.musicTreeUri ?: return@launch
+                val files = musicRepository.folderTracks(tree, slot.refId)
+                if (files.isEmpty()) return@launch
+                playback.playFolderAlbum(files, slot.label)
                 local.value = local.value.copy(nowPlayingRef = slot.refId)
             }
 
@@ -278,6 +317,8 @@ class PlayerViewModel @Inject constructor(
         val hasAudioPermission: Boolean = false,
         val isLoadingLibrary: Boolean = false,
         val albums: List<Album> = emptyList(),
+        val musicTreeUri: String? = null,
+        val folderAlbums: List<FolderAlbum> = emptyList(),
         val audiobooksTreeUri: String? = null,
         val audiobooks: List<Audiobook> = emptyList(),
         val nowPlayingRef: String? = null,
