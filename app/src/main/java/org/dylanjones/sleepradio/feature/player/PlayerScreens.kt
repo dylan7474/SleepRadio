@@ -34,7 +34,6 @@ import org.dylanjones.sleepradio.core.design.Wordmark
 /** UI callbacks for the player screen. */
 class PlayerActions(
     val onMenu: () -> Unit,
-    val onBell: () -> Unit,
     val onPresetClick: (Int) -> Unit,
     val onPresetLongClick: (Int) -> Unit,
     val onPlayPause: () -> Unit,
@@ -76,7 +75,7 @@ fun PlayerScreen(
             .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PlayerHeader(onMenu = actions.onMenu, onBell = actions.onBell) { Wordmark() }
+        PlayerHeader(onMenu = actions.onMenu) { Wordmark() }
         Spacer(Modifier.height(6.dp))
         NowPlayingBlock(state = pb, onSeek = actions.onSeek)
         Spacer(Modifier.height(10.dp))
@@ -117,6 +116,13 @@ fun PlayerScreen(
                     onClick = actions.onSleepTap,
                     onLongClick = actions.onSleepDurationPick,
                     active = state.sleepActive,
+                    contentDescription = if (state.sleepActive) {
+                        "Sleep timer running, ${formatTime(state.sleepRemainingMs)} left. " +
+                            "Double tap to cancel."
+                    } else {
+                        "Sleep timer, ${state.sleepDurationMin} minutes. Double tap to start, " +
+                            "long press to change."
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
@@ -133,6 +139,9 @@ fun PlayerScreen(
                     onClick = actions.onNoiseToggle,
                     onLongClick = actions.onNoiseColorPick,
                     active = state.noiseEnabled || binauralOn,
+                    contentDescription = "Noise and binaural: " +
+                        ambientSummary(state.noiseEnabled, state.noiseColor, binauralOn) +
+                        ". Double tap to toggle noise, long press for the ambient mix.",
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
@@ -154,6 +163,7 @@ fun PlayerScreen(
             onPrevious = actions.onPrevious,
             onPlayPause = actions.onPlayPause,
             onNext = actions.onNext,
+            isAudiobook = pb.isAudiobook,
         )
         Spacer(Modifier.height(10.dp))
         Row(
@@ -201,11 +211,18 @@ private fun PresetTile(
     onLongClick: () -> Unit,
 ) {
     val onTile = LocalAppSkin.current.colors.onTile
+    val label = if (slot == null) {
+        "Preset ${index + 1}, empty. Double tap to assign a source."
+    } else {
+        "Preset ${index + 1}, ${slot.label}${if (active) ", playing" else ""}. " +
+            "Double tap to play, long press to clear."
+    }
     SkinTile(
         onClick = onClick,
         onLongClick = onLongClick,
         modifier = modifier,
         active = active,
+        contentDescription = label,
     ) {
         Text(
             text = "${index + 1}",

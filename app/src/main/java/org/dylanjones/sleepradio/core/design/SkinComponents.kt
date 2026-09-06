@@ -34,6 +34,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import kotlin.math.cos
@@ -81,6 +83,7 @@ fun SkinTile(
     modifier: Modifier = Modifier,
     active: Boolean = false,
     onLongClick: (() -> Unit)? = null,
+    contentDescription: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = LocalAppSkin.current.colors
@@ -90,8 +93,14 @@ fun SkinTile(
         } else {
             Modifier.clickable(onClick = onClick)
         }
+    val a11y = if (contentDescription != null) {
+        Modifier.semantics { this.contentDescription = contentDescription }
+    } else {
+        Modifier
+    }
     Column(
         modifier
+            .then(a11y)
             .clip(RoundedCornerShape(14.dp))
             .background(c.tileBrush(active))
             .border(
@@ -171,6 +180,7 @@ fun StaticKnob(
 @Composable
 fun CircleGlyphButton(
     glyph: String,
+    contentDescription: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
     size: androidx.compose.ui.unit.Dp = 48.dp,
@@ -182,7 +192,7 @@ fun CircleGlyphButton(
             .clip(CircleShape)
             .background(c.panelTop)
             .border(1.dp, c.panelStroke, CircleShape)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(enabled = enabled, onClickLabel = contentDescription, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -203,6 +213,7 @@ fun TransportCluster(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
+    isAudiobook: Boolean = false,
 ) {
     val c = LocalAppSkin.current.colors
 
@@ -222,7 +233,12 @@ fun TransportCluster(
         horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CircleGlyphButton("⏮", onPrevious, enabled = hasPrevious)
+        CircleGlyphButton(
+            "⏮",
+            contentDescription = if (isAudiobook) "Back one minute" else "Previous",
+            onClick = onPrevious,
+            enabled = hasPrevious,
+        )
         Box(
             Modifier.size(84.dp),
             contentAlignment = Alignment.Center,
@@ -243,7 +259,10 @@ fun TransportCluster(
                     .clip(CircleShape)
                     .background(c.panelTop)
                     .border(2.dp, c.accent, CircleShape)
-                    .clickable(onClick = onPlayPause),
+                    .clickable(
+                        onClickLabel = if (isPlaying) "Pause" else "Play",
+                        onClick = onPlayPause,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -253,7 +272,12 @@ fun TransportCluster(
                 )
             }
         }
-        CircleGlyphButton("⏭", onNext, enabled = hasNext)
+        CircleGlyphButton(
+            "⏭",
+            contentDescription = if (isAudiobook) "Forward one minute" else "Next",
+            onClick = onNext,
+            enabled = hasNext,
+        )
     }
 }
 

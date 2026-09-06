@@ -35,7 +35,6 @@ private val previewState = PlayerUiState(
 
 private val noopActions = PlayerActions(
     onMenu = {},
-    onBell = {},
     onPresetClick = {},
     onPresetLongClick = {},
     onPlayPause = {},

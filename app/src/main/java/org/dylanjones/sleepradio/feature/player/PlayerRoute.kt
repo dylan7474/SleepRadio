@@ -131,7 +131,6 @@ fun PlayerRoute(
 
     val actions = PlayerActions(
         onMenu = { scope.launch { drawerState.open() } },
-        onBell = { aboutOpen = true },
         onPresetClick = playerViewModel::onPresetClicked,
         onPresetLongClick = playerViewModel::clearSlot,
         onPlayPause = playerViewModel::playPause,

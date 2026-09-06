@@ -51,7 +51,6 @@ import java.util.Locale
 @Composable
 fun PlayerHeader(
     onMenu: () -> Unit,
-    onBell: () -> Unit,
     modifier: Modifier = Modifier,
     center: @Composable () -> Unit,
 ) {
@@ -61,19 +60,20 @@ fun PlayerHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GlyphButton("≡", c.textPrimary, onMenu)
+        GlyphButton("≡", c.textPrimary, "Open menu", onMenu)
         center()
-        GlyphButton("🔔", c.textSecondary, onBell)
+        // Balance the ≡ button so the wordmark stays centred.
+        Spacer(Modifier.size(48.dp))
     }
 }
 
 @Composable
-private fun GlyphButton(glyph: String, color: Color, onClick: () -> Unit) {
+private fun GlyphButton(glyph: String, color: Color, description: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(40.dp)
+            .size(48.dp)
             .clip(CircleShape)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick, onClickLabel = description),
         contentAlignment = Alignment.Center,
     ) {
         Text(glyph, color = color, fontSize = 22.sp)
