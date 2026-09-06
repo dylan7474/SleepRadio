@@ -20,13 +20,28 @@ import org.dylanjones.sleepradio.playback.PlaybackConnection
 import org.dylanjones.sleepradio.playback.PlaybackState
 import javax.inject.Inject
 
+/** An assigned source-preset slot. Room-backed with the full source model in Phase 4. */
+data class PresetSlot(
+    val albumId: Long,
+    val label: String,
+    val sublabel: String,
+)
+
 data class PlayerUiState(
     val hasAudioPermission: Boolean = false,
     val isLoadingLibrary: Boolean = false,
     val albums: List<Album> = emptyList(),
     val playback: PlaybackState = PlaybackState(),
     val nowPlayingAlbumId: Long? = null,
+    val presets: List<PresetSlot?> = List(PRESET_COUNT) { null },
+    val pickerForSlot: Int? = null,
+    /** VOL knob 0..1 — static in Phase 2, wired to the mixer in Phase 3. */
+    val volume: Float = 0.8f,
+    /** BAL knob 0..1 (0 = main, 1 = noise) — static in Phase 2. */
+    val balance: Float = 0.5f,
 )
+
+const val PRESET_COUNT = 4
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -47,6 +62,8 @@ class PlayerViewModel @Inject constructor(
                 albums = l.albums,
                 playback = pb,
                 nowPlayingAlbumId = l.nowPlayingAlbumId,
+                presets = l.presets,
+                pickerForSlot = l.pickerForSlot,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayerUiState())
 
@@ -68,6 +85,32 @@ class PlayerViewModel @Inject constructor(
             playback.playTracks(tracks)
             local.value = local.value.copy(nowPlayingAlbumId = album.id)
         }
+    }
+
+    /** Tap a preset slot: play it if assigned, otherwise open the album picker for it. */
+    fun onPresetClicked(index: Int) {
+        val slot = local.value.presets.getOrNull(index)
+        if (slot == null) {
+            local.value = local.value.copy(pickerForSlot = index)
+        } else {
+            local.value.albums.firstOrNull { it.id == slot.albumId }?.let(::playAlbum)
+        }
+    }
+
+    fun dismissPicker() {
+        local.value = local.value.copy(pickerForSlot = null)
+    }
+
+    fun assignPresetAndPlay(index: Int, album: Album) {
+        val updated = local.value.presets.toMutableList().also {
+            it[index] = PresetSlot(
+                albumId = album.id,
+                label = album.title,
+                sublabel = album.artist,
+            )
+        }
+        local.value = local.value.copy(presets = updated, pickerForSlot = null)
+        playAlbum(album)
     }
 
     fun playPause() = playback.playPause()
@@ -93,5 +136,7 @@ class PlayerViewModel @Inject constructor(
         val isLoadingLibrary: Boolean = false,
         val albums: List<Album> = emptyList(),
         val nowPlayingAlbumId: Long? = null,
+        val presets: List<PresetSlot?> = List(PRESET_COUNT) { null },
+        val pickerForSlot: Int? = null,
     )
 }

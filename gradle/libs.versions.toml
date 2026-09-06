@@ -18,6 +18,8 @@ datastore = "1.2.1"
 ksp = "2.2.10-2.0.2"
 hilt = "2.60.1"
 hiltNavigationCompose = "1.4.0"
+# coil: deferred to Phase 7 — 3.6.2 pulls kotlin-stdlib 2.4.x which the
+# project's Kotlin 2.2.10 compiler cannot read.
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

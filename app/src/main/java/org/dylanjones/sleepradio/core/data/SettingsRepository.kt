@@ -4,12 +4,14 @@ import kotlinx.coroutines.flow.Flow
 import org.dylanjones.sleepradio.core.design.SkinId
 
 /**
- * App-wide user preferences. DataStore-backed implementation lands in Phase 2;
- * this interface exists so Phase 0 code can depend on the shape.
+ * App-wide user preferences, backed by DataStore.
  */
 interface SettingsRepository {
-    /** Currently selected visual skin. Defaults to [SkinId.NEON] on first run. */
+    /** Currently selected visual skin. Emits [SkinId.NEON] before the user has chosen. */
     val skin: Flow<SkinId>
+
+    /** True once the user has explicitly picked a skin (drives the first-run picker). */
+    val skinChosen: Flow<Boolean>
 
     suspend fun setSkin(skin: SkinId)
 }
