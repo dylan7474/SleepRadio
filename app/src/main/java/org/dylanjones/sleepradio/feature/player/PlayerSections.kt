@@ -97,17 +97,21 @@ fun NowPlayingBlock(
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.fillMaxWidth()) {
-                Label(if (state.isRadio) "Station" else "Artist")
-                Value(
-                    if (state.isRadio) (state.title ?: "—") else (state.artist ?: "—"),
-                    c.textPrimary,
-                )
+                val (topLabel, topValue) = when {
+                    state.isRadio -> "Station" to (state.title ?: "—")
+                    state.isAudiobook -> "Book" to (state.artist ?: "—")
+                    else -> "Artist" to (state.artist ?: "—")
+                }
+                val (botLabel, botValue) = when {
+                    state.isRadio -> "Stream" to (state.artist ?: "Live")
+                    state.isAudiobook -> "Chapter" to (state.title ?: "—")
+                    else -> "Track" to (state.title ?: "—")
+                }
+                Label(topLabel)
+                Value(topValue, c.textPrimary)
                 Spacer(Modifier.height(8.dp))
-                Label(if (state.isRadio) "Stream" else "Track")
-                Value(
-                    if (state.isRadio) (state.artist ?: "Live") else (state.title ?: "—"),
-                    c.accentAlt,
-                )
+                Label(botLabel)
+                Value(botValue, c.accentAlt)
             }
         }
         Spacer(Modifier.height(8.dp))

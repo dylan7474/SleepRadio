@@ -1,5 +1,8 @@
 package org.dylanjones.sleepradio.feature.player
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,6 +43,9 @@ class PlayerActions(
     val onNext: () -> Unit,
     val onPrevious: () -> Unit,
     val onSeek: (Long) -> Unit,
+    val onSkipBack: () -> Unit,
+    val onSkipForward: () -> Unit,
+    val onCycleSpeed: () -> Unit,
     val onVolumeChange: (Float) -> Unit,
     val onBalanceChange: (Float) -> Unit,
     val onSleepFractionChange: (Float) -> Unit,
@@ -125,7 +132,18 @@ fun PlayerScreen(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(if (pb.isAudiobook) 10.dp else 16.dp))
+        if (pb.isAudiobook) {
+            AudiobookControls(
+                chapterIndex = pb.chapterIndex,
+                chapterCount = pb.chapterCount,
+                speed = pb.speed,
+                onSkipBack = actions.onSkipBack,
+                onSkipForward = actions.onSkipForward,
+                onCycleSpeed = actions.onCycleSpeed,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         TransportCluster(
             isPlaying = pb.isPlaying,
             hasPrevious = pb.hasPrevious,
@@ -150,6 +168,50 @@ private fun SourceType.badge(): String = when (this) {
     SourceType.ALBUM -> "ALBUM"
     SourceType.AUDIOBOOK -> "BOOK"
     SourceType.RADIO -> "RADIO"
+}
+
+@Composable
+private fun AudiobookControls(
+    chapterIndex: Int,
+    chapterCount: Int,
+    speed: Float,
+    onSkipBack: () -> Unit,
+    onSkipForward: () -> Unit,
+    onCycleSpeed: () -> Unit,
+) {
+    val c = LocalAppSkin.current.colors
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Chip("−30s", c.textPrimary, onSkipBack)
+        Text(
+            "Ch ${chapterIndex + 1}/$chapterCount",
+            color = c.textSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Chip("${"%.2f".format(speed).trimEnd('0').trimEnd('.')}×", c.accent, onCycleSpeed)
+        Chip("+30s", c.textPrimary, onSkipForward)
+    }
+}
+
+@Composable
+private fun Chip(label: String, textColor: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    val c = LocalAppSkin.current.colors
+    Text(
+        text = label,
+        color = textColor,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+            .background(c.panelTop)
+            .border(1.dp, c.panelStroke, androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    )
 }
 
 @Composable

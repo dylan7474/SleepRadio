@@ -4,10 +4,11 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [SourceSlotEntity::class],
-    version = 1,
+    entities = [SourceSlotEntity::class, AudiobookProgressEntity::class],
+    version = 2,
     exportSchema = false,
 )
 abstract class SleepRadioDatabase : RoomDatabase() {
     abstract fun sourceSlotDao(): SourceSlotDao
+    abstract fun audiobookProgressDao(): AudiobookProgressDao
 }

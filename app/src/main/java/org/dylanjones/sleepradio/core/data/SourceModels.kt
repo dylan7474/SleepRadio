@@ -21,6 +21,27 @@ data class SourceSlot(
     val artworkUri: String? = null,
 )
 
+/** A local audiobook — a folder of chapter files, or a single file. */
+data class Audiobook(
+    /** Stable id = the book's document/tree-child URI string. */
+    val id: String,
+    val title: String,
+    val chapterCount: Int,
+)
+
+/** One chapter (audio file) of an audiobook. */
+data class Chapter(
+    val index: Int,
+    val title: String,
+    val uri: String,
+)
+
+/** Where playback of an audiobook should resume. */
+data class AudiobookProgress(
+    val chapterIndex: Int,
+    val positionMs: Long,
+)
+
 /** An internet-radio station. */
 data class RadioStation(
     val id: String,

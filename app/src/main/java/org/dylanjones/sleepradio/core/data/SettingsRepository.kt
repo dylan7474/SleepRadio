@@ -14,4 +14,9 @@ interface SettingsRepository {
     val skinChosen: Flow<Boolean>
 
     suspend fun setSkin(skin: SkinId)
+
+    /** Persisted SAF tree URI for the audiobooks root folder, or null. */
+    val audiobooksTreeUri: Flow<String?>
+
+    suspend fun setAudiobooksTreeUri(uri: String)
 }

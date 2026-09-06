@@ -22,8 +22,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import androidx.media3.common.PlaybackParameters
 import org.dylanjones.sleepradio.core.audio.AudioChannel
 import org.dylanjones.sleepradio.core.audio.MixerController
+import org.dylanjones.sleepradio.core.data.Chapter
 import org.dylanjones.sleepradio.di.MainDispatcher
 import org.dylanjones.sleepradio.media.Track
 import javax.inject.Inject
@@ -35,6 +37,11 @@ data class PlaybackState(
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val isRadio: Boolean = false,
+    val isAudiobook: Boolean = false,
+    val bookId: String? = null,
+    val chapterIndex: Int = 0,
+    val chapterCount: Int = 0,
+    val speed: Float = 1f,
     val title: String? = null,
     val artist: String? = null,
     val artworkUri: Uri? = null,
@@ -64,6 +71,8 @@ class PlaybackConnection @Inject constructor(
     private var future: ListenableFuture<MediaController>? = null
     private var ticker: Job? = null
     private var isRadio: Boolean = false
+    private var isAudiobook: Boolean = false
+    private var bookId: String? = null
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -94,15 +103,66 @@ class PlaybackConnection @Inject constructor(
     fun playTracks(tracks: List<Track>, startIndex: Int = 0) {
         val c = controller ?: return
         isRadio = false
+        isAudiobook = false
+        bookId = null
+        c.setPlaybackParameters(PlaybackParameters(1f))
         c.setMediaItems(tracks.map { it.toMediaItem() }, startIndex, /* startPositionMs = */ 0L)
         c.prepare()
         c.play()
+    }
+
+    /** Play an audiobook: chapters as a queue, restoring [startChapter] / [startPositionMs]. */
+    fun playAudiobook(
+        book: String,
+        chapters: List<Chapter>,
+        bookTitle: String,
+        startChapter: Int,
+        startPositionMs: Long,
+        speed: Float,
+    ) {
+        val c = controller ?: return
+        if (chapters.isEmpty()) return
+        isRadio = false
+        isAudiobook = true
+        bookId = book
+        val items = chapters.map { ch ->
+            MediaItem.Builder()
+                .setUri(ch.uri)
+                .setMediaId(ch.uri)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(ch.title)
+                        .setArtist(bookTitle)
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
+                        .build(),
+                )
+                .build()
+        }
+        c.setPlaybackParameters(PlaybackParameters(speed))
+        c.setMediaItems(items, startChapter.coerceIn(0, items.lastIndex), startPositionMs.coerceAtLeast(0L))
+        c.prepare()
+        c.play()
+    }
+
+    fun setSpeed(speed: Float) {
+        controller?.setPlaybackParameters(PlaybackParameters(speed.coerceIn(0.5f, 3f)))
+        pushSnapshot()
+    }
+
+    fun skipBy(deltaMs: Long) {
+        val c = controller ?: return
+        val target = (c.currentPosition + deltaMs).coerceAtLeast(0L)
+        c.seekTo(target)
     }
 
     /** Stream an internet-radio station on Channel A (live, no seek). */
     fun playRadio(url: String, name: String, description: String) {
         val c = controller ?: return
         isRadio = true
+        isAudiobook = false
+        bookId = null
+        c.setPlaybackParameters(PlaybackParameters(1f))
         val item = MediaItem.Builder()
             .setUri(url)
             .setMediaId(url)
@@ -161,6 +221,11 @@ class PlaybackConnection @Inject constructor(
             isPlaying = c.isPlaying,
             isBuffering = c.playbackState == Player.STATE_BUFFERING,
             isRadio = isRadio,
+            isAudiobook = isAudiobook,
+            bookId = bookId,
+            chapterIndex = if (isAudiobook) c.currentMediaItemIndex else 0,
+            chapterCount = if (isAudiobook) c.mediaItemCount else 0,
+            speed = c.playbackParameters.speed,
             title = md.title?.toString(),
             artist = md.artist?.toString(),
             artworkUri = md.artworkUri,

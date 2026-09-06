@@ -33,12 +33,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.RadioStation
 import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.SkinId
@@ -56,6 +58,8 @@ fun PlayerRoute(
     val state by playerViewModel.uiState.collectAsStateWithLifecycle()
     val skin = skinFor(skinId)
 
+    val context = LocalContext.current
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted -> playerViewModel.onAudioPermissionResult(granted) }
@@ -63,6 +67,20 @@ fun PlayerRoute(
     LaunchedEffect(state.hasAudioPermission) {
         if (!state.hasAudioPermission) {
             permissionLauncher.launch(Manifest.permission.READ_MEDIA_AUDIO)
+        }
+    }
+
+    val folderLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            playerViewModel.onAudiobooksFolderChosen(uri.toString())
         }
     }
 
@@ -77,6 +95,9 @@ fun PlayerRoute(
         onNext = playerViewModel::next,
         onPrevious = playerViewModel::previous,
         onSeek = playerViewModel::seekTo,
+        onSkipBack = playerViewModel::skipBack,
+        onSkipForward = playerViewModel::skipForward,
+        onCycleSpeed = playerViewModel::cycleSpeed,
         onVolumeChange = playerViewModel::onVolumeChange,
         onBalanceChange = playerViewModel::onBalanceChange,
         onSleepFractionChange = playerViewModel::onSleepFractionChange,
@@ -107,8 +128,12 @@ fun PlayerRoute(
             SourcePickerDialog(
                 stations = state.stations,
                 albums = state.albums,
+                audiobooks = state.audiobooks,
+                audiobooksFolderChosen = state.audiobooksFolderChosen,
                 onPickStation = { playerViewModel.assignStationToSlot(slotIndex, it) },
                 onPickAlbum = { playerViewModel.assignAlbumToSlot(slotIndex, it) },
+                onPickAudiobook = { playerViewModel.assignAudiobookToSlot(slotIndex, it) },
+                onChooseFolder = { folderLauncher.launch(null) },
                 onDismiss = playerViewModel::dismissPicker,
             )
         }
@@ -164,8 +189,12 @@ private fun SkinChoiceCard(title: String, subtitle: String, onClick: () -> Unit)
 private fun SourcePickerDialog(
     stations: List<RadioStation>,
     albums: List<Album>,
+    audiobooks: List<Audiobook>,
+    audiobooksFolderChosen: Boolean,
     onPickStation: (RadioStation) -> Unit,
     onPickAlbum: (Album) -> Unit,
+    onPickAudiobook: (Audiobook) -> Unit,
+    onChooseFolder: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -177,13 +206,37 @@ private fun SourcePickerDialog(
             LazyColumn(Modifier.heightIn(max = 460.dp)) {
                 item { SectionHeader("INTERNET RADIO") }
                 items(stations, key = { it.id }) { station ->
+                    PickerRow(station.name, station.description) { onPickStation(station) }
+                    HorizontalDivider()
+                }
+
+                item { SectionHeader("AUDIOBOOKS") }
+                item {
                     PickerRow(
-                        primary = station.name,
-                        secondary = station.description,
-                        onClick = { onPickStation(station) },
+                        primary = if (audiobooksFolderChosen) "Change audiobooks folder…" else "Choose audiobooks folder…",
+                        secondary = "Pick a folder of book folders",
+                        onClick = onChooseFolder,
                     )
                     HorizontalDivider()
                 }
+                if (audiobooksFolderChosen && audiobooks.isEmpty()) {
+                    item {
+                        Text(
+                            "No books found in that folder.",
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                        )
+                    }
+                }
+                items(audiobooks, key = { "book_${it.id}" }) { book ->
+                    PickerRow(
+                        primary = book.title,
+                        secondary = "${book.chapterCount} chapter${if (book.chapterCount == 1) "" else "s"}",
+                        onClick = { onPickAudiobook(book) },
+                    )
+                    HorizontalDivider()
+                }
+
                 item { SectionHeader("ALBUMS ON THIS DEVICE") }
                 if (albums.isEmpty()) {
                     item {

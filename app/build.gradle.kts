@@ -67,10 +67,13 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
-    // SleepRadio: Room (persisted source-preset slots)
+    // SleepRadio: Room (persisted source-preset slots + audiobook progress)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+
+    // SleepRadio: SAF folder access for audiobooks
+    implementation(libs.androidx.documentfile)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

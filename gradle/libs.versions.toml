@@ -19,6 +19,7 @@ ksp = "2.2.10-2.0.2"
 hilt = "2.60.1"
 hiltNavigationCompose = "1.4.0"
 room = "2.8.4"
+documentfile = "1.1.0"
 # coil: deferred to Phase 7 — 3.6.2 pulls kotlin-stdlib 2.4.x which the
 # project's Kotlin 2.2.10 compiler cannot read.
 
@@ -55,6 +56,7 @@ androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navig
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

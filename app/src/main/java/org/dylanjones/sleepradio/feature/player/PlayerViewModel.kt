@@ -12,26 +12,38 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.dylanjones.sleepradio.core.audio.MixerController
+import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
 import org.dylanjones.sleepradio.core.data.RadioStation
+import org.dylanjones.sleepradio.core.data.SettingsRepository
 import org.dylanjones.sleepradio.core.data.SlotRepository
 import org.dylanjones.sleepradio.core.data.SourceSlot
 import org.dylanjones.sleepradio.core.data.SourceType
+import org.dylanjones.sleepradio.core.data.db.AudiobookProgressDao
+import org.dylanjones.sleepradio.core.data.db.AudiobookProgressEntity
+import org.dylanjones.sleepradio.core.data.db.toDomain
 import org.dylanjones.sleepradio.core.design.sleepMinutesFor
 import org.dylanjones.sleepradio.media.Album
+import org.dylanjones.sleepradio.media.AudiobookRepository
 import org.dylanjones.sleepradio.media.MusicRepository
 import org.dylanjones.sleepradio.playback.PlaybackConnection
 import org.dylanjones.sleepradio.playback.PlaybackState
 import javax.inject.Inject
+
+private val SPEED_CYCLE = listOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 0.85f)
 
 data class PlayerUiState(
     val hasAudioPermission: Boolean = false,
     val isLoadingLibrary: Boolean = false,
     val albums: List<Album> = emptyList(),
     val stations: List<RadioStation> = emptyList(),
+    val audiobooks: List<Audiobook> = emptyList(),
+    val audiobooksFolderChosen: Boolean = false,
     val playback: PlaybackState = PlaybackState(),
     val nowPlayingRef: String? = null,
     val presets: List<SourceSlot?> = List(PRESET_COUNT) { null },
@@ -50,9 +62,12 @@ data class PlayerUiState(
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val musicRepository: MusicRepository,
+    private val audiobookRepository: AudiobookRepository,
     private val playback: PlaybackConnection,
     private val mixer: MixerController,
     private val slots: SlotRepository,
+    private val settings: SettingsRepository,
+    private val progressDao: AudiobookProgressDao,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(
@@ -66,6 +81,8 @@ class PlayerViewModel @Inject constructor(
                 isLoadingLibrary = l.isLoadingLibrary,
                 albums = l.albums,
                 stations = RadioStation.bundled,
+                audiobooks = l.audiobooks,
+                audiobooksFolderChosen = l.audiobooksTreeUri != null,
                 playback = pb,
                 nowPlayingRef = l.nowPlayingRef,
                 presets = presetSlots,
@@ -76,8 +93,36 @@ class PlayerViewModel @Inject constructor(
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayerUiState())
 
+    private var lastProgressSaveMs = 0L
+
     init {
         if (local.value.hasAudioPermission) loadLibrary()
+
+        settings.audiobooksTreeUri.onEach { uri ->
+            local.value = local.value.copy(audiobooksTreeUri = uri)
+            local.value = local.value.copy(
+                audiobooks = uri?.let { runCatching { audiobookRepository.listBooks(it) }.getOrDefault(emptyList()) }
+                    ?: emptyList(),
+            )
+        }.launchIn(viewModelScope)
+
+        // Persist audiobook progress while it plays.
+        playback.state.onEach { pb ->
+            if (pb.isAudiobook && pb.bookId != null && pb.isPlaying) {
+                val now = System.currentTimeMillis()
+                if (now - lastProgressSaveMs > 5_000) {
+                    lastProgressSaveMs = now
+                    progressDao.upsert(
+                        AudiobookProgressEntity(
+                            bookId = pb.bookId!!,
+                            chapterIndex = pb.chapterIndex,
+                            positionMs = pb.positionMs,
+                            updatedAt = now,
+                        ),
+                    )
+                }
+            }
+        }.launchIn(viewModelScope)
     }
 
     fun onAudioPermissionResult(granted: Boolean) {
@@ -86,6 +131,10 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun refreshLibrary() = loadLibrary()
+
+    fun onAudiobooksFolderChosen(treeUri: String) {
+        viewModelScope.launch { settings.setAudiobooksTreeUri(treeUri) }
+    }
 
     /** Tap a preset slot: play it if assigned, otherwise open the picker for it. */
     fun onPresetClicked(index: Int) {
@@ -128,6 +177,19 @@ class PlayerViewModel @Inject constructor(
         playSlot(slot)
     }
 
+    fun assignAudiobookToSlot(index: Int, book: Audiobook) {
+        val slot = SourceSlot(
+            index = index,
+            type = SourceType.AUDIOBOOK,
+            refId = book.id,
+            label = book.title,
+            sublabel = "${book.chapterCount} chapter${if (book.chapterCount == 1) "" else "s"}",
+        )
+        viewModelScope.launch { slots.assign(slot) }
+        local.value = local.value.copy(pickerForSlot = null)
+        playSlot(slot)
+    }
+
     fun clearSlot(index: Int) {
         viewModelScope.launch { slots.clear(index) }
     }
@@ -147,7 +209,21 @@ class PlayerViewModel @Inject constructor(
                 local.value = local.value.copy(nowPlayingRef = slot.refId)
             }
 
-            SourceType.AUDIOBOOK -> Unit // Phase 4 chunk C
+            SourceType.AUDIOBOOK -> viewModelScope.launch {
+                val tree = local.value.audiobooksTreeUri ?: return@launch
+                val chapters = audiobookRepository.chapters(tree, slot.refId)
+                if (chapters.isEmpty()) return@launch
+                val progress = progressDao.get(slot.refId)?.toDomain()
+                playback.playAudiobook(
+                    book = slot.refId,
+                    chapters = chapters,
+                    bookTitle = slot.label,
+                    startChapter = progress?.chapterIndex ?: 0,
+                    startPositionMs = progress?.positionMs ?: 0L,
+                    speed = 1f,
+                )
+                local.value = local.value.copy(nowPlayingRef = slot.refId)
+            }
         }
     }
 
@@ -155,6 +231,14 @@ class PlayerViewModel @Inject constructor(
     fun next() = playback.next()
     fun previous() = playback.previous()
     fun seekTo(positionMs: Long) = playback.seekTo(positionMs)
+    fun skipBack() = playback.skipBy(-30_000L)
+    fun skipForward() = playback.skipBy(30_000L)
+
+    fun cycleSpeed() {
+        val current = uiState.value.playback.speed
+        val next = SPEED_CYCLE.firstOrNull { it > current + 0.01f } ?: SPEED_CYCLE.first()
+        playback.setSpeed(next)
+    }
 
     fun onVolumeChange(value: Float) = mixer.setVolume(value)
     fun onBalanceChange(value: Float) = mixer.setBalance(value)
@@ -179,6 +263,8 @@ class PlayerViewModel @Inject constructor(
         val hasAudioPermission: Boolean = false,
         val isLoadingLibrary: Boolean = false,
         val albums: List<Album> = emptyList(),
+        val audiobooksTreeUri: String? = null,
+        val audiobooks: List<Audiobook> = emptyList(),
         val nowPlayingRef: String? = null,
         val pickerForSlot: Int? = null,
         val sleepFraction: Float = 1f / 3f,
