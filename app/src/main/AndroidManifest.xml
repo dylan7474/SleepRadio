@@ -21,7 +21,9 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- Added later: RECORD_AUDIO (Visualizer) in Phase 7. -->
+    <!-- Audio-reactive visualiser reads the output mix via android.media.audiofx.Visualizer.
+         Optional: denied -> the strip falls back to a decorative animation. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:name=".SleepRadioApp"

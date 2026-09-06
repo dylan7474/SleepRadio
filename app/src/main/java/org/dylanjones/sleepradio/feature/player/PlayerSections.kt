@@ -24,9 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -39,8 +37,6 @@ import org.dylanjones.sleepradio.core.design.SkinId
 import org.dylanjones.sleepradio.core.design.panelBrush
 import org.dylanjones.sleepradio.playback.PlaybackState
 import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.sin
 
 @Composable
 fun PlayerHeader(
@@ -149,10 +145,12 @@ fun NowPlayingBlock(
                 ),
             )
         }
-        WaveformStrip(
-            Modifier
+        AudioVisualizerStrip(
+            playing = state.isPlaying,
+            color = c.accent,
+            modifier = Modifier
                 .fillMaxWidth()
-                .height(16.dp)
+                .height(18.dp)
                 .padding(top = 4.dp),
         )
     }
@@ -194,28 +192,6 @@ private fun RadarVisual(modifier: Modifier) {
                 radius = 3.dp.toPx(),
                 center = Offset(center.x + r * 0.4f, center.y - r * 0.2f),
             )
-        }
-    }
-}
-
-@Composable
-private fun WaveformStrip(modifier: Modifier) {
-    val c = LocalAppSkin.current.colors
-    Canvas(modifier) {
-        val barW = 3.dp.toPx()
-        val gap = 3.dp.toPx()
-        var x = 0f
-        var i = 0
-        while (x < size.width) {
-            val h = size.height * (0.25f + 0.75f * abs(sin(i * 0.7f)))
-            drawRoundRect(
-                color = if (i % 4 == 0) c.accent else c.accent.copy(alpha = 0.35f),
-                topLeft = Offset(x, (size.height - h) / 2f),
-                size = Size(barW, h),
-                cornerRadius = CornerRadius(barW / 2f),
-            )
-            x += barW + gap
-            i++
         }
     }
 }
