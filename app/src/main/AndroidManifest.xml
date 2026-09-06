@@ -59,6 +59,13 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!-- Channels B/C (noise, binaural). Keeps ambient playing after the
+             sleep timer stops Channel A and after an app-swipe. -->
+        <service
+            android:name=".playback.AmbientPlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 
 </manifest>

@@ -19,11 +19,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import androidx.media3.common.PlaybackParameters
 import org.dylanjones.sleepradio.core.audio.AudioChannel
+import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.data.Chapter
 import org.dylanjones.sleepradio.di.MainDispatcher
@@ -61,7 +64,7 @@ data class PlaybackState(
  */
 @Singleton
 class PlaybackConnection @Inject constructor(
-    @ApplicationContext context: Context,
+    @ApplicationContext private val appContext: Context,
     @MainDispatcher mainDispatcher: CoroutineDispatcher,
     private val mixer: MixerController,
 ) {
@@ -89,17 +92,26 @@ class PlaybackConnection @Inject constructor(
     }
 
     init {
-        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val f = MediaController.Builder(context, token).buildAsync()
+        val token = SessionToken(appContext, ComponentName(appContext, PlaybackService::class.java))
+        val f = MediaController.Builder(appContext, token).buildAsync()
         future = f
         f.addListener({
             controller = f.get().apply { addListener(listener) }
             applyMainGain()
             pushSnapshot()
-        }, ContextCompat.getMainExecutor(context))
+        }, ContextCompat.getMainExecutor(appContext))
 
         // Apply VOL / BAL to Channel A's output whenever the mixer changes.
         mixer.state.onEach { applyMainGain() }.launchIn(scope)
+
+        // Bring up the ambient foreground service whenever Channel B or C turns
+        // on; it owns the noise/binaural generators and stops itself when both
+        // go quiet (so ambient outlives Channel A and an app-swipe).
+        mixer.ambient
+            .map { it.noiseEnabled || it.binaural != BinauralPreset.OFF }
+            .distinctUntilChanged()
+            .onEach { anyAmbientOn -> if (anyAmbientOn) AmbientPlaybackService.start(appContext) }
+            .launchIn(scope)
     }
 
     private fun applyMainGain() {
