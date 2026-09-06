@@ -56,4 +56,24 @@ class MixerController @Inject constructor() {
     fun setBinaural(preset: BinauralPreset) {
         _ambient.update { it.copy(binaural = preset) }
     }
+
+    /** The whole ambient mix as a recallable snapshot (for persistence / PATTERNs). */
+    fun currentPattern(): AmbientPattern = AmbientPattern(
+        noiseEnabled = _ambient.value.noiseEnabled,
+        noiseColor = _ambient.value.noiseColor,
+        binaural = _ambient.value.binaural,
+        binauralLevel = _state.value.binauralLevel,
+    )
+
+    /** Apply a saved snapshot (restore-on-launch, PATTERN recall). */
+    fun applyPattern(p: AmbientPattern) {
+        _state.update { it.copy(binauralLevel = p.binauralLevel.coerceIn(0f, 1f)) }
+        _ambient.update {
+            it.copy(
+                noiseEnabled = p.noiseEnabled,
+                noiseColor = p.noiseColor,
+                binaural = p.binaural,
+            )
+        }
+    }
 }

@@ -1,7 +1,11 @@
 package org.dylanjones.sleepradio.core.data
 
 import kotlinx.coroutines.flow.Flow
+import org.dylanjones.sleepradio.core.audio.AmbientPattern
 import org.dylanjones.sleepradio.core.design.SkinId
+
+/** Number of saveable ambient PATTERN slots. */
+const val AMBIENT_PATTERN_SLOTS = 3
 
 /**
  * App-wide user preferences, backed by DataStore.
@@ -24,4 +28,14 @@ interface SettingsRepository {
     val musicTreeUri: Flow<String?>
 
     suspend fun setMusicTreeUri(uri: String)
+
+    /** Last-used ambient mix, restored on launch. Null before anything is saved. */
+    val ambient: Flow<AmbientPattern?>
+
+    suspend fun setAmbient(pattern: AmbientPattern)
+
+    /** The [AMBIENT_PATTERN_SLOTS] saved PATTERN slots (null = empty). */
+    val ambientPatterns: Flow<List<AmbientPattern?>>
+
+    suspend fun setAmbientPattern(index: Int, pattern: AmbientPattern?)
 }

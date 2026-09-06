@@ -64,3 +64,28 @@ data class AmbientState(
 ) {
     val binauralEnabled: Boolean get() = binaural != BinauralPreset.OFF
 }
+
+/**
+ * A recallable snapshot of the ambient mix — [AmbientState] plus the binaural
+ * level (which lives on [MixerState]). Used for restore-on-launch and the
+ * PATTERN slots.
+ */
+data class AmbientPattern(
+    val noiseEnabled: Boolean,
+    val noiseColor: NoiseColor,
+    val binaural: BinauralPreset,
+    val binauralLevel: Float,
+) {
+    val isSilent: Boolean get() = !noiseEnabled && binaural == BinauralPreset.OFF
+
+    fun summary(): String {
+        val parts = buildList {
+            if (noiseEnabled) add(noiseColor.name.pretty())
+            if (binaural != BinauralPreset.OFF) add(binaural.name.pretty() + " beats")
+        }
+        return parts.joinToString(" · ").ifEmpty { "Silent" }
+    }
+
+    private fun String.pretty() =
+        lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+}

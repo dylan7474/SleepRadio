@@ -7,14 +7,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.dylanjones.sleepradio.core.audio.AmbientPattern
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.audio.NoiseColor
+import org.dylanjones.sleepradio.core.data.AMBIENT_PATTERN_SLOTS
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
@@ -56,6 +61,10 @@ data class PlayerUiState(
     val noiseColor: NoiseColor = NoiseColor.WHITE,
     /** Channel C (binaural) preset — OFF = disabled. */
     val binaural: BinauralPreset = BinauralPreset.OFF,
+    /** Channel C level 0..1 (settings-controlled, outside BAL). */
+    val binauralLevel: Float = 0.4f,
+    /** Saved ambient PATTERN slots (null = empty). */
+    val patterns: List<AmbientPattern?> = List(AMBIENT_PATTERN_SLOTS) { null },
 ) {
     val sleepMinutes: Int get() = sleepMinutesFor(sleepFraction)
 }
@@ -97,6 +106,8 @@ class PlayerViewModel @Inject constructor(
                 noiseEnabled = amb.noiseEnabled,
                 noiseColor = amb.noiseColor,
                 binaural = amb.binaural,
+                binauralLevel = mx.binauralLevel,
+                patterns = l.ambientPatterns,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayerUiState())
 
@@ -121,6 +132,20 @@ class PlayerViewModel @Inject constructor(
             } ?: emptyList()
             local.update { it.copy(musicTreeUri = uri, folderAlbums = albums) }
         }.launchIn(viewModelScope)
+
+        // Restore the last ambient mix, then persist every change. Seeding and
+        // the persist collector share one coroutine so seed always wins the race
+        // (a persist write must never land before restore).
+        viewModelScope.launch {
+            settings.ambient.first()?.let { mixer.applyPattern(it) }
+            combine(mixer.ambient, mixer.state) { _, _ -> mixer.currentPattern() }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { settings.setAmbient(it) }
+        }
+        settings.ambientPatterns
+            .onEach { list -> local.update { it.copy(ambientPatterns = list) } }
+            .launchIn(viewModelScope)
 
         // Persist audiobook progress while it plays.
         playback.state.onEach { pb ->
@@ -265,6 +290,22 @@ class PlayerViewModel @Inject constructor(
     fun toggleNoise() = mixer.toggleNoise()
     fun setNoiseColor(color: NoiseColor) = mixer.setNoiseColor(color)
     fun setBinaural(preset: BinauralPreset) = mixer.setBinaural(preset)
+    fun setBinauralLevel(value: Float) = mixer.setBinauralLevel(value)
+
+    /** Save the current ambient mix into PATTERN slot [index]. */
+    fun savePattern(index: Int) {
+        viewModelScope.launch { settings.setAmbientPattern(index, mixer.currentPattern()) }
+    }
+
+    /** Recall PATTERN slot [index] into the live mix (no-op if empty). */
+    fun recallPattern(index: Int) {
+        uiState.value.patterns.getOrNull(index)?.let { mixer.applyPattern(it) }
+    }
+
+    fun clearPattern(index: Int) {
+        viewModelScope.launch { settings.setAmbientPattern(index, null) }
+    }
+
     fun onSleepFractionChange(value: Float) {
         local.value = local.value.copy(sleepFraction = value.coerceIn(0f, 1f))
     }
@@ -277,5 +318,6 @@ class PlayerViewModel @Inject constructor(
         val nowPlayingRef: String? = null,
         val pickerForSlot: Int? = null,
         val sleepFraction: Float = 1f / 3f,
+        val ambientPatterns: List<AmbientPattern?> = List(AMBIENT_PATTERN_SLOTS) { null },
     )
 }

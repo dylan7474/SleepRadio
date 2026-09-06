@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +17,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.dylanjones.sleepradio.core.audio.AmbientPattern
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.data.Audiobook
@@ -131,8 +135,14 @@ fun PlayerRoute(
             AmbientDialog(
                 noiseColor = state.noiseColor,
                 binaural = state.binaural,
+                binauralLevel = state.binauralLevel,
+                patterns = state.patterns,
                 onPickNoise = playerViewModel::setNoiseColor,
                 onPickBinaural = playerViewModel::setBinaural,
+                onBinauralLevel = playerViewModel::setBinauralLevel,
+                onRecallPattern = playerViewModel::recallPattern,
+                onSavePattern = playerViewModel::savePattern,
+                onClearPattern = playerViewModel::clearPattern,
                 onDismiss = { ambientDialogOpen = false },
             )
         }
@@ -292,8 +302,14 @@ private fun SourcePickerDialog(
 private fun AmbientDialog(
     noiseColor: NoiseColor,
     binaural: BinauralPreset,
+    binauralLevel: Float,
+    patterns: List<AmbientPattern?>,
     onPickNoise: (NoiseColor) -> Unit,
     onPickBinaural: (BinauralPreset) -> Unit,
+    onBinauralLevel: (Float) -> Unit,
+    onRecallPattern: (Int) -> Unit,
+    onSavePattern: (Int) -> Unit,
+    onClearPattern: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -303,6 +319,18 @@ private fun AmbientDialog(
         title = { Text("Ambient mix") },
         text = {
             LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                item { SectionHeader("PATTERNS — tap to recall, long-press to save") }
+                itemsIndexed(patterns) { i, p ->
+                    PatternRow(
+                        index = i,
+                        pattern = p,
+                        onRecall = { onRecallPattern(i) },
+                        onSave = { onSavePattern(i) },
+                        onClear = { onClearPattern(i) },
+                    )
+                    HorizontalDivider()
+                }
+
                 item { SectionHeader("NOISE — SPECTRUM") }
                 items(NoiseColor.entries.toList(), key = { "noise_${it.name}" }) { color ->
                     PickerRow(
@@ -326,9 +354,50 @@ private fun AmbientDialog(
                     )
                     HorizontalDivider()
                 }
+                item {
+                    Text(
+                        "Binaural level  ${(binauralLevel * 100).toInt()}%",
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                    Slider(
+                        value = binauralLevel,
+                        onValueChange = onBinauralLevel,
+                        valueRange = 0f..1f,
+                    )
+                }
             }
         },
     )
+}
+
+@Composable
+private fun PatternRow(
+    index: Int,
+    pattern: AmbientPattern?,
+    onRecall: () -> Unit,
+    onSave: () -> Unit,
+    onClear: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = { if (pattern != null) onRecall() else onSave() }, onLongClick = onSave)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Pattern ${index + 1}", fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(
+                pattern?.summary() ?: "Empty — long-press to save current mix",
+                fontSize = 12.sp,
+                maxLines = 1,
+            )
+        }
+        if (pattern != null) {
+            TextButton(onClick = onClear) { Text("Clear") }
+        }
+    }
 }
 
 private fun trimHz(v: Float): String =
