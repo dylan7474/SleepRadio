@@ -9,8 +9,19 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Playback service keeps the CPU awake while the screen is off -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- Permissions added per phase: READ_MEDIA_AUDIO + FOREGROUND_SERVICE(_MEDIA_PLAYBACK)
-         + POST_NOTIFICATIONS in Phase 1; RECORD_AUDIO (Visualizer) in Phase 7. -->
+
+    <!-- Phase 1: Channel A playback service + media notification -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Phase 1: read the on-device music library -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Added later: RECORD_AUDIO (Visualizer) in Phase 7. -->
 
     <application
         android:name=".SleepRadioApp"
@@ -34,6 +45,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Channel A playback. Media3 attaches its default MediaNotification. -->
+        <service
+            android:name=".playback.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>
