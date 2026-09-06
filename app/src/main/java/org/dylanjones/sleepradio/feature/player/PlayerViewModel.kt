@@ -96,7 +96,7 @@ class PlayerViewModel @Inject constructor(
     private var lastProgressSaveMs = 0L
 
     init {
-        if (local.value.hasAudioPermission) loadLibrary()
+        loadLibrary()
 
         settings.audiobooksTreeUri.onEach { uri ->
             local.value = local.value.copy(audiobooksTreeUri = uri)
@@ -140,10 +140,20 @@ class PlayerViewModel @Inject constructor(
     fun onPresetClicked(index: Int) {
         val slot = uiState.value.presets.getOrNull(index)
         if (slot == null) {
-            local.value = local.value.copy(pickerForSlot = index)
+            // Re-check permission and (re)load the library so the picker is current.
+            local.value = local.value.copy(
+                hasAudioPermission = readPermission(),
+                pickerForSlot = index,
+            )
+            loadLibrary(force = true)
         } else {
             playSlot(slot)
         }
+    }
+
+    fun retryLibraryLoad() {
+        local.value = local.value.copy(hasAudioPermission = readPermission())
+        loadLibrary(force = true)
     }
 
     fun dismissPicker() {
@@ -246,11 +256,16 @@ class PlayerViewModel @Inject constructor(
         local.value = local.value.copy(sleepFraction = value.coerceIn(0f, 1f))
     }
 
-    private fun loadLibrary() {
-        if (local.value.isLoadingLibrary) return
+    private fun loadLibrary(force: Boolean = false) {
+        if (local.value.isLoadingLibrary && !force) return
         local.value = local.value.copy(isLoadingLibrary = true)
         viewModelScope.launch {
-            val albums = musicRepository.albums()
+            val albums = try {
+                musicRepository.albums()
+            } catch (e: Exception) {
+                android.util.Log.w("PlayerViewModel", "loadLibrary failed", e)
+                local.value.albums
+            }
             local.value = local.value.copy(albums = albums, isLoadingLibrary = false)
         }
     }

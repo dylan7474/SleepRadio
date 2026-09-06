@@ -130,10 +130,15 @@ fun PlayerRoute(
                 albums = state.albums,
                 audiobooks = state.audiobooks,
                 audiobooksFolderChosen = state.audiobooksFolderChosen,
+                hasMusicAccess = state.hasAudioPermission,
                 onPickStation = { playerViewModel.assignStationToSlot(slotIndex, it) },
                 onPickAlbum = { playerViewModel.assignAlbumToSlot(slotIndex, it) },
                 onPickAudiobook = { playerViewModel.assignAudiobookToSlot(slotIndex, it) },
                 onChooseFolder = { folderLauncher.launch(null) },
+                onGrantMusicAccess = {
+                    permissionLauncher.launch(Manifest.permission.READ_MEDIA_AUDIO)
+                    playerViewModel.retryLibraryLoad()
+                },
                 onDismiss = playerViewModel::dismissPicker,
             )
         }
@@ -191,10 +196,12 @@ private fun SourcePickerDialog(
     albums: List<Album>,
     audiobooks: List<Audiobook>,
     audiobooksFolderChosen: Boolean,
+    hasMusicAccess: Boolean,
     onPickStation: (RadioStation) -> Unit,
     onPickAlbum: (Album) -> Unit,
     onPickAudiobook: (Audiobook) -> Unit,
     onChooseFolder: () -> Unit,
+    onGrantMusicAccess: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -238,10 +245,19 @@ private fun SourcePickerDialog(
                 }
 
                 item { SectionHeader("ALBUMS ON THIS DEVICE") }
-                if (albums.isEmpty()) {
+                if (!hasMusicAccess) {
+                    item {
+                        PickerRow(
+                            primary = "Grant access to music",
+                            secondary = "Needed to list on-device albums",
+                            onClick = onGrantMusicAccess,
+                        )
+                        HorizontalDivider()
+                    }
+                } else if (albums.isEmpty()) {
                     item {
                         Text(
-                            "No albums found (grant music access).",
+                            "No albums found on this device.",
                             fontSize = 12.sp,
                             modifier = Modifier.padding(vertical = 12.dp),
                         )
