@@ -45,7 +45,10 @@ class PlayerActions(
     val onSeek: (Long) -> Unit,
     val onVolumeChange: (Float) -> Unit,
     val onBalanceChange: (Float) -> Unit,
-    val onSleepFractionChange: (Float) -> Unit,
+    /** SLEEP tile tap — start the timer, or cancel a running one. */
+    val onSleepTap: () -> Unit,
+    /** SLEEP tile long-press — open the duration picker. */
+    val onSleepDurationPick: () -> Unit,
     /** NOISE tile tap — toggle Channel B on/off. */
     val onNoiseToggle: () -> Unit,
     /** NOISE tile long-press — open the spectrum picker. */
@@ -111,14 +114,19 @@ fun PlayerScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 SkinTile(
-                    onClick = {},
+                    onClick = actions.onSleepTap,
+                    onLongClick = actions.onSleepDurationPick,
+                    active = state.sleepActive,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
                 ) {
                     TileTitle("SLEEP")
                     Text("🌙", fontSize = 20.sp)
-                    TileSub("${state.sleepMinutes} MIN")
+                    TileSub(
+                        if (state.sleepActive) formatTime(state.sleepRemainingMs)
+                        else "${state.sleepDurationMin} MIN",
+                    )
                 }
                 val binauralOn = state.binaural != BinauralPreset.OFF
                 SkinTile(

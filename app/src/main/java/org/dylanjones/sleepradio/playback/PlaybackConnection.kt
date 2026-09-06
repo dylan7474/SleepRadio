@@ -3,6 +3,7 @@ package org.dylanjones.sleepradio.playback
 import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -58,6 +59,13 @@ data class PlaybackState(
     val queueSize: Int = 0,
 )
 
+/** Sleep-timer snapshot for the UI. Ambient channels (B/C) are never affected. */
+data class SleepTimerState(
+    val active: Boolean = false,
+    val remainingMs: Long = 0L,
+    val totalMs: Long = 0L,
+)
+
 /**
  * Owns a [MediaController] bound to [PlaybackService] and exposes its state as a
  * [StateFlow]. All controller access happens on the main thread.
@@ -72,6 +80,12 @@ class PlaybackConnection @Inject constructor(
 
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
+
+    private val _sleepTimer = MutableStateFlow(SleepTimerState())
+    val sleepTimer: StateFlow<SleepTimerState> = _sleepTimer.asStateFlow()
+    private var sleepJob: Job? = null
+    /** 1f normally; ramped 1→0 by the sleep timer's fade, multiplied into Channel A gain. */
+    private var sleepFade: Float = 1f
 
     private var controller: MediaController? = null
     private var future: ListenableFuture<MediaController>? = null
@@ -115,8 +129,50 @@ class PlaybackConnection @Inject constructor(
     }
 
     private fun applyMainGain() {
-        val gain = mixer.state.value.effectiveGain(AudioChannel.MAIN)
+        val gain = mixer.state.value.effectiveGain(AudioChannel.MAIN) * sleepFade
         controller?.volume = gain.coerceIn(0f, 1f)
+    }
+
+    // --- Sleep timer (Channel A only; B/C keep playing) ---
+
+    /** Start / restart the sleep timer. Fades out and pauses Channel A on expiry. */
+    fun startSleepTimer(durationMs: Long) {
+        if (durationMs <= 0L) return
+        cancelSleepTimer()
+        val endAt = SystemClock.elapsedRealtime() + durationMs
+        _sleepTimer.value = SleepTimerState(active = true, remainingMs = durationMs, totalMs = durationMs)
+        sleepJob = scope.launch {
+            while (true) {
+                val remaining = endAt - SystemClock.elapsedRealtime()
+                if (remaining <= SLEEP_FADE_MS) break
+                _sleepTimer.value = _sleepTimer.value.copy(remainingMs = remaining)
+                delay(500)
+            }
+            // Equal-ish linear fade of Channel A over the last SLEEP_FADE_MS.
+            val fadeStart = SystemClock.elapsedRealtime()
+            while (true) {
+                val f = ((SystemClock.elapsedRealtime() - fadeStart).toFloat() / SLEEP_FADE_MS).coerceIn(0f, 1f)
+                sleepFade = 1f - f
+                applyMainGain()
+                _sleepTimer.value = _sleepTimer.value.copy(
+                    remainingMs = (endAt - SystemClock.elapsedRealtime()).coerceAtLeast(0L),
+                )
+                if (f >= 1f) break
+                delay(100)
+            }
+            controller?.pause()
+            sleepFade = 1f
+            applyMainGain()
+            _sleepTimer.value = SleepTimerState()
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepJob?.cancel()
+        sleepJob = null
+        sleepFade = 1f
+        applyMainGain()
+        _sleepTimer.value = SleepTimerState()
     }
 
     fun playTracks(tracks: List<Track>, startIndex: Int = 0) {
@@ -312,6 +368,7 @@ class PlaybackConnection @Inject constructor(
 
     private companion object {
         const val POSITION_POLL_MS = 500L
+        const val SLEEP_FADE_MS = 20_000L
     }
 }
 

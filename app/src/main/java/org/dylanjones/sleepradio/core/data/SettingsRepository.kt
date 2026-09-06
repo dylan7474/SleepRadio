@@ -38,4 +38,9 @@ interface SettingsRepository {
     val ambientPatterns: Flow<List<AmbientPattern?>>
 
     suspend fun setAmbientPattern(index: Int, pattern: AmbientPattern?)
+
+    /** Sleep-timer duration in minutes (default 30). The running timer is not persisted. */
+    val sleepDurationMin: Flow<Int>
+
+    suspend fun setSleepDurationMin(minutes: Int)
 }

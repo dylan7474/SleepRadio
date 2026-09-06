@@ -3,6 +3,7 @@ package org.dylanjones.sleepradio.core.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -64,11 +65,19 @@ class SettingsRepositoryImpl @Inject constructor(
         }
     }
 
+    override val sleepDurationMin: Flow<Int> =
+        dataStore.data.map { (it[KEY_SLEEP_MIN] ?: 30).coerceIn(1, 600) }
+
+    override suspend fun setSleepDurationMin(minutes: Int) {
+        dataStore.edit { it[KEY_SLEEP_MIN] = minutes.coerceIn(1, 600) }
+    }
+
     private companion object {
         val KEY_SKIN = stringPreferencesKey("skin_id")
         val KEY_AUDIOBOOKS_TREE = stringPreferencesKey("audiobooks_tree_uri")
         val KEY_MUSIC_TREE = stringPreferencesKey("music_tree_uri")
         val KEY_AMBIENT = stringPreferencesKey("ambient_current")
+        val KEY_SLEEP_MIN = intPreferencesKey("sleep_duration_min")
 
         fun patternKey(index: Int) = stringPreferencesKey("ambient_pattern_$index")
 

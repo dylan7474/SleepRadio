@@ -31,11 +31,11 @@ import org.dylanjones.sleepradio.core.data.SourceType
 import org.dylanjones.sleepradio.core.data.db.AudiobookProgressDao
 import org.dylanjones.sleepradio.core.data.db.AudiobookProgressEntity
 import org.dylanjones.sleepradio.core.data.db.toDomain
-import org.dylanjones.sleepradio.core.design.sleepMinutesFor
 import org.dylanjones.sleepradio.media.AudiobookRepository
 import org.dylanjones.sleepradio.media.MusicRepository
 import org.dylanjones.sleepradio.playback.PlaybackConnection
 import org.dylanjones.sleepradio.playback.PlaybackState
+import org.dylanjones.sleepradio.playback.SleepTimerState
 import javax.inject.Inject
 
 data class PlayerUiState(
@@ -53,8 +53,12 @@ data class PlayerUiState(
     val volume: Float = 0.8f,
     /** BAL knob 0..1 (0 = main, 1 = noise) — equal-power A↔B crossfade. */
     val balance: Float = 0.5f,
-    /** Sleep-duration slider 0..1 (15–60 min). Wired to the timer in Phase 6. */
-    val sleepFraction: Float = 1f / 3f,
+    /** Configured sleep-timer duration in minutes. */
+    val sleepDurationMin: Int = 30,
+    /** Sleep timer currently running (Channel A will fade + stop). */
+    val sleepActive: Boolean = false,
+    /** Milliseconds left on the running sleep timer. */
+    val sleepRemainingMs: Long = 0L,
     /** Channel B (noise) on/off. */
     val noiseEnabled: Boolean = false,
     /** Channel B noise spectrum. */
@@ -65,9 +69,7 @@ data class PlayerUiState(
     val binauralLevel: Float = 0.4f,
     /** Saved ambient PATTERN slots (null = empty). */
     val patterns: List<AmbientPattern?> = List(AMBIENT_PATTERN_SLOTS) { null },
-) {
-    val sleepMinutes: Int get() = sleepMinutesFor(sleepFraction)
-}
+)
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
@@ -102,7 +104,9 @@ class PlayerViewModel @Inject constructor(
                 pickerForSlot = l.pickerForSlot,
                 volume = mx.masterGain,
                 balance = mx.crossfade,
-                sleepFraction = l.sleepFraction,
+                sleepDurationMin = l.sleepDurationMin,
+                sleepActive = l.sleepTimer.active,
+                sleepRemainingMs = l.sleepTimer.remainingMs,
                 noiseEnabled = amb.noiseEnabled,
                 noiseColor = amb.noiseColor,
                 binaural = amb.binaural,
@@ -147,11 +151,22 @@ class PlayerViewModel @Inject constructor(
             .onEach { list -> local.update { it.copy(ambientPatterns = list) } }
             .launchIn(viewModelScope)
 
-        // Persist audiobook progress while it plays.
+        // Sleep-timer: seed the duration, mirror the running timer into UI state.
+        settings.sleepDurationMin
+            .onEach { min -> local.update { it.copy(sleepDurationMin = min) } }
+            .launchIn(viewModelScope)
+        playback.sleepTimer
+            .onEach { st -> local.update { it.copy(sleepTimer = st) } }
+            .launchIn(viewModelScope)
+
+        // Persist audiobook progress every 5 s while playing, and once more on
+        // the play→pause edge (so the sleep timer / a manual pause don't leave
+        // the resume point up to 5 s stale).
         playback.state.onEach { pb ->
-            if (pb.isAudiobook && pb.bookId != null && pb.isPlaying) {
+            if (pb.isAudiobook && pb.bookId != null) {
                 val now = System.currentTimeMillis()
-                if (now - lastProgressSaveMs > 5_000) {
+                val pausedEdge = wasPlaying && !pb.isPlaying
+                if ((pb.isPlaying && now - lastProgressSaveMs > 5_000) || pausedEdge) {
                     lastProgressSaveMs = now
                     progressDao.upsert(
                         AudiobookProgressEntity(
@@ -163,8 +178,11 @@ class PlayerViewModel @Inject constructor(
                     )
                 }
             }
+            wasPlaying = pb.isPlaying
         }.launchIn(viewModelScope)
     }
+
+    private var wasPlaying = false
 
     fun onAudiobooksFolderChosen(treeUri: String) {
         viewModelScope.launch { settings.setAudiobooksTreeUri(treeUri) }
@@ -306,8 +324,19 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { settings.setAmbientPattern(index, null) }
     }
 
-    fun onSleepFractionChange(value: Float) {
-        local.value = local.value.copy(sleepFraction = value.coerceIn(0f, 1f))
+    /** SLEEP tile tap: start the timer at the configured duration, or cancel it. */
+    fun onSleepTap() {
+        if (uiState.value.sleepActive) {
+            playback.cancelSleepTimer()
+        } else {
+            playback.startSleepTimer(uiState.value.sleepDurationMin * 60_000L)
+        }
+    }
+
+    fun setSleepDuration(minutes: Int) {
+        local.update { it.copy(sleepDurationMin = minutes) }
+        viewModelScope.launch { settings.setSleepDurationMin(minutes) }
+        if (uiState.value.sleepActive) playback.startSleepTimer(minutes * 60_000L)
     }
 
     private data class LocalState(
@@ -317,7 +346,8 @@ class PlayerViewModel @Inject constructor(
         val audiobooks: List<Audiobook> = emptyList(),
         val nowPlayingRef: String? = null,
         val pickerForSlot: Int? = null,
-        val sleepFraction: Float = 1f / 3f,
+        val sleepDurationMin: Int = 30,
+        val sleepTimer: SleepTimerState = SleepTimerState(),
         val ambientPatterns: List<AmbientPattern?> = List(AMBIENT_PATTERN_SLOTS) { null },
     )
 }

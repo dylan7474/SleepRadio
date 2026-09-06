@@ -44,7 +44,8 @@ private val noopActions = PlayerActions(
     onSeek = {},
     onVolumeChange = {},
     onBalanceChange = {},
-    onSleepFractionChange = {},
+    onSleepTap = {},
+    onSleepDurationPick = {},
     onNoiseToggle = {},
     onNoiseColorPick = {},
 )

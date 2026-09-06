@@ -93,6 +93,7 @@ fun PlayerRoute(
 
     var menuOpen by remember { mutableStateOf(false) }
     var ambientDialogOpen by remember { mutableStateOf(false) }
+    var sleepDialogOpen by remember { mutableStateOf(false) }
 
     val actions = PlayerActions(
         onMenu = { menuOpen = true },
@@ -105,7 +106,8 @@ fun PlayerRoute(
         onSeek = playerViewModel::seekTo,
         onVolumeChange = playerViewModel::onVolumeChange,
         onBalanceChange = playerViewModel::onBalanceChange,
-        onSleepFractionChange = playerViewModel::onSleepFractionChange,
+        onSleepTap = playerViewModel::onSleepTap,
+        onSleepDurationPick = { sleepDialogOpen = true },
         onNoiseToggle = playerViewModel::toggleNoise,
         onNoiseColorPick = { ambientDialogOpen = true },
     )
@@ -129,6 +131,17 @@ fun PlayerRoute(
 
         if (!skinChosen) {
             SkinPickerOverlay(onPick = rootViewModel::chooseSkin)
+        }
+
+        if (sleepDialogOpen) {
+            SleepDurationDialog(
+                current = state.sleepDurationMin,
+                onPick = {
+                    playerViewModel.setSleepDuration(it)
+                    sleepDialogOpen = false
+                },
+                onDismiss = { sleepDialogOpen = false },
+            )
         }
 
         if (ambientDialogOpen) {
@@ -290,6 +303,33 @@ private fun SourcePickerDialog(
                             "${album.trackCount} tracks",
                         ).joinToString(" · "),
                         onClick = { onPickFolderAlbum(album) },
+                    )
+                    HorizontalDivider()
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun SleepDurationDialog(
+    current: Int,
+    onPick: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val options = listOf(5, 10, 15, 20, 30, 45, 60, 90)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Sleep timer") },
+        text = {
+            LazyColumn {
+                items(options, key = { it }) { min ->
+                    PickerRow(
+                        primary = "$min minutes" + if (min == current) "  ● current" else "",
+                        secondary = "Fade out & stop the main source; noise / binaural keep playing",
+                        onClick = { onPick(min) },
                     )
                     HorizontalDivider()
                 }
