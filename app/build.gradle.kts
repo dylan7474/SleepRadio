@@ -42,10 +42,12 @@ android {
 
     buildTypes {
         release {
-            // R8 minify is off: the shrunk build renders a black screen (Compose
-            // stalls after ~2 frames, no crash) — a keep-rule issue still to be
-            // chased. The signed unminified release APK is fine for sideloading.
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            // isShrinkResources stays OFF: with it on, resource shrinking strips
+            // a font/emoji resource and all Compose text renders invisible
+            // (black screen, no crash). R8 code shrinking alone already takes
+            // the APK from ~42 MB to ~4.5 MB; the resource-shrink delta (~0.25
+            // MB) isn't worth the fragility.
             isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
