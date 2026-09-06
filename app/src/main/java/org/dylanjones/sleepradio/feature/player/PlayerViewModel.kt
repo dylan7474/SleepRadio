@@ -1,13 +1,8 @@
 package org.dylanjones.sleepradio.feature.player
 
-import android.Manifest
-import android.content.Context
-import android.content.pm.PackageManager
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +24,6 @@ import org.dylanjones.sleepradio.core.data.db.AudiobookProgressDao
 import org.dylanjones.sleepradio.core.data.db.AudiobookProgressEntity
 import org.dylanjones.sleepradio.core.data.db.toDomain
 import org.dylanjones.sleepradio.core.design.sleepMinutesFor
-import org.dylanjones.sleepradio.media.Album
 import org.dylanjones.sleepradio.media.AudiobookRepository
 import org.dylanjones.sleepradio.media.MusicRepository
 import org.dylanjones.sleepradio.playback.PlaybackConnection
@@ -39,9 +33,7 @@ import javax.inject.Inject
 private val SPEED_CYCLE = listOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 0.85f)
 
 data class PlayerUiState(
-    val hasAudioPermission: Boolean = false,
-    val isLoadingLibrary: Boolean = false,
-    val albums: List<Album> = emptyList(),
+    /** Music-folder albums from the user-chosen SAF tree (the only music source). */
     val folderAlbums: List<FolderAlbum> = emptyList(),
     val musicFolderChosen: Boolean = false,
     val stations: List<RadioStation> = emptyList(),
@@ -63,7 +55,6 @@ data class PlayerUiState(
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val musicRepository: MusicRepository,
     private val audiobookRepository: AudiobookRepository,
     private val playback: PlaybackConnection,
@@ -73,16 +64,11 @@ class PlayerViewModel @Inject constructor(
     private val progressDao: AudiobookProgressDao,
 ) : ViewModel() {
 
-    private val local = MutableStateFlow(
-        LocalState(hasAudioPermission = readPermission()),
-    )
+    private val local = MutableStateFlow(LocalState())
 
     val uiState: StateFlow<PlayerUiState> =
         combine(local, playback.state, mixer.state, slots.slots) { l, pb, mx, presetSlots ->
             PlayerUiState(
-                hasAudioPermission = l.hasAudioPermission,
-                isLoadingLibrary = l.isLoadingLibrary,
-                albums = l.albums,
                 folderAlbums = l.folderAlbums,
                 musicFolderChosen = l.musicTreeUri != null,
                 stations = RadioStation.bundled,
@@ -101,8 +87,6 @@ class PlayerViewModel @Inject constructor(
     private var lastProgressSaveMs = 0L
 
     init {
-        loadLibrary()
-
         settings.audiobooksTreeUri.onEach { uri ->
             local.value = local.value.copy(audiobooksTreeUri = uri)
             local.value = local.value.copy(
@@ -139,13 +123,6 @@ class PlayerViewModel @Inject constructor(
         }.launchIn(viewModelScope)
     }
 
-    fun onAudioPermissionResult(granted: Boolean) {
-        local.value = local.value.copy(hasAudioPermission = granted)
-        if (granted && local.value.albums.isEmpty()) loadLibrary()
-    }
-
-    fun refreshLibrary() = loadLibrary()
-
     fun onAudiobooksFolderChosen(treeUri: String) {
         viewModelScope.launch { settings.setAudiobooksTreeUri(treeUri) }
     }
@@ -158,38 +135,14 @@ class PlayerViewModel @Inject constructor(
     fun onPresetClicked(index: Int) {
         val slot = uiState.value.presets.getOrNull(index)
         if (slot == null) {
-            // Re-check permission and (re)load the library so the picker is current.
-            local.value = local.value.copy(
-                hasAudioPermission = readPermission(),
-                pickerForSlot = index,
-            )
-            loadLibrary(force = true)
+            local.value = local.value.copy(pickerForSlot = index)
         } else {
             playSlot(slot)
         }
     }
 
-    fun retryLibraryLoad() {
-        local.value = local.value.copy(hasAudioPermission = readPermission())
-        loadLibrary(force = true)
-    }
-
     fun dismissPicker() {
         local.value = local.value.copy(pickerForSlot = null)
-    }
-
-    fun assignAlbumToSlot(index: Int, album: Album) {
-        val slot = SourceSlot(
-            index = index,
-            type = SourceType.ALBUM,
-            refId = album.id.toString(),
-            label = album.title,
-            sublabel = album.artist,
-            artworkUri = album.artworkUri?.toString(),
-        )
-        viewModelScope.launch { slots.assign(slot) }
-        local.value = local.value.copy(pickerForSlot = null)
-        playSlot(slot)
     }
 
     fun assignStationToSlot(index: Int, station: RadioStation) {
@@ -237,6 +190,8 @@ class PlayerViewModel @Inject constructor(
 
     private fun playSlot(slot: SourceSlot) {
         when (slot.type) {
+            // Legacy slots assigned before music became folder-only still play
+            // via MediaStore by album id.
             SourceType.ALBUM -> viewModelScope.launch {
                 val id = slot.refId.toLongOrNull() ?: return@launch
                 val tracks = musicRepository.tracksForAlbum(id)
@@ -295,28 +250,7 @@ class PlayerViewModel @Inject constructor(
         local.value = local.value.copy(sleepFraction = value.coerceIn(0f, 1f))
     }
 
-    private fun loadLibrary(force: Boolean = false) {
-        if (local.value.isLoadingLibrary && !force) return
-        local.value = local.value.copy(isLoadingLibrary = true)
-        viewModelScope.launch {
-            val albums = try {
-                musicRepository.albums()
-            } catch (e: Exception) {
-                android.util.Log.w("PlayerViewModel", "loadLibrary failed", e)
-                local.value.albums
-            }
-            local.value = local.value.copy(albums = albums, isLoadingLibrary = false)
-        }
-    }
-
-    private fun readPermission(): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_AUDIO) ==
-            PackageManager.PERMISSION_GRANTED
-
     private data class LocalState(
-        val hasAudioPermission: Boolean = false,
-        val isLoadingLibrary: Boolean = false,
-        val albums: List<Album> = emptyList(),
         val musicTreeUri: String? = null,
         val folderAlbums: List<FolderAlbum> = emptyList(),
         val audiobooksTreeUri: String? = null,

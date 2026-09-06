@@ -12,7 +12,6 @@ import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.playback.PlaybackState
 
 private val previewState = PlayerUiState(
-    hasAudioPermission = true,
     playback = PlaybackState(
         isConnected = true,
         isPlaying = true,

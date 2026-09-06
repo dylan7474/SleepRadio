@@ -98,12 +98,14 @@ fun NowPlayingBlock(
             Spacer(Modifier.width(16.dp))
             Column(Modifier.fillMaxWidth()) {
                 val (topLabel, topValue) = when {
-                    state.isRadio -> "Station" to (state.title ?: "—")
+                    state.isRadio -> "Station" to (state.stationName ?: state.title ?: "—")
                     state.isAudiobook -> "Book" to (state.artist ?: "—")
                     else -> "Artist" to (state.artist ?: "—")
                 }
                 val (botLabel, botValue) = when {
-                    state.isRadio -> "Stream" to (state.artist ?: "Live")
+                    // ICY now-playing when the stream sends it, else the station
+                    // description, else a plain "Live".
+                    state.isRadio -> "Now playing" to (state.nowPlaying ?: state.artist ?: "Live")
                     state.isAudiobook -> "Chapter" to (state.title ?: "—")
                     else -> "Track" to (state.title ?: "—")
                 }

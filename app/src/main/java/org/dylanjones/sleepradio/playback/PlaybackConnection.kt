@@ -42,6 +42,10 @@ data class PlaybackState(
     val chapterIndex: Int = 0,
     val chapterCount: Int = 0,
     val speed: Float = 1f,
+    /** Radio: stable station name (never overwritten by stream metadata). */
+    val stationName: String? = null,
+    /** Radio: current "Artist - Track" from ICY stream metadata, if any. */
+    val nowPlaying: String? = null,
     val title: String? = null,
     val artist: String? = null,
     val artworkUri: Uri? = null,
@@ -73,6 +77,10 @@ class PlaybackConnection @Inject constructor(
     private var isRadio: Boolean = false
     private var isAudiobook: Boolean = false
     private var bookId: String? = null
+    /** Stable station name from the slot label; never overwritten by ICY metadata. */
+    private var radioStationName: String? = null
+    /** Station description (fallback "now playing" line when the stream sends no metadata). */
+    private var radioStationDesc: String? = null
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -190,15 +198,21 @@ class PlaybackConnection @Inject constructor(
         isRadio = true
         isAudiobook = false
         bookId = null
+        radioStationName = name
+        radioStationDesc = description.ifBlank { null }
         c.setPlaybackParameters(PlaybackParameters(1f))
         val item = MediaItem.Builder()
             .setUri(url)
             .setMediaId(url)
             .setMediaMetadata(
                 MediaMetadata.Builder()
-                    .setTitle(name)
-                    .setArtist(description)
+                    // No .setTitle(): leave mediaMetadata.title free so Media3 can
+                    // fill it from the stream's ICY StreamTitle. .setStation() keeps
+                    // the station name stable; .setDisplayTitle() feeds the
+                    // system media notification.
                     .setStation(name)
+                    .setDisplayTitle(name)
+                    .setArtist(description)
                     .setIsBrowsable(false)
                     .setIsPlayable(true)
                     .build(),
@@ -244,6 +258,9 @@ class PlaybackConnection @Inject constructor(
             return
         }
         val md = c.mediaMetadata
+        // Radio: mediaMetadata.title carries the ICY StreamTitle (Media3 fills it
+        // from the stream). displayTitle stays the station name for the notification.
+        val icyNowPlaying = if (isRadio) cleanIcy(md.title?.toString()) else null
         _state.value = PlaybackState(
             isConnected = true,
             isPlaying = c.isPlaying,
@@ -254,6 +271,8 @@ class PlaybackConnection @Inject constructor(
             chapterIndex = if (isAudiobook) c.currentMediaItemIndex else 0,
             chapterCount = if (isAudiobook) c.mediaItemCount else 0,
             speed = c.playbackParameters.speed,
+            stationName = if (isRadio) radioStationName else null,
+            nowPlaying = icyNowPlaying,
             title = md.title?.toString(),
             artist = md.artist?.toString(),
             artworkUri = md.artworkUri,
@@ -263,6 +282,26 @@ class PlaybackConnection @Inject constructor(
             hasPrevious = !isRadio && c.hasPreviousMediaItem(),
             queueSize = c.mediaItemCount,
         )
+    }
+
+    /**
+     * Tidy an ICY StreamTitle into something presentable. Shoutcast/Icecast
+     * titles are wildly inconsistent — "Artist - Track", bare track names,
+     * "Unknown", ad markers, stray whitespace. Returns null when there's
+     * nothing worth showing (blank, a placeholder, or just the station name).
+     */
+    private fun cleanIcy(raw: String?): String? {
+        val collapsed = raw?.replace(Regex("\\s+"), " ")?.trim().orEmpty()
+        if (collapsed.isEmpty()) return null
+        val lower = collapsed.lowercase()
+        if (lower == "unknown" || lower == "unknown - unknown" || lower == "-") return null
+        // Split "Artist - Track" and drop halves that are empty / "unknown".
+        val parts = collapsed.split(" - ").map { it.trim() }.filter {
+            it.isNotEmpty() && !it.equals("unknown", ignoreCase = true)
+        }
+        val text = if (parts.isEmpty()) collapsed else parts.joinToString(" - ")
+        if (text.equals(radioStationName?.trim(), ignoreCase = true)) return null
+        return text
     }
 
     private companion object {

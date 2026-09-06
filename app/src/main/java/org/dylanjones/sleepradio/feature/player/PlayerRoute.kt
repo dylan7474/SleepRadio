@@ -1,6 +1,5 @@
 package org.dylanjones.sleepradio.feature.player
 
-import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -25,7 +24,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,7 +45,6 @@ import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.SkinId
 import org.dylanjones.sleepradio.core.design.skinFor
 import org.dylanjones.sleepradio.feature.root.RootViewModel
-import org.dylanjones.sleepradio.media.Album
 
 @Composable
 fun PlayerRoute(
@@ -60,16 +57,6 @@ fun PlayerRoute(
     val skin = skinFor(skinId)
 
     val context = LocalContext.current
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> playerViewModel.onAudioPermissionResult(granted) }
-
-    LaunchedEffect(state.hasAudioPermission) {
-        if (!state.hasAudioPermission) {
-            permissionLauncher.launch(Manifest.permission.READ_MEDIA_AUDIO)
-        }
-    }
 
     fun persistTreeGrant(uri: android.net.Uri) {
         runCatching {
@@ -141,22 +128,15 @@ fun PlayerRoute(
         state.pickerForSlot?.let { slotIndex ->
             SourcePickerDialog(
                 stations = state.stations,
-                albums = state.albums,
                 folderAlbums = state.folderAlbums,
                 musicFolderChosen = state.musicFolderChosen,
                 audiobooks = state.audiobooks,
                 audiobooksFolderChosen = state.audiobooksFolderChosen,
-                hasMusicAccess = state.hasAudioPermission,
                 onPickStation = { playerViewModel.assignStationToSlot(slotIndex, it) },
-                onPickAlbum = { playerViewModel.assignAlbumToSlot(slotIndex, it) },
                 onPickFolderAlbum = { playerViewModel.assignFolderAlbumToSlot(slotIndex, it) },
                 onPickAudiobook = { playerViewModel.assignAudiobookToSlot(slotIndex, it) },
                 onChooseAudiobooksFolder = { audiobooksFolderLauncher.launch(null) },
                 onChooseMusicFolder = { musicFolderLauncher.launch(null) },
-                onGrantMusicAccess = {
-                    permissionLauncher.launch(Manifest.permission.READ_MEDIA_AUDIO)
-                    playerViewModel.retryLibraryLoad()
-                },
                 onDismiss = playerViewModel::dismissPicker,
             )
         }
@@ -211,19 +191,15 @@ private fun SkinChoiceCard(title: String, subtitle: String, onClick: () -> Unit)
 @Composable
 private fun SourcePickerDialog(
     stations: List<RadioStation>,
-    albums: List<Album>,
     folderAlbums: List<FolderAlbum>,
     musicFolderChosen: Boolean,
     audiobooks: List<Audiobook>,
     audiobooksFolderChosen: Boolean,
-    hasMusicAccess: Boolean,
     onPickStation: (RadioStation) -> Unit,
-    onPickAlbum: (Album) -> Unit,
     onPickFolderAlbum: (FolderAlbum) -> Unit,
     onPickAudiobook: (Audiobook) -> Unit,
     onChooseAudiobooksFolder: () -> Unit,
     onChooseMusicFolder: () -> Unit,
-    onGrantMusicAccess: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -266,7 +242,7 @@ private fun SourcePickerDialog(
                     HorizontalDivider()
                 }
 
-                item { SectionHeader("MUSIC — FROM A FOLDER") }
+                item { SectionHeader("MUSIC") }
                 item {
                     PickerRow(
                         primary = if (musicFolderChosen) "Change music folder…" else "Choose music folder…",
@@ -292,34 +268,6 @@ private fun SourcePickerDialog(
                             "${album.trackCount} tracks",
                         ).joinToString(" · "),
                         onClick = { onPickFolderAlbum(album) },
-                    )
-                    HorizontalDivider()
-                }
-
-                item { SectionHeader("MUSIC — DEVICE LIBRARY") }
-                if (!hasMusicAccess) {
-                    item {
-                        PickerRow(
-                            primary = "Grant access to music",
-                            secondary = "Needed to list the device music library",
-                            onClick = onGrantMusicAccess,
-                        )
-                        HorizontalDivider()
-                    }
-                } else if (albums.isEmpty()) {
-                    item {
-                        Text(
-                            "No albums found in the device library.",
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(vertical = 12.dp),
-                        )
-                    }
-                }
-                items(albums, key = { "album_${it.id}" }) { album ->
-                    PickerRow(
-                        primary = album.title,
-                        secondary = "${album.artist} · ${album.trackCount} tracks",
-                        onClick = { onPickAlbum(album) },
                     )
                     HorizontalDivider()
                 }
