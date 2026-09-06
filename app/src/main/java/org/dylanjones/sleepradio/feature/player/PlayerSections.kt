@@ -79,10 +79,10 @@ fun NowPlayingBlock(
 ) {
     val c = LocalAppSkin.current.colors
     Column(modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.Top) {
             visual(
                 Modifier
-                    .size(96.dp)
+                    .size(84.dp)
                     .clip(RoundedCornerShape(18.dp))
                     .background(c.panelBrush())
                     .border(1.dp, c.panelStroke, RoundedCornerShape(18.dp)),
@@ -91,12 +91,12 @@ fun NowPlayingBlock(
             Column(Modifier.fillMaxWidth()) {
                 Label("Artist")
                 Value(state.artist ?: "—", c.textPrimary)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 Label("Track")
                 Value(state.title ?: "—", c.accentAlt)
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 "${formatTime(state.positionMs)} / ${formatTime(state.durationMs)}",
@@ -110,6 +110,7 @@ fun NowPlayingBlock(
             onValueChange = { onSeek(it.toLong()) },
             valueRange = 0f..state.durationMs.coerceAtLeast(1L).toFloat(),
             enabled = state.durationMs > 0,
+            modifier = Modifier.height(20.dp),
             colors = SliderDefaults.colors(
                 activeTrackColor = c.accent,
                 thumbColor = c.accent,
@@ -119,7 +120,7 @@ fun NowPlayingBlock(
         WaveformStrip(
             Modifier
                 .fillMaxWidth()
-                .height(18.dp)
+                .height(16.dp)
                 .padding(top = 4.dp),
         )
     }
@@ -158,7 +159,12 @@ private fun WaveformStrip(modifier: Modifier) {
 
 @Composable
 private fun Label(text: String) {
-    Text(text, color = LocalAppSkin.current.colors.textDim, fontSize = 11.sp)
+    Text(
+        text = text,
+        color = LocalAppSkin.current.colors.textDim,
+        fontSize = 11.sp,
+        lineHeight = 13.sp,
+    )
 }
 
 @Composable
@@ -166,7 +172,8 @@ private fun Value(text: String, color: Color) {
     Text(
         text = text,
         color = color,
-        fontSize = 18.sp,
+        fontSize = 19.sp,
+        lineHeight = 22.sp,
         fontWeight = FontWeight.Bold,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

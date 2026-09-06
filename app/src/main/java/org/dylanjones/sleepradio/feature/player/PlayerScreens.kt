@@ -6,22 +6,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -70,40 +65,59 @@ fun NeonPlayerScreen(
         modifier = modifier
             .fillMaxSize()
             .safeDrawingPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         PlayerHeader(onMenu = actions.onMenu, onBell = actions.onBell) { Wordmark() }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(6.dp))
         NowPlayingBlock(state = pb, onSeek = actions.onSeek)
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(10.dp))
 
-        SkinPanel(Modifier.fillMaxWidth()) {
+        SkinPanel(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 repeat(PRESET_COUNT) { i ->
                     PresetTile(
                         index = i,
                         slot = state.presets.getOrNull(i),
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
                         onClick = { actions.onPresetClick(i) },
                     )
                 }
             }
             Spacer(Modifier.height(10.dp))
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                SkinTile(onClick = {}, modifier = Modifier.weight(1f)) {
+                SkinTile(
+                    onClick = {},
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                ) {
                     TileTitle("SLEEP")
                     Text("🌙", fontSize = 20.sp)
                     TileSub("${state.sleepMinutes} MIN")
                 }
-                SkinTile(onClick = {}, modifier = Modifier.weight(1f)) {
+                SkinTile(
+                    onClick = {},
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                ) {
                     TileTitle("NOISE")
                     Text("〜", fontSize = 20.sp)
                     TileSub("AMBIENT")
@@ -111,7 +125,7 @@ fun NeonPlayerScreen(
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
         TransportCluster(
             isPlaying = pb.isPlaying,
             hasPrevious = pb.hasPrevious,
@@ -120,7 +134,7 @@ fun NeonPlayerScreen(
             onPlayPause = actions.onPlayPause,
             onNext = actions.onNext,
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(10.dp))
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -128,7 +142,7 @@ fun NeonPlayerScreen(
             RotaryKnob("VOL", state.volume, actions.onVolumeChange)
             RotaryKnob("BAL", state.balance, actions.onBalanceChange)
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(4.dp))
     }
 }
 
@@ -192,35 +206,47 @@ fun IndustrialPlayerScreen(
         modifier = modifier
             .fillMaxSize()
             .safeDrawingPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         PlayerHeader(onMenu = actions.onMenu, onBell = actions.onBell) { Wordmark() }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(6.dp))
         NowPlayingBlock(
             state = pb,
             onSeek = actions.onSeek,
             visual = { m -> RadarVisual(m) },
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(10.dp))
 
-        SkinPanel(Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SkinTile(onClick = {}, modifier = Modifier.weight(1f)) {
-                    Text("🌙", fontSize = 18.sp)
+        SkinPanel(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SkinTile(onClick = {}, modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    Text("🌙", fontSize = 14.sp)
+                    Spacer(Modifier.height(2.dp))
                     TileSub("SLEEP\nDURATION")
                 }
-                SkinTile(onClick = {}, modifier = Modifier.weight(1f)) { TileSub("PATTERN 1") }
-                SkinTile(onClick = {}, modifier = Modifier.weight(1f)) { TileSub("PATTERN 2") }
-                SkinTile(onClick = {}, modifier = Modifier.weight(1f)) {
-                    Text("〜", fontSize = 18.sp)
+                SkinTile(onClick = {}, modifier = Modifier.weight(1f).fillMaxHeight()) { TileSub("PATTERN 1") }
+                SkinTile(onClick = {}, modifier = Modifier.weight(1f).fillMaxHeight()) { TileSub("PATTERN 2") }
+                SkinTile(onClick = {}, modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    Text("〜", fontSize = 14.sp)
+                    Spacer(Modifier.height(2.dp))
                     TileSub("NOISE\nMIXER")
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1.7f),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -228,12 +254,14 @@ fun IndustrialPlayerScreen(
                     fraction = state.sleepFraction,
                     minutes = state.sleepMinutes,
                     onChange = actions.onSleepFractionChange,
-                    modifier = Modifier.width(56.dp),
+                    modifier = Modifier
+                        .width(56.dp)
+                        .fillMaxHeight(),
                 )
                 StaticKnob(
                     label = "AURAL PATTERNS",
                     value = 0.5f,
-                    size = 110.dp,
+                    size = 96.dp,
                     modifier = Modifier.weight(1f),
                 )
                 Column(
@@ -241,20 +269,32 @@ fun IndustrialPlayerScreen(
                     modifier = Modifier.width(96.dp),
                 ) {
                     listOf("WHITE", "PINK", "DEEP SPACE", "AMBIENT").forEach {
-                        SkinTile(onClick = {}, modifier = Modifier.fillMaxWidth()) { TileSub(it) }
+                        SkinTile(
+                            onClick = {},
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { TileSub(it) }
                     }
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SkinTile(onClick = {}, modifier = Modifier.weight(1f)) { TileSub("PATTERN 3") }
-                SkinTile(onClick = {}, modifier = Modifier.weight(1f), active = true) {
-                    TileSub("RANDOM\nPATTERN")
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                SkinTile(onClick = {}, modifier = Modifier.weight(1f).fillMaxHeight()) { TileSub("PATTERN 3") }
+                SkinTile(
+                    onClick = {},
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    active = true,
+                ) {
+                    TileSub("RANDOM PATTERN")
                 }
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
         TransportCluster(
             isPlaying = pb.isPlaying,
             hasPrevious = pb.hasPrevious,
@@ -263,12 +303,12 @@ fun IndustrialPlayerScreen(
             onPlayPause = actions.onPlayPause,
             onNext = actions.onNext,
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            StaticKnob("VOL", state.volume)
-            StaticKnob("BAL", state.balance)
+            RotaryKnob("VOL", state.volume, actions.onVolumeChange)
+            RotaryKnob("BAL", state.balance, actions.onBalanceChange)
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(4.dp))
     }
 }
 
@@ -286,10 +326,17 @@ private fun DurationControl(
             value = fraction,
             onValueChange = onChange,
             modifier = Modifier
-                .width(40.dp)
-                .height(140.dp),
+                .width(36.dp)
+                .weight(1f)
+                .padding(vertical = 4.dp),
         )
-        Text("DURATION", color = c.textDim, fontSize = 9.sp)
+        Text(
+            text = "DURATION",
+            color = c.textDim,
+            fontSize = 8.sp,
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 
@@ -333,9 +380,11 @@ private fun TileSub(text: String) {
     Text(
         text = text,
         color = LocalAppSkin.current.colors.onTile,
-        fontSize = 9.sp,
+        fontSize = 10.sp,
         fontWeight = FontWeight.SemiBold,
         textAlign = TextAlign.Center,
-        lineHeight = 11.sp,
+        lineHeight = 12.sp,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
     )
 }

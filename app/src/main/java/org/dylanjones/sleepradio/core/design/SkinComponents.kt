@@ -66,7 +66,7 @@ fun SkinPanel(
             .clip(RoundedCornerShape(28.dp))
             .background(c.panelBrush())
             .border(1.dp, c.panelStroke, RoundedCornerShape(28.dp))
-            .padding(12.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         content = content,
     )
 }
@@ -90,7 +90,7 @@ fun SkinTile(
                 shape = RoundedCornerShape(14.dp),
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 5.dp, vertical = 11.dp),
+            .padding(horizontal = 4.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         content = content,
