@@ -2,6 +2,7 @@ package org.dylanjones.sleepradio.feature.player
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -231,6 +232,9 @@ private fun Label(text: String) {
 
 @Composable
 private fun Value(text: String, color: Color) {
+    // Long titles / ICY metadata scroll horizontally (marquee) instead of being
+    // clipped at the screen edge. basicMarquee only animates when the text
+    // actually overflows its width.
     Text(
         text = text,
         color = color,
@@ -238,7 +242,15 @@ private fun Value(text: String, color: Color) {
         lineHeight = 22.sp,
         fontWeight = FontWeight.Bold,
         maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+        softWrap = false,
+        overflow = TextOverflow.Clip,
+        modifier = Modifier
+            .fillMaxWidth()
+            .basicMarquee(
+                iterations = Int.MAX_VALUE,
+                initialDelayMillis = 1500,
+                velocity = 32.dp,
+            ),
     )
 }
 
