@@ -32,7 +32,11 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.SleepRadio">
+        <!-- usesCleartextTraffic: many internet-radio streams are http-only.
+             Phase 8 can narrow this to a per-domain network-security config. -->
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

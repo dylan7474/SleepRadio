@@ -34,6 +34,7 @@ data class PlaybackState(
     val isConnected: Boolean = false,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
+    val isRadio: Boolean = false,
     val title: String? = null,
     val artist: String? = null,
     val artworkUri: Uri? = null,
@@ -62,6 +63,7 @@ class PlaybackConnection @Inject constructor(
     private var controller: MediaController? = null
     private var future: ListenableFuture<MediaController>? = null
     private var ticker: Job? = null
+    private var isRadio: Boolean = false
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -91,7 +93,30 @@ class PlaybackConnection @Inject constructor(
 
     fun playTracks(tracks: List<Track>, startIndex: Int = 0) {
         val c = controller ?: return
+        isRadio = false
         c.setMediaItems(tracks.map { it.toMediaItem() }, startIndex, /* startPositionMs = */ 0L)
+        c.prepare()
+        c.play()
+    }
+
+    /** Stream an internet-radio station on Channel A (live, no seek). */
+    fun playRadio(url: String, name: String, description: String) {
+        val c = controller ?: return
+        isRadio = true
+        val item = MediaItem.Builder()
+            .setUri(url)
+            .setMediaId(url)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(name)
+                    .setArtist(description)
+                    .setStation(name)
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .build(),
+            )
+            .build()
+        c.setMediaItem(item)
         c.prepare()
         c.play()
     }
@@ -135,13 +160,14 @@ class PlaybackConnection @Inject constructor(
             isConnected = true,
             isPlaying = c.isPlaying,
             isBuffering = c.playbackState == Player.STATE_BUFFERING,
+            isRadio = isRadio,
             title = md.title?.toString(),
             artist = md.artist?.toString(),
             artworkUri = md.artworkUri,
-            positionMs = c.currentPosition.coerceAtLeast(0L),
-            durationMs = c.duration.let { if (it > 0) it else 0L },
-            hasNext = c.hasNextMediaItem(),
-            hasPrevious = c.hasPreviousMediaItem(),
+            positionMs = if (isRadio) 0L else c.currentPosition.coerceAtLeast(0L),
+            durationMs = if (isRadio) 0L else c.duration.let { if (it > 0) it else 0L },
+            hasNext = !isRadio && c.hasNextMediaItem(),
+            hasPrevious = !isRadio && c.hasPreviousMediaItem(),
             queueSize = c.mediaItemCount,
         )
     }

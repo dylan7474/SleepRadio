@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import org.dylanjones.sleepradio.core.data.SourceSlot
+import org.dylanjones.sleepradio.core.data.SourceType
 import org.dylanjones.sleepradio.core.design.IndustrialSkin
 import org.dylanjones.sleepradio.core.design.NeonSkin
 import org.dylanjones.sleepradio.core.design.SkinBackground
@@ -25,9 +27,9 @@ private val previewState = PlayerUiState(
     volume = 0.7f,
     balance = 0.4f,
     presets = listOf(
-        PresetSlot(1, "Abbey Road", "The Beatles"),
+        SourceSlot(0, SourceType.ALBUM, "1", "Abbey Road", "The Beatles"),
+        SourceSlot(1, SourceType.RADIO, "http://x", "BBC Radio 4", "Speech & drama"),
         null,
-        PresetSlot(3, "By The Way", "Red Hot Chili Peppers"),
         null,
     ),
 )
@@ -36,6 +38,7 @@ private val noopActions = PlayerActions(
     onMenu = {},
     onBell = {},
     onPresetClick = {},
+    onPresetLongClick = {},
     onPlayPause = {},
     onNext = {},
     onPrevious = {},

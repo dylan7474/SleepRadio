@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
+import androidx.room.Room
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -15,6 +16,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import org.dylanjones.sleepradio.core.data.SettingsRepository
 import org.dylanjones.sleepradio.core.data.SettingsRepositoryImpl
+import org.dylanjones.sleepradio.core.data.db.SleepRadioDatabase
+import org.dylanjones.sleepradio.core.data.db.SourceSlotDao
 import javax.inject.Singleton
 
 @Module
@@ -35,5 +38,15 @@ abstract class DataModule {
             scope = CoroutineScope(SupervisorJob() + io),
             produceFile = { context.preferencesDataStoreFile("sleepradio_settings") },
         )
+
+        @Provides
+        @Singleton
+        fun provideDatabase(@ApplicationContext context: Context): SleepRadioDatabase =
+            Room.databaseBuilder(context, SleepRadioDatabase::class.java, "sleepradio.db")
+                .fallbackToDestructiveMigration(dropAllTables = true)
+                .build()
+
+        @Provides
+        fun provideSourceSlotDao(db: SleepRadioDatabase): SourceSlotDao = db.sourceSlotDao()
     }
 }

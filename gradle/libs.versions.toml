@@ -18,6 +18,7 @@ datastore = "1.2.1"
 ksp = "2.2.10-2.0.2"
 hilt = "2.60.1"
 hiltNavigationCompose = "1.4.0"
+room = "2.8.4"
 # coil: deferred to Phase 7 — 3.6.2 pulls kotlin-stdlib 2.4.x which the
 # project's Kotlin 2.2.10 compiler cannot read.
 
@@ -51,6 +52,9 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
 androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

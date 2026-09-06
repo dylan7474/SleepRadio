@@ -97,34 +97,51 @@ fun NowPlayingBlock(
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.fillMaxWidth()) {
-                Label("Artist")
-                Value(state.artist ?: "—", c.textPrimary)
+                Label(if (state.isRadio) "Station" else "Artist")
+                Value(
+                    if (state.isRadio) (state.title ?: "—") else (state.artist ?: "—"),
+                    c.textPrimary,
+                )
                 Spacer(Modifier.height(8.dp))
-                Label("Track")
-                Value(state.title ?: "—", c.accentAlt)
+                Label(if (state.isRadio) "Stream" else "Track")
+                Value(
+                    if (state.isRadio) (state.artist ?: "Live") else (state.title ?: "—"),
+                    c.accentAlt,
+                )
             }
         }
         Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                "${formatTime(state.positionMs)} / ${formatTime(state.durationMs)}",
-                color = c.textSecondary,
-                fontSize = 12.sp,
+        if (state.isRadio) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("● LIVE", color = c.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(8.dp))
+                if (state.isBuffering) {
+                    Text("buffering…", color = c.textDim, fontSize = 12.sp)
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    "${formatTime(state.positionMs)} / ${formatTime(state.durationMs)}",
+                    color = c.textSecondary,
+                    fontSize = 12.sp,
+                )
+                Text(formatTime(state.durationMs), color = c.textDim, fontSize = 12.sp)
+            }
+            Slider(
+                value = state.positionMs.coerceIn(0L, state.durationMs.coerceAtLeast(0L)).toFloat(),
+                onValueChange = { onSeek(it.toLong()) },
+                valueRange = 0f..state.durationMs.coerceAtLeast(1L).toFloat(),
+                enabled = state.durationMs > 0,
+                modifier = Modifier.height(20.dp),
+                colors = SliderDefaults.colors(
+                    activeTrackColor = c.accent,
+                    thumbColor = c.accent,
+                    inactiveTrackColor = c.panelStroke,
+                ),
             )
-            Text(formatTime(state.durationMs), color = c.textDim, fontSize = 12.sp)
         }
-        Slider(
-            value = state.positionMs.coerceIn(0L, state.durationMs.coerceAtLeast(0L)).toFloat(),
-            onValueChange = { onSeek(it.toLong()) },
-            valueRange = 0f..state.durationMs.coerceAtLeast(1L).toFloat(),
-            enabled = state.durationMs > 0,
-            modifier = Modifier.height(20.dp),
-            colors = SliderDefaults.colors(
-                activeTrackColor = c.accent,
-                thumbColor = c.accent,
-                inactiveTrackColor = c.panelStroke,
-            ),
-        )
         WaveformStrip(
             Modifier
                 .fillMaxWidth()

@@ -39,11 +39,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.dylanjones.sleepradio.core.design.LocalAppSkin
+import org.dylanjones.sleepradio.core.data.RadioStation
 import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.SkinId
 import org.dylanjones.sleepradio.core.design.skinFor
 import org.dylanjones.sleepradio.feature.root.RootViewModel
+import org.dylanjones.sleepradio.media.Album
 
 @Composable
 fun PlayerRoute(
@@ -71,6 +72,7 @@ fun PlayerRoute(
         onMenu = { menuOpen = true },
         onBell = {},
         onPresetClick = playerViewModel::onPresetClicked,
+        onPresetLongClick = playerViewModel::clearSlot,
         onPlayPause = playerViewModel::playPause,
         onNext = playerViewModel::next,
         onPrevious = playerViewModel::previous,
@@ -101,10 +103,12 @@ fun PlayerRoute(
             SkinPickerOverlay(onPick = rootViewModel::chooseSkin)
         }
 
-        state.pickerForSlot?.let { slot ->
-            AlbumPickerDialog(
+        state.pickerForSlot?.let { slotIndex ->
+            SourcePickerDialog(
+                stations = state.stations,
                 albums = state.albums,
-                onPick = { playerViewModel.assignPresetAndPlay(slot, it) },
+                onPickStation = { playerViewModel.assignStationToSlot(slotIndex, it) },
+                onPickAlbum = { playerViewModel.assignAlbumToSlot(slotIndex, it) },
                 onDismiss = playerViewModel::dismissPicker,
             )
         }
@@ -157,9 +161,11 @@ private fun SkinChoiceCard(title: String, subtitle: String, onClick: () -> Unit)
 }
 
 @Composable
-private fun AlbumPickerDialog(
-    albums: List<org.dylanjones.sleepradio.media.Album>,
-    onPick: (org.dylanjones.sleepradio.media.Album) -> Unit,
+private fun SourcePickerDialog(
+    stations: List<RadioStation>,
+    albums: List<Album>,
+    onPickStation: (RadioStation) -> Unit,
+    onPickAlbum: (Album) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -168,25 +174,58 @@ private fun AlbumPickerDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
         title = { Text("Assign a source") },
         text = {
-            LazyColumn(Modifier.heightIn(max = 420.dp)) {
-                items(albums, key = { it.id }) { album ->
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { onPick(album) }
-                            .padding(vertical = 12.dp),
-                    ) {
-                        Text(album.title, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                item { SectionHeader("INTERNET RADIO") }
+                items(stations, key = { it.id }) { station ->
+                    PickerRow(
+                        primary = station.name,
+                        secondary = station.description,
+                        onClick = { onPickStation(station) },
+                    )
+                    HorizontalDivider()
+                }
+                item { SectionHeader("ALBUMS ON THIS DEVICE") }
+                if (albums.isEmpty()) {
+                    item {
                         Text(
-                            "${album.artist} · ${album.trackCount} tracks",
+                            "No albums found (grant music access).",
                             fontSize = 12.sp,
-                            maxLines = 1,
-                            textAlign = TextAlign.Start,
+                            modifier = Modifier.padding(vertical = 12.dp),
                         )
                     }
+                }
+                items(albums, key = { "album_${it.id}" }) { album ->
+                    PickerRow(
+                        primary = album.title,
+                        secondary = "${album.artist} · ${album.trackCount} tracks",
+                        onClick = { onPickAlbum(album) },
+                    )
                     HorizontalDivider()
                 }
             }
         },
     )
+}
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text = text,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun PickerRow(primary: String, secondary: String, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+    ) {
+        Text(primary, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Text(secondary, fontSize = 12.sp, maxLines = 1, textAlign = TextAlign.Start)
+    }
 }

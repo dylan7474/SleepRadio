@@ -33,7 +33,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -71,15 +73,23 @@ fun SkinPanel(
     )
 }
 
-/** A pressable control tile (preset slot, SLEEP, NOISE, PATTERN, noise colour…). */
+/** A pressable control tile (preset slot, SLEEP, NOISE, …). */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SkinTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     active: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = LocalAppSkin.current.colors
+    val clickModifier =
+        if (onLongClick != null) {
+            Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+        } else {
+            Modifier.clickable(onClick = onClick)
+        }
     Column(
         modifier
             .clip(RoundedCornerShape(14.dp))
@@ -89,7 +99,7 @@ fun SkinTile(
                 color = if (active) c.tileStroke else c.panelStroke,
                 shape = RoundedCornerShape(14.dp),
             )
-            .clickable(onClick = onClick)
+            .then(clickModifier)
             .padding(horizontal = 4.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,

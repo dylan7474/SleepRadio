@@ -19,6 +19,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.dylanjones.sleepradio.core.data.PRESET_COUNT
+import org.dylanjones.sleepradio.core.data.SourceSlot
+import org.dylanjones.sleepradio.core.data.SourceType
 import org.dylanjones.sleepradio.core.design.LocalAppSkin
 import org.dylanjones.sleepradio.core.design.RotaryKnob
 import org.dylanjones.sleepradio.core.design.SkinPanel
@@ -31,6 +34,7 @@ class PlayerActions(
     val onMenu: () -> Unit,
     val onBell: () -> Unit,
     val onPresetClick: (Int) -> Unit,
+    val onPresetLongClick: (Int) -> Unit,
     val onPlayPause: () -> Unit,
     val onNext: () -> Unit,
     val onPrevious: () -> Unit,
@@ -78,13 +82,16 @@ fun PlayerScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 repeat(PRESET_COUNT) { i ->
+                    val slot = state.presets.getOrNull(i)
                     PresetTile(
                         index = i,
-                        slot = state.presets.getOrNull(i),
+                        slot = slot,
+                        active = slot != null && slot.refId == state.nowPlayingRef,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight(),
                         onClick = { actions.onPresetClick(i) },
+                        onLongClick = { actions.onPresetLongClick(i) },
                     )
                 }
             }
@@ -139,19 +146,32 @@ fun PlayerScreen(
     }
 }
 
+private fun SourceType.badge(): String = when (this) {
+    SourceType.ALBUM -> "ALBUM"
+    SourceType.AUDIOBOOK -> "BOOK"
+    SourceType.RADIO -> "RADIO"
+}
+
 @Composable
 private fun PresetTile(
     index: Int,
-    slot: PresetSlot?,
+    slot: SourceSlot?,
+    active: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val onTile = LocalAppSkin.current.colors.onTile
-    SkinTile(onClick = onClick, modifier = modifier, active = slot != null) {
+    SkinTile(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        modifier = modifier,
+        active = active,
+    ) {
         Text(
             text = "${index + 1}",
             color = onTile,
-            fontSize = 22.sp,
+            fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
         )
         if (slot == null) {
@@ -166,20 +186,20 @@ private fun PresetTile(
             )
         } else {
             Text(
-                slot.label,
-                color = onTile,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
+                slot.type.badge(),
+                color = onTile.copy(alpha = 0.6f),
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
             )
             Text(
-                slot.sublabel,
-                color = onTile.copy(alpha = 0.7f),
+                slot.label,
+                color = onTile,
                 fontSize = 10.sp,
-                maxLines = 1,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
+                lineHeight = 12.sp,
             )
         }
     }
