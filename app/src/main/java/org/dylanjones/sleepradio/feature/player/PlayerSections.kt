@@ -27,11 +27,14 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.dylanjones.sleepradio.core.design.LocalAppSkin
+import org.dylanjones.sleepradio.core.design.SkinId
 import org.dylanjones.sleepradio.core.design.panelBrush
 import org.dylanjones.sleepradio.playback.PlaybackState
 import java.util.Locale
@@ -75,18 +78,23 @@ fun NowPlayingBlock(
     state: PlaybackState,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    visual: @Composable (Modifier) -> Unit = { m -> DefaultArtwork(state, m) },
 ) {
-    val c = LocalAppSkin.current.colors
+    val skin = LocalAppSkin.current
+    val c = skin.colors
     Column(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.Top) {
-            visual(
-                Modifier
-                    .size(84.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(c.panelBrush())
-                    .border(1.dp, c.panelStroke, RoundedCornerShape(18.dp)),
-            )
+            val visualModifier = Modifier
+                .size(84.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(c.panelBrush())
+                .border(1.dp, c.panelStroke, RoundedCornerShape(18.dp))
+            // The skin picks its now-playing visual: radar for Industrial,
+            // album-art placeholder for Neon. (Real album art: Phase 7.)
+            if (skin.id == SkinId.INDUSTRIAL) {
+                RadarVisual(visualModifier)
+            } else {
+                DefaultArtwork(state, visualModifier)
+            }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.fillMaxWidth()) {
                 Label("Artist")
@@ -132,6 +140,37 @@ private fun DefaultArtwork(state: PlaybackState, modifier: Modifier) {
     val c = LocalAppSkin.current.colors
     Box(modifier, contentAlignment = Alignment.Center) {
         Text("♪", color = c.textDim, fontSize = 28.sp)
+    }
+}
+
+@Composable
+private fun RadarVisual(modifier: Modifier) {
+    val c = LocalAppSkin.current.colors
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxWidth().height(84.dp)) {
+            val r = size.minDimension / 2f * 0.82f
+            val center = Offset(size.width / 2f, size.height / 2f)
+            for (ring in 1..3) {
+                drawCircle(
+                    color = c.accent.copy(alpha = 0.25f),
+                    radius = r * ring / 3f,
+                    center = center,
+                    style = Stroke(1.dp.toPx()),
+                )
+            }
+            drawLine(
+                color = c.accent,
+                start = center,
+                end = Offset(center.x + r * 0.9f, center.y - r * 0.5f),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+            drawCircle(
+                color = c.accentAlt,
+                radius = 3.dp.toPx(),
+                center = Offset(center.x + r * 0.4f, center.y - r * 0.2f),
+            )
+        }
     }
 }
 

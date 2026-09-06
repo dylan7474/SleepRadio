@@ -45,18 +45,18 @@ private val noopActions = PlayerActions(
     onSleepFractionChange = {},
 )
 
-@Preview(name = "Neon", widthDp = 412, heightDp = 980)
+@Preview(name = "Neon", widthDp = 412, heightDp = 900)
 @Composable
 private fun NeonPlayerPreview() {
     SkinBackground(NeonSkin) {
-        NeonPlayerScreen(previewState, noopActions, Modifier.fillMaxSize())
+        PlayerScreen(previewState, noopActions, Modifier.fillMaxSize())
     }
 }
 
-@Preview(name = "Industrial", widthDp = 412, heightDp = 980)
+@Preview(name = "Industrial", widthDp = 412, heightDp = 900)
 @Composable
 private fun IndustrialPlayerPreview() {
     SkinBackground(IndustrialSkin) {
-        IndustrialPlayerScreen(previewState, noopActions, Modifier.fillMaxSize())
+        PlayerScreen(previewState, noopActions, Modifier.fillMaxSize())
     }
 }

@@ -247,17 +247,17 @@ fun TransportCluster(
     }
 }
 
-/** RETROSYNC / PLAYER wordmark. */
+/** SLEEPRADIO / PLAYER wordmark. */
 @Composable
 fun Wordmark(modifier: Modifier = Modifier) {
     val c = LocalAppSkin.current.colors
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         Text(
-            text = "RETROSYNC",
+            text = "SLEEPRADIO",
             color = c.accent,
-            fontSize = 26.sp,
+            fontSize = 25.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 4.sp,
+            letterSpacing = 3.sp,
             textAlign = TextAlign.Center,
         )
         Text(

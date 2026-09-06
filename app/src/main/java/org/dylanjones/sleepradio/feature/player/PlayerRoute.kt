@@ -81,10 +81,7 @@ fun PlayerRoute(
     )
 
     SkinBackground(skin) {
-        when (skinId) {
-            SkinId.NEON -> NeonPlayerScreen(state, actions, Modifier.fillMaxSize())
-            SkinId.INDUSTRIAL -> IndustrialPlayerScreen(state, actions, Modifier.fillMaxSize())
-        }
+        PlayerScreen(state, actions, Modifier.fillMaxSize())
 
         // Skin switch menu, anchored near the ≡ button.
         Box(Modifier.safeDrawingPadding().padding(start = 20.dp, top = 8.dp)) {
