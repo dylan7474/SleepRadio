@@ -5,12 +5,16 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -29,6 +33,7 @@ import org.dylanjones.sleepradio.core.audio.AudioChannel
 import org.dylanjones.sleepradio.core.audio.BinauralGenerator
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.MixerController
+import org.dylanjones.sleepradio.core.audio.MixerState
 import org.dylanjones.sleepradio.core.audio.NoiseGenerator
 
 /**
@@ -55,6 +60,19 @@ class AmbientPlaybackService : Service() {
     private lateinit var mixer: MixerController
     private var observing: Job? = null
     private var startedForeground = false
+    private var noisyRegistered = false
+
+    /**
+     * Headphones unplugged / BT disconnected — never blast ambient noise out of
+     * the phone speaker (esp. at 3am). Channel A ([PlaybackService]) owns audio
+     * focus; this layer deliberately doesn't fight it for focus, it just handles
+     * the becoming-noisy case.
+     */
+    private val becomingNoisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) stopAmbient()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -64,11 +82,10 @@ class AmbientPlaybackService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            mixer.setNoiseEnabled(false)
-            mixer.setBinaural(BinauralPreset.OFF)
-            // The observer below sees both off and stops the service.
+            stopAmbient()
         }
         ensureForeground(label(mixer.ambient.value))
+        registerNoisy()
         if (observing == null) startObserving()
         return START_STICKY
     }
@@ -76,32 +93,52 @@ class AmbientPlaybackService : Service() {
     private fun startObserving() {
         observing = combine(mixer.state, mixer.ambient) { mix, amb -> mix to amb }
             .onEach { (mix, amb) ->
-                noise.setColor(amb.noiseColor)
-                if (amb.noiseEnabled) {
-                    noise.setGain(mix.effectiveGain(AudioChannel.NOISE))
-                    noise.start()
-                } else {
-                    noise.setGain(0f)
-                    noise.stop()
-                }
-
-                val bp = amb.binaural
-                if (bp != BinauralPreset.OFF) {
-                    binaural.setTones(bp.carrierHz, bp.beatHz)
-                    binaural.setGain(mix.effectiveGain(AudioChannel.BINAURAL))
-                    binaural.start()
-                } else {
-                    binaural.setGain(0f)
-                    binaural.stop()
-                }
-
-                if (!amb.noiseEnabled && bp == BinauralPreset.OFF) {
+                applyState(mix, amb)
+                if (!amb.noiseEnabled && amb.binaural == BinauralPreset.OFF) {
                     stopSelf()
                 } else {
                     updateNotification(label(amb))
                 }
             }
             .launchIn(scope)
+    }
+
+    private fun applyState(mix: MixerState, amb: AmbientState) {
+        noise.setColor(amb.noiseColor)
+        if (amb.noiseEnabled) {
+            noise.setGain(mix.effectiveGain(AudioChannel.NOISE))
+            noise.start()
+        } else {
+            noise.setGain(0f)
+            noise.stop()
+        }
+
+        val bp = amb.binaural
+        if (bp != BinauralPreset.OFF) {
+            binaural.setTones(bp.carrierHz, bp.beatHz)
+            binaural.setGain(mix.effectiveGain(AudioChannel.BINAURAL))
+            binaural.start()
+        } else {
+            binaural.setGain(0f)
+            binaural.stop()
+        }
+    }
+
+    /** Clean stop: turn both channels off in the mixer; the observer stops the service. */
+    private fun stopAmbient() {
+        mixer.setNoiseEnabled(false)
+        mixer.setBinaural(BinauralPreset.OFF)
+    }
+
+    private fun registerNoisy() {
+        if (noisyRegistered) return
+        ContextCompat.registerReceiver(
+            this,
+            becomingNoisyReceiver,
+            IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        noisyRegistered = true
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -113,6 +150,10 @@ class AmbientPlaybackService : Service() {
         observing?.cancel()
         noise.stop()
         binaural.stop()
+        if (noisyRegistered) {
+            runCatching { unregisterReceiver(becomingNoisyReceiver) }
+            noisyRegistered = false
+        }
         scope.cancel()
         super.onDestroy()
     }
