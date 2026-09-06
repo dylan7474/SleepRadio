@@ -25,17 +25,21 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import org.dylanjones.sleepradio.core.audio.AmbientPattern
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.NoiseColor
@@ -100,15 +105,22 @@ fun PlayerRoute(
         }
     }
 
-    var menuOpen by remember { mutableStateOf(false) }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    fun closeDrawer() = scope.launch { drawerState.close() }
+
     var ambientDialogOpen by remember { mutableStateOf(false) }
     var sleepDialogOpen by remember { mutableStateOf(false) }
     var addStationOpen by remember { mutableStateOf(false) }
     var directoryOpen by remember { mutableStateOf(false) }
+    /** Slot to assign a directory pick to, or null = "play now" from the drawer. */
+    var directoryAssignSlot by remember { mutableStateOf<Int?>(null) }
+    var radioStationsOpen by remember { mutableStateOf(false) }
+    var aboutOpen by remember { mutableStateOf(false) }
 
     val actions = PlayerActions(
-        onMenu = { menuOpen = true },
-        onBell = {},
+        onMenu = { scope.launch { drawerState.open() } },
+        onBell = { aboutOpen = true },
         onPresetClick = playerViewModel::onPresetClicked,
         onPresetLongClick = playerViewModel::clearSlot,
         onPlayPause = playerViewModel::playPause,
@@ -123,72 +135,89 @@ fun PlayerRoute(
         onNoiseColorPick = { ambientDialogOpen = true },
     )
 
-    SkinBackground(skin) {
-        PlayerScreen(state, actions, Modifier.fillMaxSize())
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            AppDrawer(
+                currentSkin = skinId,
+                onNowPlaying = { closeDrawer() },
+                onAmbient = { closeDrawer(); ambientDialogOpen = true },
+                onSleep = { closeDrawer(); sleepDialogOpen = true },
+                onRadioStations = { closeDrawer(); radioStationsOpen = true },
+                onSkin = { rootViewModel.chooseSkin(it); closeDrawer() },
+                onAbout = { closeDrawer(); aboutOpen = true },
+            )
+        },
+    ) {
+        SkinBackground(skin) {
+            PlayerScreen(state, actions, Modifier.fillMaxSize())
 
-        // Skin switch menu, anchored near the ≡ button.
-        Box(Modifier.safeDrawingPadding().padding(start = 20.dp, top = 8.dp)) {
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(
-                    text = { Text("Neon skin") },
-                    onClick = { rootViewModel.chooseSkin(SkinId.NEON); menuOpen = false },
-                )
-                DropdownMenuItem(
-                    text = { Text("Industrial skin") },
-                    onClick = { rootViewModel.chooseSkin(SkinId.INDUSTRIAL); menuOpen = false },
+            if (!skinChosen) {
+                SkinPickerOverlay(onPick = rootViewModel::chooseSkin)
+            }
+
+            if (sleepDialogOpen) {
+                SleepDurationDialog(
+                    current = state.sleepDurationMin,
+                    onPick = {
+                        playerViewModel.setSleepDuration(it)
+                        sleepDialogOpen = false
+                    },
+                    onDismiss = { sleepDialogOpen = false },
                 )
             }
-        }
 
-        if (!skinChosen) {
-            SkinPickerOverlay(onPick = rootViewModel::chooseSkin)
-        }
+            if (ambientDialogOpen) {
+                AmbientDialog(
+                    noiseColor = state.noiseColor,
+                    binaural = state.binaural,
+                    binauralLevel = state.binauralLevel,
+                    patterns = state.patterns,
+                    onPickNoise = playerViewModel::setNoiseColor,
+                    onPickBinaural = playerViewModel::setBinaural,
+                    onBinauralLevel = playerViewModel::setBinauralLevel,
+                    onRecallPattern = playerViewModel::recallPattern,
+                    onSavePattern = playerViewModel::savePattern,
+                    onClearPattern = playerViewModel::clearPattern,
+                    onDismiss = { ambientDialogOpen = false },
+                )
+            }
 
-        if (sleepDialogOpen) {
-            SleepDurationDialog(
-                current = state.sleepDurationMin,
-                onPick = {
-                    playerViewModel.setSleepDuration(it)
-                    sleepDialogOpen = false
-                },
-                onDismiss = { sleepDialogOpen = false },
-            )
-        }
+            if (radioStationsOpen) {
+                RadioStationsDialog(
+                    stations = state.stations,
+                    customStationIds = state.customStationIds,
+                    onPlay = { playerViewModel.playStationNow(it); radioStationsOpen = false },
+                    onRemove = playerViewModel::removeStation,
+                    onAddManual = { addStationOpen = true },
+                    onBrowseDirectory = { directoryAssignSlot = null; directoryOpen = true },
+                    onDismiss = { radioStationsOpen = false },
+                )
+            }
 
-        if (ambientDialogOpen) {
-            AmbientDialog(
-                noiseColor = state.noiseColor,
-                binaural = state.binaural,
-                binauralLevel = state.binauralLevel,
-                patterns = state.patterns,
-                onPickNoise = playerViewModel::setNoiseColor,
-                onPickBinaural = playerViewModel::setBinaural,
-                onBinauralLevel = playerViewModel::setBinauralLevel,
-                onRecallPattern = playerViewModel::recallPattern,
-                onSavePattern = playerViewModel::savePattern,
-                onClearPattern = playerViewModel::clearPattern,
-                onDismiss = { ambientDialogOpen = false },
-            )
-        }
+            if (aboutOpen) {
+                AboutDialog(onDismiss = { aboutOpen = false })
+            }
 
-        state.pickerForSlot?.let { slotIndex ->
-            SourcePickerDialog(
-                stations = state.stations,
-                customStationIds = state.customStationIds,
-                folderAlbums = state.folderAlbums,
-                musicFolderChosen = state.musicFolderChosen,
-                audiobooks = state.audiobooks,
-                audiobooksFolderChosen = state.audiobooksFolderChosen,
-                onPickStation = { playerViewModel.assignStationToSlot(slotIndex, it) },
-                onRemoveStation = playerViewModel::removeStation,
-                onAddManual = { addStationOpen = true },
-                onBrowseDirectory = { directoryOpen = true },
-                onPickFolderAlbum = { playerViewModel.assignFolderAlbumToSlot(slotIndex, it) },
-                onPickAudiobook = { playerViewModel.assignAudiobookToSlot(slotIndex, it) },
-                onChooseAudiobooksFolder = { audiobooksFolderLauncher.launch(null) },
-                onChooseMusicFolder = { musicFolderLauncher.launch(null) },
-                onDismiss = playerViewModel::dismissPicker,
-            )
+            state.pickerForSlot?.let { slotIndex ->
+                SourcePickerDialog(
+                    stations = state.stations,
+                    customStationIds = state.customStationIds,
+                    folderAlbums = state.folderAlbums,
+                    musicFolderChosen = state.musicFolderChosen,
+                    audiobooks = state.audiobooks,
+                    audiobooksFolderChosen = state.audiobooksFolderChosen,
+                    onPickStation = { playerViewModel.assignStationToSlot(slotIndex, it) },
+                    onRemoveStation = playerViewModel::removeStation,
+                    onAddManual = { addStationOpen = true },
+                    onBrowseDirectory = { directoryAssignSlot = slotIndex; directoryOpen = true },
+                    onPickFolderAlbum = { playerViewModel.assignFolderAlbumToSlot(slotIndex, it) },
+                    onPickAudiobook = { playerViewModel.assignAudiobookToSlot(slotIndex, it) },
+                    onChooseAudiobooksFolder = { audiobooksFolderLauncher.launch(null) },
+                    onChooseMusicFolder = { musicFolderLauncher.launch(null) },
+                    onDismiss = playerViewModel::dismissPicker,
+                )
+            }
 
             if (addStationOpen) {
                 AddStationDialog(
@@ -201,9 +230,16 @@ fun PlayerRoute(
                     results = state.directoryResults,
                     searching = state.directorySearching,
                     onSearch = playerViewModel::searchDirectory,
-                    onPick = {
-                        playerViewModel.addAndAssignStation(slotIndex, it)
+                    onPick = { station ->
+                        val slot = directoryAssignSlot
+                        if (slot != null) {
+                            playerViewModel.addAndAssignStation(slot, station)
+                        } else {
+                            playerViewModel.saveCustomStation(station)
+                            playerViewModel.playStationNow(station)
+                        }
                         directoryOpen = false
+                        playerViewModel.clearDirectory()
                     },
                     onDismiss = {
                         directoryOpen = false
@@ -213,6 +249,145 @@ fun PlayerRoute(
             }
         }
     }
+}
+
+@Composable
+private fun AppDrawer(
+    currentSkin: SkinId,
+    onNowPlaying: () -> Unit,
+    onAmbient: () -> Unit,
+    onSleep: () -> Unit,
+    onRadioStations: () -> Unit,
+    onSkin: (SkinId) -> Unit,
+    onAbout: () -> Unit,
+) {
+    ModalDrawerSheet {
+        Column(
+            Modifier
+                .safeDrawingPadding()
+                .padding(horizontal = 12.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Text(
+                "SLEEPRADIO",
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                modifier = Modifier.padding(16.dp),
+            )
+            NavigationDrawerItem(
+                label = { Text("Now playing") },
+                selected = false,
+                onClick = onNowPlaying,
+            )
+            NavigationDrawerItem(
+                label = { Text("Ambient mix") },
+                selected = false,
+                onClick = onAmbient,
+            )
+            NavigationDrawerItem(
+                label = { Text("Sleep timer") },
+                selected = false,
+                onClick = onSleep,
+            )
+            NavigationDrawerItem(
+                label = { Text("Radio stations") },
+                selected = false,
+                onClick = onRadioStations,
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SectionHeader("APPEARANCE")
+            NavigationDrawerItem(
+                label = { Text("Neon") },
+                selected = currentSkin == SkinId.NEON,
+                onClick = { onSkin(SkinId.NEON) },
+            )
+            NavigationDrawerItem(
+                label = { Text("Industrial") },
+                selected = currentSkin == SkinId.INDUSTRIAL,
+                onClick = { onSkin(SkinId.INDUSTRIAL) },
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            NavigationDrawerItem(
+                label = { Text("About") },
+                selected = false,
+                onClick = onAbout,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val version = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "—"
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+        title = { Text("SleepRadio") },
+        text = {
+            Column {
+                Text("Version $version", fontSize = 13.sp)
+                Spacer(Modifier.padding(6.dp))
+                Text(
+                    "A bedside player: a main source (local music, audiobooks or " +
+                        "internet radio) plus coloured-noise and binaural-beat channels " +
+                        "that keep going after the sleep timer stops the main audio.",
+                    fontSize = 13.sp,
+                )
+                Spacer(Modifier.padding(6.dp))
+                Text(
+                    "Station directory data from radio-browser.info (community-run, " +
+                        "public domain).",
+                    fontSize = 12.sp,
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun RadioStationsDialog(
+    stations: List<RadioStation>,
+    customStationIds: Set<String>,
+    onPlay: (RadioStation) -> Unit,
+    onRemove: (String) -> Unit,
+    onAddManual: () -> Unit,
+    onBrowseDirectory: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text("Radio stations") },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                item {
+                    PickerRow("＋  Add a station manually…", "Enter a name and stream URL", onAddManual)
+                    HorizontalDivider()
+                }
+                item {
+                    PickerRow("⌕  Browse the online directory…", "Search radio-browser.info", onBrowseDirectory)
+                    HorizontalDivider()
+                }
+                item { SectionHeader("TAP TO PLAY NOW") }
+                items(stations, key = { it.id }) { station ->
+                    StationRow(
+                        name = station.name,
+                        description = station.description,
+                        deletable = station.id in customStationIds,
+                        onClick = { onPlay(station) },
+                        onRemove = { onRemove(station.id) },
+                    )
+                    HorizontalDivider()
+                }
+            }
+        },
+    )
 }
 
 @Composable

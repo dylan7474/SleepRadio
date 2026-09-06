@@ -276,6 +276,17 @@ class PlayerViewModel @Inject constructor(
         assignStationToSlot(index, station)
     }
 
+    /** Persist a station (e.g. a directory result) without assigning it to a slot. */
+    fun saveCustomStation(station: RadioStation) {
+        viewModelScope.launch { settings.addCustomStation(station) }
+    }
+
+    /** Play a station on Channel A immediately, without occupying a preset slot. */
+    fun playStationNow(station: RadioStation) {
+        playback.playRadio(station.streamUrl, station.name, station.description)
+        local.update { it.copy(nowPlayingRef = station.streamUrl) }
+    }
+
     fun assignFolderAlbumToSlot(index: Int, album: FolderAlbum) {
         val slot = SourceSlot(
             index = index,
