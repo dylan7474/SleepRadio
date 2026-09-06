@@ -39,3 +39,13 @@ data class MixerState(
         AudioChannel.BINAURAL -> binauralLevel.coerceIn(0f, 1f) * masterGain
     }
 }
+
+/**
+ * On/off + configuration for the two ambient channels (B noise, C binaural).
+ * Separate from [MixerState] because these are discrete choices, not knob
+ * positions. Channel C lands in a later Phase 5 chunk.
+ */
+data class AmbientState(
+    val noiseEnabled: Boolean = false,
+    val noiseColor: NoiseColor = NoiseColor.WHITE,
+)

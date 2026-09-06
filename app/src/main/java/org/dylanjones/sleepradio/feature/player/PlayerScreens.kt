@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
 import org.dylanjones.sleepradio.core.data.SourceSlot
 import org.dylanjones.sleepradio.core.data.SourceType
@@ -49,6 +50,10 @@ class PlayerActions(
     val onVolumeChange: (Float) -> Unit,
     val onBalanceChange: (Float) -> Unit,
     val onSleepFractionChange: (Float) -> Unit,
+    /** NOISE tile tap — toggle Channel B on/off. */
+    val onNoiseToggle: () -> Unit,
+    /** NOISE tile long-press — open the spectrum picker. */
+    val onNoiseColorPick: () -> Unit,
 )
 
 private val placeholderFreqs = listOf("94.7", "101.3", "88.5", "106.1")
@@ -120,14 +125,16 @@ fun PlayerScreen(
                     TileSub("${state.sleepMinutes} MIN")
                 }
                 SkinTile(
-                    onClick = {},
+                    onClick = actions.onNoiseToggle,
+                    onLongClick = actions.onNoiseColorPick,
+                    active = state.noiseEnabled,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
                 ) {
                     TileTitle("NOISE")
                     Text("〜", fontSize = 20.sp)
-                    TileSub("AMBIENT")
+                    TileSub(if (state.noiseEnabled) state.noiseColor.label() else "OFF")
                 }
             }
         }
@@ -169,6 +176,15 @@ private fun SourceType.badge(): String = when (this) {
     SourceType.MUSIC_FOLDER -> "ALBUM"
     SourceType.AUDIOBOOK -> "BOOK"
     SourceType.RADIO -> "RADIO"
+}
+
+internal fun NoiseColor.label(): String = when (this) {
+    NoiseColor.WHITE -> "WHITE"
+    NoiseColor.PINK -> "PINK"
+    NoiseColor.BROWN -> "BROWN"
+    NoiseColor.BLUE -> "BLUE"
+    NoiseColor.DEEP_SPACE -> "DEEP SPACE"
+    NoiseColor.AMBIENT -> "AMBIENT"
 }
 
 @Composable

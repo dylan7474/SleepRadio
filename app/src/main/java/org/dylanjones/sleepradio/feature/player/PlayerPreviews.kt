@@ -48,6 +48,8 @@ private val noopActions = PlayerActions(
     onVolumeChange = {},
     onBalanceChange = {},
     onSleepFractionChange = {},
+    onNoiseToggle = {},
+    onNoiseColorPick = {},
 )
 
 @Preview(name = "Neon", widthDp = 412, heightDp = 900)

@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.RadioStation
@@ -86,6 +87,7 @@ fun PlayerRoute(
     }
 
     var menuOpen by remember { mutableStateOf(false) }
+    var noiseColorPickerOpen by remember { mutableStateOf(false) }
 
     val actions = PlayerActions(
         onMenu = { menuOpen = true },
@@ -102,6 +104,8 @@ fun PlayerRoute(
         onVolumeChange = playerViewModel::onVolumeChange,
         onBalanceChange = playerViewModel::onBalanceChange,
         onSleepFractionChange = playerViewModel::onSleepFractionChange,
+        onNoiseToggle = playerViewModel::toggleNoise,
+        onNoiseColorPick = { noiseColorPickerOpen = true },
     )
 
     SkinBackground(skin) {
@@ -123,6 +127,17 @@ fun PlayerRoute(
 
         if (!skinChosen) {
             SkinPickerOverlay(onPick = rootViewModel::chooseSkin)
+        }
+
+        if (noiseColorPickerOpen) {
+            NoiseColorDialog(
+                current = state.noiseColor,
+                onPick = {
+                    playerViewModel.setNoiseColor(it)
+                    noiseColorPickerOpen = false
+                },
+                onDismiss = { noiseColorPickerOpen = false },
+            )
         }
 
         state.pickerForSlot?.let { slotIndex ->
@@ -274,6 +289,44 @@ private fun SourcePickerDialog(
             }
         },
     )
+}
+
+@Composable
+private fun NoiseColorDialog(
+    current: NoiseColor,
+    onPick: (NoiseColor) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Noise colour") },
+        text = {
+            LazyColumn {
+                items(NoiseColor.entries.toList(), key = { it.name }) { color ->
+                    PickerRow(
+                        primary = color.label(),
+                        secondary = color.blurb(),
+                        onClick = { onPick(color) },
+                    )
+                    if (color == current) {
+                        Text("● current", fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
+                    }
+                    HorizontalDivider()
+                }
+            }
+        },
+    )
+}
+
+private fun NoiseColor.blurb(): String = when (this) {
+    NoiseColor.WHITE -> "Flat spectrum — bright, full hiss"
+    NoiseColor.PINK -> "−3 dB/oct — balanced, natural"
+    NoiseColor.BROWN -> "−6 dB/oct — deep, rain-like rumble"
+    NoiseColor.BLUE -> "+3 dB/oct — airy, high-frequency"
+    NoiseColor.DEEP_SPACE -> "Very deep brown — distant hum"
+    NoiseColor.AMBIENT -> "Pink with a slow swell"
 }
 
 @Composable

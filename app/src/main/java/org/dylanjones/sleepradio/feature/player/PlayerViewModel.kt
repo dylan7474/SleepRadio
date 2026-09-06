@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.dylanjones.sleepradio.core.audio.MixerController
+import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
@@ -50,6 +51,10 @@ data class PlayerUiState(
     val balance: Float = 0.5f,
     /** Sleep-duration slider 0..1 (15–60 min). Wired to the timer in Phase 6. */
     val sleepFraction: Float = 1f / 3f,
+    /** Channel B (noise) on/off. */
+    val noiseEnabled: Boolean = false,
+    /** Channel B noise spectrum. */
+    val noiseColor: NoiseColor = NoiseColor.WHITE,
 ) {
     val sleepMinutes: Int get() = sleepMinutesFor(sleepFraction)
 }
@@ -68,7 +73,13 @@ class PlayerViewModel @Inject constructor(
     private val local = MutableStateFlow(LocalState())
 
     val uiState: StateFlow<PlayerUiState> =
-        combine(local, playback.state, mixer.state, slots.slots) { l, pb, mx, presetSlots ->
+        combine(
+            local,
+            playback.state,
+            mixer.state,
+            mixer.ambient,
+            slots.slots,
+        ) { l, pb, mx, amb, presetSlots ->
             PlayerUiState(
                 folderAlbums = l.folderAlbums,
                 musicFolderChosen = l.musicTreeUri != null,
@@ -82,6 +93,8 @@ class PlayerViewModel @Inject constructor(
                 volume = mx.masterGain,
                 balance = mx.crossfade,
                 sleepFraction = l.sleepFraction,
+                noiseEnabled = amb.noiseEnabled,
+                noiseColor = amb.noiseColor,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayerUiState())
 
@@ -249,6 +262,8 @@ class PlayerViewModel @Inject constructor(
 
     fun onVolumeChange(value: Float) = mixer.setVolume(value)
     fun onBalanceChange(value: Float) = mixer.setBalance(value)
+    fun toggleNoise() = mixer.toggleNoise()
+    fun setNoiseColor(color: NoiseColor) = mixer.setNoiseColor(color)
     fun onSleepFractionChange(value: Float) {
         local.value = local.value.copy(sleepFraction = value.coerceIn(0f, 1f))
     }
