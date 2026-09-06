@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
 import org.dylanjones.sleepradio.core.data.SourceSlot
@@ -119,17 +120,18 @@ fun PlayerScreen(
                     Text("🌙", fontSize = 20.sp)
                     TileSub("${state.sleepMinutes} MIN")
                 }
+                val binauralOn = state.binaural != BinauralPreset.OFF
                 SkinTile(
                     onClick = actions.onNoiseToggle,
                     onLongClick = actions.onNoiseColorPick,
-                    active = state.noiseEnabled,
+                    active = state.noiseEnabled || binauralOn,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight(),
                 ) {
                     TileTitle("NOISE")
                     Text("〜", fontSize = 20.sp)
-                    TileSub(if (state.noiseEnabled) state.noiseColor.label() else "OFF")
+                    TileSub(ambientSummary(state.noiseEnabled, state.noiseColor, binauralOn))
                 }
             }
         }
@@ -171,6 +173,14 @@ internal fun NoiseColor.label(): String = when (this) {
     NoiseColor.BLUE -> "BLUE"
     NoiseColor.DEEP_SPACE -> "DEEP SPACE"
     NoiseColor.AMBIENT -> "AMBIENT"
+}
+
+/** NOISE-tile sub-label covering both ambient channels (long-press = config). */
+private fun ambientSummary(noiseOn: Boolean, color: NoiseColor, binauralOn: Boolean): String = when {
+    noiseOn && binauralOn -> "${color.label()} +β"
+    noiseOn -> color.label()
+    binauralOn -> "BEATS"
+    else -> "OFF"
 }
 
 @Composable

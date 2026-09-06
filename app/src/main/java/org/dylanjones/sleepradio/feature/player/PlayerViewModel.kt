@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.data.Audiobook
@@ -53,6 +54,8 @@ data class PlayerUiState(
     val noiseEnabled: Boolean = false,
     /** Channel B noise spectrum. */
     val noiseColor: NoiseColor = NoiseColor.WHITE,
+    /** Channel C (binaural) preset — OFF = disabled. */
+    val binaural: BinauralPreset = BinauralPreset.OFF,
 ) {
     val sleepMinutes: Int get() = sleepMinutesFor(sleepFraction)
 }
@@ -93,6 +96,7 @@ class PlayerViewModel @Inject constructor(
                 sleepFraction = l.sleepFraction,
                 noiseEnabled = amb.noiseEnabled,
                 noiseColor = amb.noiseColor,
+                binaural = amb.binaural,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayerUiState())
 
@@ -260,6 +264,7 @@ class PlayerViewModel @Inject constructor(
     fun onBalanceChange(value: Float) = mixer.setBalance(value)
     fun toggleNoise() = mixer.toggleNoise()
     fun setNoiseColor(color: NoiseColor) = mixer.setNoiseColor(color)
+    fun setBinaural(preset: BinauralPreset) = mixer.setBinaural(preset)
     fun onSleepFractionChange(value: Float) {
         local.value = local.value.copy(sleepFraction = value.coerceIn(0f, 1f))
     }

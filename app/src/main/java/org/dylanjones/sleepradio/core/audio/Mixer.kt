@@ -26,8 +26,8 @@ data class MixerState(
     val masterGain: Float = 0.8f,
     /** BAL: 0f = MAIN only, 0.5f = both, 1f = NOISE only. */
     val crossfade: Float = 0.5f,
-    /** Binaural level from Settings: 0f..1f. */
-    val binauralLevel: Float = 0f,
+    /** Binaural level (settings-controlled, outside BAL): 0f..1f. */
+    val binauralLevel: Float = 0.4f,
 ) {
     private val theta: Float
         get() = crossfade.coerceIn(0f, 1f) * (Math.PI.toFloat() / 2f)
@@ -41,11 +41,26 @@ data class MixerState(
 }
 
 /**
+ * Binaural-beat presets (carrier + beat Hz). Custom carrier/beat come with the
+ * settings screen later in Phase 5.
+ */
+enum class BinauralPreset(val label: String, val carrierHz: Float, val beatHz: Float) {
+    OFF("Off", 0f, 0f),
+    SLEEP("Sleep · 3 Hz delta", 180f, 3f),
+    MEDITATE("Meditate · 4.5 Hz theta", 190f, 4.5f),
+    RELAX("Relax · 6 Hz theta", 200f, 6f),
+    FOCUS("Focus · 10 Hz alpha", 220f, 10f),
+}
+
+/**
  * On/off + configuration for the two ambient channels (B noise, C binaural).
  * Separate from [MixerState] because these are discrete choices, not knob
- * positions. Channel C lands in a later Phase 5 chunk.
+ * positions.
  */
 data class AmbientState(
     val noiseEnabled: Boolean = false,
     val noiseColor: NoiseColor = NoiseColor.WHITE,
-)
+    val binaural: BinauralPreset = BinauralPreset.OFF,
+) {
+    val binauralEnabled: Boolean get() = binaural != BinauralPreset.OFF
+}

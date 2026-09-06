@@ -36,10 +36,11 @@ class MixerController @Inject constructor() {
     val ambient: StateFlow<AmbientState> = _ambient.asStateFlow()
 
     private val noise = NoiseGenerator()
+    private val binaural = BinauralGenerator()
 
     init {
-        // Keep Channel B's generator in sync with VOL, BAL and the noise
-        // on-off / colour choice.
+        // Keep Channels B (noise) and C (binaural) in sync with VOL / BAL and
+        // their on-off / preset choices.
         combine(_state, _ambient) { mix, amb -> mix to amb }
             .onEach { (mix, amb) ->
                 noise.setColor(amb.noiseColor)
@@ -49,6 +50,16 @@ class MixerController @Inject constructor() {
                 } else {
                     noise.setGain(0f)
                     noise.stop()
+                }
+
+                val bp = amb.binaural
+                if (bp != BinauralPreset.OFF) {
+                    binaural.setTones(bp.carrierHz, bp.beatHz)
+                    binaural.setGain(mix.effectiveGain(AudioChannel.BINAURAL))
+                    binaural.start()
+                } else {
+                    binaural.setGain(0f)
+                    binaural.stop()
                 }
             }
             .launchIn(scope)
@@ -81,5 +92,10 @@ class MixerController @Inject constructor() {
     /** NOISE colour picker. */
     fun setNoiseColor(color: NoiseColor) {
         _ambient.update { it.copy(noiseColor = color) }
+    }
+
+    /** Channel C binaural preset ([BinauralPreset.OFF] = disabled). */
+    fun setBinaural(preset: BinauralPreset) {
+        _ambient.update { it.copy(binaural = preset) }
     }
 }

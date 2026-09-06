@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.FolderAlbum
@@ -87,7 +88,7 @@ fun PlayerRoute(
     }
 
     var menuOpen by remember { mutableStateOf(false) }
-    var noiseColorPickerOpen by remember { mutableStateOf(false) }
+    var ambientDialogOpen by remember { mutableStateOf(false) }
 
     val actions = PlayerActions(
         onMenu = { menuOpen = true },
@@ -102,7 +103,7 @@ fun PlayerRoute(
         onBalanceChange = playerViewModel::onBalanceChange,
         onSleepFractionChange = playerViewModel::onSleepFractionChange,
         onNoiseToggle = playerViewModel::toggleNoise,
-        onNoiseColorPick = { noiseColorPickerOpen = true },
+        onNoiseColorPick = { ambientDialogOpen = true },
     )
 
     SkinBackground(skin) {
@@ -126,14 +127,13 @@ fun PlayerRoute(
             SkinPickerOverlay(onPick = rootViewModel::chooseSkin)
         }
 
-        if (noiseColorPickerOpen) {
-            NoiseColorDialog(
-                current = state.noiseColor,
-                onPick = {
-                    playerViewModel.setNoiseColor(it)
-                    noiseColorPickerOpen = false
-                },
-                onDismiss = { noiseColorPickerOpen = false },
+        if (ambientDialogOpen) {
+            AmbientDialog(
+                noiseColor = state.noiseColor,
+                binaural = state.binaural,
+                onPickNoise = playerViewModel::setNoiseColor,
+                onPickBinaural = playerViewModel::setBinaural,
+                onDismiss = { ambientDialogOpen = false },
             )
         }
 
@@ -289,33 +289,50 @@ private fun SourcePickerDialog(
 }
 
 @Composable
-private fun NoiseColorDialog(
-    current: NoiseColor,
-    onPick: (NoiseColor) -> Unit,
+private fun AmbientDialog(
+    noiseColor: NoiseColor,
+    binaural: BinauralPreset,
+    onPickNoise: (NoiseColor) -> Unit,
+    onPickBinaural: (BinauralPreset) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-        title = { Text("Noise colour") },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        title = { Text("Ambient mix") },
         text = {
-            LazyColumn {
-                items(NoiseColor.entries.toList(), key = { it.name }) { color ->
+            LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                item { SectionHeader("NOISE — SPECTRUM") }
+                items(NoiseColor.entries.toList(), key = { "noise_${it.name}" }) { color ->
                     PickerRow(
-                        primary = color.label(),
+                        primary = color.label() + if (color == noiseColor) "  ● current" else "",
                         secondary = color.blurb(),
-                        onClick = { onPick(color) },
+                        onClick = { onPickNoise(color) },
                     )
-                    if (color == current) {
-                        Text("● current", fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
-                    }
+                    HorizontalDivider()
+                }
+
+                item { SectionHeader("BINAURAL BEATS — USE HEADPHONES") }
+                items(BinauralPreset.entries.toList(), key = { "bin_${it.name}" }) { preset ->
+                    PickerRow(
+                        primary = preset.label + if (preset == binaural) "  ● current" else "",
+                        secondary = if (preset == BinauralPreset.OFF) {
+                            "Channel C off"
+                        } else {
+                            "${preset.carrierHz.toInt()} Hz carrier · +${trimHz(preset.beatHz)} Hz beat"
+                        },
+                        onClick = { onPickBinaural(preset) },
+                    )
                     HorizontalDivider()
                 }
             }
         },
     )
 }
+
+private fun trimHz(v: Float): String =
+    if (v % 1f == 0f) v.toInt().toString() else v.toString()
 
 private fun NoiseColor.blurb(): String = when (this) {
     NoiseColor.WHITE -> "Flat spectrum — bright, full hiss"
