@@ -32,8 +32,6 @@ import org.dylanjones.sleepradio.playback.PlaybackConnection
 import org.dylanjones.sleepradio.playback.PlaybackState
 import javax.inject.Inject
 
-private val SPEED_CYCLE = listOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 0.85f)
-
 data class PlayerUiState(
     /** Music-folder albums from the user-chosen SAF tree (the only music source). */
     val folderAlbums: List<FolderAlbum> = emptyList(),
@@ -240,7 +238,6 @@ class PlayerViewModel @Inject constructor(
                     bookTitle = slot.label,
                     startChapter = progress?.chapterIndex ?: 0,
                     startPositionMs = progress?.positionMs ?: 0L,
-                    speed = 1f,
                 )
                 local.value = local.value.copy(nowPlayingRef = slot.refId)
             }
@@ -248,17 +245,16 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun playPause() = playback.playPause()
-    fun next() = playback.next()
-    fun previous() = playback.previous()
-    fun seekTo(positionMs: Long) = playback.seekTo(positionMs)
-    fun skipBack() = playback.skipBy(-30_000L)
-    fun skipForward() = playback.skipBy(30_000L)
 
-    fun cycleSpeed() {
-        val current = uiState.value.playback.speed
-        val next = SPEED_CYCLE.firstOrNull { it > current + 0.01f } ?: SPEED_CYCLE.first()
-        playback.setSpeed(next)
-    }
+    /** Audiobook: jump +1 min. Otherwise: next track in the queue. */
+    fun next() =
+        if (uiState.value.playback.isAudiobook) playback.skipBy(60_000L) else playback.next()
+
+    /** Audiobook: jump −1 min. Otherwise: previous track in the queue. */
+    fun previous() =
+        if (uiState.value.playback.isAudiobook) playback.skipBy(-60_000L) else playback.previous()
+
+    fun seekTo(positionMs: Long) = playback.seekTo(positionMs)
 
     fun onVolumeChange(value: Float) = mixer.setVolume(value)
     fun onBalanceChange(value: Float) = mixer.setBalance(value)

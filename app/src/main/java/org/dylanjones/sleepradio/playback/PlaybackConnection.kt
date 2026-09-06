@@ -41,7 +41,6 @@ data class PlaybackState(
     val bookId: String? = null,
     val chapterIndex: Int = 0,
     val chapterCount: Int = 0,
-    val speed: Float = 1f,
     /** Radio: stable station name (never overwritten by stream metadata). */
     val stationName: String? = null,
     /** Radio: current "Artist - Track" from ICY stream metadata, if any. */
@@ -154,7 +153,6 @@ class PlaybackConnection @Inject constructor(
         bookTitle: String,
         startChapter: Int,
         startPositionMs: Long,
-        speed: Float,
     ) {
         val c = controller ?: return
         if (chapters.isEmpty()) return
@@ -175,17 +173,14 @@ class PlaybackConnection @Inject constructor(
                 )
                 .build()
         }
-        c.setPlaybackParameters(PlaybackParameters(speed))
+        c.setPlaybackParameters(PlaybackParameters(1f))
         c.setMediaItems(items, startChapter.coerceIn(0, items.lastIndex), startPositionMs.coerceAtLeast(0L))
         c.prepare()
         c.play()
     }
 
-    fun setSpeed(speed: Float) {
-        controller?.setPlaybackParameters(PlaybackParameters(speed.coerceIn(0.5f, 3f)))
-        pushSnapshot()
-    }
-
+    /** Seek by [deltaMs] (negative = backward), clamped at 0. Used by the
+     *  transport prev/next buttons while an audiobook plays (±1 min). */
     fun skipBy(deltaMs: Long) {
         val c = controller ?: return
         val target = (c.currentPosition + deltaMs).coerceAtLeast(0L)
@@ -270,7 +265,6 @@ class PlaybackConnection @Inject constructor(
             bookId = bookId,
             chapterIndex = if (isAudiobook) c.currentMediaItemIndex else 0,
             chapterCount = if (isAudiobook) c.mediaItemCount else 0,
-            speed = c.playbackParameters.speed,
             stationName = if (isRadio) radioStationName else null,
             nowPlaying = icyNowPlaying,
             title = md.title?.toString(),
