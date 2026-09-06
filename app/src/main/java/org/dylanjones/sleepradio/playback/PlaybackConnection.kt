@@ -51,7 +51,10 @@ data class PlaybackState(
     val nowPlaying: String? = null,
     val title: String? = null,
     val artist: String? = null,
+    /** Embedded/known artwork URI from mediaMetadata, if any. */
     val artworkUri: Uri? = null,
+    /** The current item's own content URI (used to pull embedded cover art). */
+    val mediaUri: Uri? = null,
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val hasNext: Boolean = false,
@@ -338,6 +341,12 @@ class PlaybackConnection @Inject constructor(
             title = md.title?.toString(),
             artist = md.artist?.toString(),
             artworkUri = md.artworkUri,
+            mediaUri = if (isRadio) {
+                null
+            } else {
+                c.currentMediaItem?.localConfiguration?.uri
+                    ?: c.currentMediaItem?.mediaId?.takeIf { it.contains("://") }?.let(Uri::parse)
+            },
             positionMs = if (isRadio) 0L else c.currentPosition.coerceAtLeast(0L),
             durationMs = if (isRadio) 0L else c.duration.let { if (it > 0) it else 0L },
             hasNext = !isRadio && c.hasNextMediaItem(),

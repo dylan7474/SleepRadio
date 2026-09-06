@@ -1,6 +1,13 @@
 package org.dylanjones.sleepradio.feature.player
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
@@ -21,6 +28,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +36,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -85,12 +95,19 @@ fun NowPlayingBlock(
                 .clip(RoundedCornerShape(18.dp))
                 .background(c.panelBrush())
                 .border(1.dp, c.panelStroke, RoundedCornerShape(18.dp))
-            // The skin picks its now-playing visual: radar for Industrial,
-            // album-art placeholder for Neon. (Real album art: Phase 7.)
-            if (skin.id == SkinId.INDUSTRIAL) {
-                RadarVisual(visualModifier)
-            } else {
-                DefaultArtwork(state, visualModifier)
+            // Real cover art when the item has any; otherwise the skin's visual —
+            // an animated radar for Industrial, a ♪ placeholder for Neon.
+            val art = rememberAlbumArt(state.artworkUri, state.mediaUri)
+            when {
+                art != null -> Image(
+                    bitmap = art,
+                    contentDescription = "Cover art",
+                    contentScale = ContentScale.Crop,
+                    modifier = visualModifier,
+                )
+
+                skin.id == SkinId.INDUSTRIAL -> RadarVisual(visualModifier)
+                else -> DefaultArtwork(visualModifier)
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.fillMaxWidth()) {
@@ -157,8 +174,7 @@ fun NowPlayingBlock(
 }
 
 @Composable
-private fun DefaultArtwork(state: PlaybackState, modifier: Modifier) {
-    // Album art (Coil) is wired in Phase 7. Placeholder glyph for now.
+private fun DefaultArtwork(modifier: Modifier) {
     val c = LocalAppSkin.current.colors
     Box(modifier, contentAlignment = Alignment.Center) {
         Text("♪", color = c.textDim, fontSize = 28.sp)
@@ -168,6 +184,15 @@ private fun DefaultArtwork(state: PlaybackState, modifier: Modifier) {
 @Composable
 private fun RadarVisual(modifier: Modifier) {
     val c = LocalAppSkin.current.colors
+    val sweep by rememberInfiniteTransition(label = "radar").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "radar-sweep",
+    )
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxWidth().height(84.dp)) {
             val r = size.minDimension / 2f * 0.82f
@@ -180,13 +205,16 @@ private fun RadarVisual(modifier: Modifier) {
                     style = Stroke(1.dp.toPx()),
                 )
             }
-            drawLine(
-                color = c.accent,
-                start = center,
-                end = Offset(center.x + r * 0.9f, center.y - r * 0.5f),
-                strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
+            // Rotating sweep line + blip.
+            rotate(degrees = sweep, pivot = center) {
+                drawLine(
+                    color = c.accent,
+                    start = center,
+                    end = Offset(center.x + r, center.y),
+                    strokeWidth = 2.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
             drawCircle(
                 color = c.accentAlt,
                 radius = 3.dp.toPx(),
