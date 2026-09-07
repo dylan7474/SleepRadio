@@ -1,0 +1,44 @@
+SleepRadio
+Copyright (C) 2026 Dylan Jones
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See the LICENSE file for the full text.
+
+
+Why GPL-3.0-or-later
+--------------------
+
+SleepRadio's "Broadcast Radio" mode uses on-device text-to-speech via
+sherpa-onnx (https://github.com/k2-fsa/sherpa-onnx). sherpa-onnx itself is
+Apache-2.0, but for Piper / VITS voices it statically links eSpeak-NG
+(https://github.com/espeak-ng/espeak-ng) for phoneme generation, and eSpeak-NG
+is licensed GPL-3.0-or-later. Because a released APK therefore contains
+GPL-licensed code, the project as a whole is distributed under GPL-3.0-or-later.
+
+Corresponding source is this repository:
+https://github.com/dylan7474/SleepRadio
+
+
+Third-party components
+----------------------
+
+* sherpa-onnx .......... Apache-2.0        https://github.com/k2-fsa/sherpa-onnx
+* eSpeak-NG ............ GPL-3.0-or-later   https://github.com/espeak-ng/espeak-ng
+    (statically linked inside sherpa-onnx's native library; also the source of
+     the espeak-ng-data phoneme files installed at runtime)
+* Piper (VITS TTS) ..... MIT               https://github.com/rhasspy/piper
+* ONNX Runtime ......... MIT               https://github.com/microsoft/onnxruntime
+* AndroidX / Jetpack ... Apache-2.0
+* Media3 / ExoPlayer ... Apache-2.0
+* Hilt / Dagger ....... Apache-2.0
+* Kotlin & coroutines . Apache-2.0
+
+Voice models
+------------
+
+No voice model is bundled in the APK or committed to this repository. The
+default ("stock") voice is installed on first use of Broadcast mode from a
+release asset or a user-supplied file. Any personal / cloned voice is imported
+by the user onto their own device and is never part of a build or a release.
