@@ -72,7 +72,10 @@ class OfflineTtsEngine {
         val engine = tts ?: return null
         if (text.isBlank()) return null
         return try {
+            val t0 = System.currentTimeMillis()
             val out = engine.generate(text = text, sid = 0, speed = speed)
+            Log.d(TAG, "synth ${out.samples.size} samples @ ${out.sampleRate}Hz " +
+                "in ${System.currentTimeMillis() - t0}ms: \"$text\"")
             TtsAudio(out.samples, out.sampleRate)
         } catch (e: Throwable) {
             Log.e(TAG, "Synthesis failed", e)

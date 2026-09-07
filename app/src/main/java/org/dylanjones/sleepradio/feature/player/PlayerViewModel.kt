@@ -1,8 +1,10 @@
 package org.dylanjones.sleepradio.feature.player
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,8 +21,11 @@ import org.dylanjones.sleepradio.core.audio.AmbientPattern
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.audio.NoiseColor
+import org.dylanjones.sleepradio.core.broadcast.BroadcastConfig
+import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
 import org.dylanjones.sleepradio.core.data.AMBIENT_PATTERN_SLOTS
 import org.dylanjones.sleepradio.core.data.Audiobook
+import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
 import org.dylanjones.sleepradio.core.data.RadioDirectory
@@ -32,6 +37,7 @@ import org.dylanjones.sleepradio.core.data.SourceType
 import org.dylanjones.sleepradio.core.data.db.AudiobookProgressDao
 import org.dylanjones.sleepradio.core.data.db.AudiobookProgressEntity
 import org.dylanjones.sleepradio.core.data.db.toDomain
+import org.dylanjones.sleepradio.core.tts.VoicePackResolver
 import org.dylanjones.sleepradio.media.AudiobookRepository
 import org.dylanjones.sleepradio.media.MusicRepository
 import org.dylanjones.sleepradio.playback.PlaybackConnection
@@ -80,6 +86,7 @@ data class PlayerUiState(
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val musicRepository: MusicRepository,
     private val audiobookRepository: AudiobookRepository,
     private val playback: PlaybackConnection,
@@ -313,6 +320,19 @@ class PlayerViewModel @Inject constructor(
         playSlot(slot)
     }
 
+    fun assignBroadcastToSlot(index: Int) {
+        val slot = SourceSlot(
+            index = index,
+            type = SourceType.BROADCAST,
+            refId = "broadcast",
+            label = "SleepRadio broadcast",
+            sublabel = "Auto-DJ · your music folder",
+        )
+        viewModelScope.launch { slots.assign(slot) }
+        local.value = local.value.copy(pickerForSlot = null)
+        playSlot(slot)
+    }
+
     fun clearSlot(index: Int) {
         viewModelScope.launch { slots.clear(index) }
     }
@@ -356,8 +376,35 @@ class PlayerViewModel @Inject constructor(
                 )
                 local.value = local.value.copy(nowPlayingRef = slot.refId)
             }
+
+            SourceType.BROADCAST -> viewModelScope.launch {
+                val tree = local.value.musicTreeUri ?: return@launch
+                val pool = musicRepository.folderAlbums(tree).flatMap { album ->
+                    musicRepository.folderTracks(tree, album.id).map { ch ->
+                        BroadcastTrack(
+                            uri = ch.uri,
+                            title = cleanTrackTitle(ch.title),
+                            artist = album.artist.ifBlank { album.title },
+                            album = album.title,
+                        )
+                    }
+                }
+                if (pool.isEmpty()) return@launch
+                val voiceId = settings.broadcastVoice.first()
+                val pack = if (voiceId == BROADCAST_VOICE_OFF) {
+                    null
+                } else {
+                    VoicePackResolver(appContext).byId(voiceId)
+                }
+                playback.startBroadcast(pool, pack, BroadcastConfig())
+                local.value = local.value.copy(nowPlayingRef = slot.refId)
+            }
         }
     }
+
+    /** Strip a leading track number ("01 - ", "1. ", "007_") from a filename title. */
+    private fun cleanTrackTitle(raw: String): String =
+        raw.replace(Regex("^\\s*\\d{1,3}\\s*[-._)]+\\s*"), "").trim().ifEmpty { raw }
 
     fun playPause() = playback.playPause()
 

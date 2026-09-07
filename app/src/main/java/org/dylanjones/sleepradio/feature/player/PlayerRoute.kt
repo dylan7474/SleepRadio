@@ -259,6 +259,7 @@ fun PlayerRoute(
                     onRemoveStation = playerViewModel::removeStation,
                     onAddManual = { addStationOpen = true },
                     onBrowseDirectory = { directoryAssignSlot = slotIndex; directoryOpen = true },
+                    onPickBroadcast = { playerViewModel.assignBroadcastToSlot(slotIndex) },
                     onPickFolderAlbum = { playerViewModel.assignFolderAlbumToSlot(slotIndex, it) },
                     onPickAudiobook = { playerViewModel.assignAudiobookToSlot(slotIndex, it) },
                     onChooseAudiobooksFolder = { audiobooksFolderLauncher.launch(null) },
@@ -609,6 +610,7 @@ private fun SourcePickerDialog(
     onRemoveStation: (String) -> Unit,
     onAddManual: () -> Unit,
     onBrowseDirectory: () -> Unit,
+    onPickBroadcast: () -> Unit,
     onPickFolderAlbum: (FolderAlbum) -> Unit,
     onPickAudiobook: (Audiobook) -> Unit,
     onChooseAudiobooksFolder: () -> Unit,
@@ -622,6 +624,20 @@ private fun SourcePickerDialog(
         title = { Text("Assign a source") },
         text = {
             LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                item { SectionHeader("BROADCAST") }
+                item {
+                    PickerRow(
+                        primary = "📻  SleepRadio broadcast",
+                        secondary = if (musicFolderChosen) {
+                            "Auto-DJ over your music folder"
+                        } else {
+                            "Choose a music folder first"
+                        },
+                        onClick = { if (musicFolderChosen) onPickBroadcast() },
+                    )
+                    HorizontalDivider()
+                }
+
                 item { SectionHeader("INTERNET RADIO") }
                 item {
                     PickerRow("＋  Add a station manually…", "Enter a name and stream URL", onAddManual)

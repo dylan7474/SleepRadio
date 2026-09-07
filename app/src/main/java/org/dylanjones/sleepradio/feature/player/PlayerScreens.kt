@@ -182,6 +182,7 @@ private fun SourceType.badge(): String = when (this) {
     SourceType.MUSIC_FOLDER -> "ALBUM"
     SourceType.AUDIOBOOK -> "BOOK"
     SourceType.RADIO -> "RADIO"
+    SourceType.BROADCAST -> "LIVE"
 }
 
 internal fun NoiseColor.label(): String = when (this) {
