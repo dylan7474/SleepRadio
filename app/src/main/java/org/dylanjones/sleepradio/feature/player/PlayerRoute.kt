@@ -502,12 +502,10 @@ private fun BroadcastVoiceDialog(
                     VoicePackInstaller.InstallState.Idle -> Unit
                 }
 
-                Row {
-                    if (!state.stockInstalled) {
-                        TextButton(onClick = onDownloadStock) { Text("Download stock voice") }
-                    }
-                    TextButton(onClick = onImport) { Text("Import a voice…") }
+                if (!state.stockInstalled) {
+                    TextButton(onClick = onDownloadStock) { Text("Download stock voice") }
                 }
+                TextButton(onClick = onImport) { Text("Import a voice…") }
                 if (state.personalInstalled) {
                     TextButton(onClick = onRemovePersonal) { Text("Remove my voice") }
                 }

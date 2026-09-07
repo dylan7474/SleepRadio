@@ -102,6 +102,22 @@ class VoicePackInstaller internal constructor(private val root: File) {
             unzip(zip, staging)
             val src = locatePackRoot(staging) ?: return fail("Zip has no model.onnx")
             normalise(src) ?: return fail("Zip missing tokens.txt")
+
+            // Make the pack self-contained. A model-only import (typical for a
+            // personal voice) has no espeak-ng-data of its own — copy the stock
+            // pack's (both are en-* espeak phonemes; it's ~1.8 MB trimmed). If
+            // there's no stock either, VoicePackResolver still borrows at load
+            // time, but a self-contained copy survives the stock pack being
+            // removed.
+            val ownData = File(src, VoicePack.DATA_DIR_NAME)
+            if (!ownData.isDirectory) {
+                val stockData = File(File(root, "stock"), VoicePack.DATA_DIR_NAME)
+                if (stockData.isDirectory) {
+                    stockData.copyRecursively(ownData, overwrite = true)
+                    Log.d(TAG, "Copied stock espeak-ng-data into '$id'")
+                }
+            }
+
             val dest = File(root, id)
             dest.deleteRecursively()
             if (!src.renameTo(dest)) {
@@ -207,7 +223,11 @@ class VoicePackInstaller internal constructor(private val root: File) {
             "https://github.com/dylan7474/SleepRadio/releases/download/voice-stock-v1/" +
                 "sleepradio-voice-en_GB-v1.zip"
 
-        /** Lowercase hex SHA-256 of the asset at [STOCK_URL]; blank = skip check. */
-        const val STOCK_SHA256 = ""
+        /**
+         * Lowercase hex SHA-256 of the asset at [STOCK_URL]; blank = skip check.
+         * Matches the `.zip` produced by `tools/build-stock-voice.sh`
+         * (en_GB-southern_english_female-low + English-only espeak-ng-data).
+         */
+        const val STOCK_SHA256 = "8ed5f60ca1266e8f3f7d898981704bd736366175a5c35998eb0af20f0570b70e"
     }
 }

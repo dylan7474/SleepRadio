@@ -23,3 +23,6 @@ keystore.properties
 # app/src/main/assets/tts/personal/ is auto-imported on the owner's own builds;
 # the stock voice is a runtime download / file-picker import.
 /app/src/main/assets/tts/
+
+# Stock-voice build output (voice/eSpeak data is never committed)
+/tools/build/

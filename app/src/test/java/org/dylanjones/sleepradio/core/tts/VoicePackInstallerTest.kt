@@ -99,6 +99,24 @@ class VoicePackInstallerTest {
     }
 
     @Test
+    fun `model-only personal import copies stock's espeak data in`() {
+        val root = tmp.newFolder("tts")
+        install(
+            root, "stock",
+            zipOf(
+                "a.onnx" to "M".toByteArray(),
+                "tokens.txt" to "a 1\n".toByteArray(),
+                "espeak-ng-data/en_dict" to "x".toByteArray(),
+            ),
+        )
+        install(
+            root, "personal",
+            zipOf("my.onnx" to "P".toByteArray(), "tokens.txt" to "a 1\n".toByteArray()),
+        )
+        assertTrue(File(root, "personal/espeak-ng-data/en_dict").isFile)
+    }
+
+    @Test
     fun `reinstall replaces the previous pack`() {
         val root = tmp.newFolder("tts")
         install(root, "stock", zipOf("a.onnx" to "V1".toByteArray(), "tokens.txt" to "a 1\n".toByteArray()))
