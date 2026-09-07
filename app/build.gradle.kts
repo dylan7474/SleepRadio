@@ -27,6 +27,20 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            // sherpa-onnx (Phase 9 TTS) ships native libs for 4 ABIs, ~5 MB
+            // each. The only deploy target is an arm64 Pixel 9, so ship just
+            // that and keep the APK from ballooning. Add "x86_64" if emulator
+            // testing is ever needed.
+            abiFilters += "arm64-v8a"
+        }
+    }
+
+    androidResources {
+        // ONNX models are already compressed; storing them uncompressed lets
+        // sherpa-onnx mmap them instead of inflating on load.
+        noCompress += "onnx"
     }
 
     signingConfigs {
@@ -63,6 +77,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // BuildConfig.DEBUG gates the Phase 9 TTS test action in the drawer.
+        buildConfig = true
     }
 }
 
@@ -103,6 +119,11 @@ dependencies {
 
     // SleepRadio: SAF folder access for audiobooks
     implementation(libs.androidx.documentfile)
+
+    // SleepRadio: on-device Piper/VITS TTS for Broadcast mode (Phase 9).
+    // Apache-2.0, but its native lib statically links eSpeak-NG
+    // (GPL-3.0-or-later) — the project is GPL-3.0-or-later for this reason.
+    implementation(libs.sherpa.onnx)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

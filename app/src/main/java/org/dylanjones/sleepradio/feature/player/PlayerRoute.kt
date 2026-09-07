@@ -66,6 +66,7 @@ import org.dylanjones.sleepradio.core.data.RadioStation
 import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.SkinId
 import org.dylanjones.sleepradio.core.design.skinFor
+import org.dylanjones.sleepradio.core.tts.rememberDebugTtsTest
 import org.dylanjones.sleepradio.feature.root.RootViewModel
 
 @Composable
@@ -120,6 +121,9 @@ fun PlayerRoute(
     val scope = rememberCoroutineScope()
     fun closeDrawer() = scope.launch { drawerState.close() }
 
+    // Debug-only TTS smoke test (Phase 9 Chunk A); null in release builds.
+    val onTtsTest = rememberDebugTtsTest()
+
     var ambientDialogOpen by remember { mutableStateOf(false) }
     var sleepDialogOpen by remember { mutableStateOf(false) }
     var addStationOpen by remember { mutableStateOf(false) }
@@ -156,6 +160,7 @@ fun PlayerRoute(
                 onRadioStations = { closeDrawer(); radioStationsOpen = true },
                 onSkin = { rootViewModel.chooseSkin(it); closeDrawer() },
                 onAbout = { closeDrawer(); aboutOpen = true },
+                onTtsTest = onTtsTest?.let { test -> { closeDrawer(); test() } },
             )
         },
     ) {
@@ -270,6 +275,7 @@ private fun AppDrawer(
     onRadioStations: () -> Unit,
     onSkin: (SkinId) -> Unit,
     onAbout: () -> Unit,
+    onTtsTest: (() -> Unit)? = null,
 ) {
     ModalDrawerSheet {
         Column(
@@ -322,6 +328,13 @@ private fun AppDrawer(
                 selected = false,
                 onClick = onAbout,
             )
+            if (onTtsTest != null) {
+                NavigationDrawerItem(
+                    label = { Text("▶ Speak test line (debug)") },
+                    selected = false,
+                    onClick = onTtsTest,
+                )
+            }
         }
     }
 }

@@ -22,6 +22,10 @@ room = "2.8.4"
 documentfile = "1.1.0"
 # coil: deferred to Phase 7 — 3.6.2 pulls kotlin-stdlib 2.4.x which the
 # project's Kotlin 2.2.10 compiler cannot read.
+# sherpa-onnx: on-device Piper/VITS TTS for Broadcast mode (Phase 9). Apache-2.0,
+# but statically links eSpeak-NG (GPL-3.0-or-later) — see NOTICE. Pinned to the
+# version proven on this toolchain in the DylanSpeaks project.
+sherpaOnnx = "1.13.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -57,6 +61,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
+sherpa-onnx = { group = "com.github.k2-fsa", name = "sherpa-onnx", version.ref = "sherpaOnnx" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
