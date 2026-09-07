@@ -62,14 +62,21 @@ class VoicePackResolver(context: Context) {
 
     fun byId(id: String): VoicePack? = load(File(root, id))
 
+    fun isInstalled(id: String): Boolean = load(File(root, id)) != null
+
     private fun load(dir: File): VoicePack? {
         if (!dir.isDirectory) return null
         val model = File(dir, VoicePack.MODEL_NAME)
         val tokens = File(dir, VoicePack.TOKENS_NAME)
-        val data = File(dir, VoicePack.DATA_DIR_NAME)
         if (!model.isFile || model.length() == 0L) return null
         if (!tokens.isFile || tokens.length() == 0L) return null
-        if (!data.isDirectory) return null
+        // A pack may ship its own espeak-ng-data, or (for a model-only personal
+        // import) borrow the stock pack's copy — both are en-us espeak phonemes.
+        val ownData = File(dir, VoicePack.DATA_DIR_NAME)
+        val data = when {
+            ownData.isDirectory -> ownData
+            else -> File(File(root, ID_STOCK), VoicePack.DATA_DIR_NAME).takeIf { it.isDirectory }
+        } ?: return null
         return VoicePack(
             id = dir.name,
             displayName = displayNameFor(dir.name),

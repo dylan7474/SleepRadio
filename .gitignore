@@ -18,3 +18,8 @@ local.properties
 keystore.properties
 *.jks
 *.keystore
+
+# TTS voice packs — never committed (see NOTICE). A gitignored
+# app/src/main/assets/tts/personal/ is auto-imported on the owner's own builds;
+# the stock voice is a runtime download / file-picker import.
+/app/src/main/assets/tts/
