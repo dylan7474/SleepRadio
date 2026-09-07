@@ -130,20 +130,32 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
             val a = abs(s)
             if (a > peak) peak = a
         }
-        val gain = if (peak > 0f) (0.97f / peak).coerceAtMost(6f) else 1f
+        val gain = if (peak > 0f) (0.97f / peak).coerceAtMost(8f) else 1f
         val pcm = ShortArray(samples.size) { i ->
             (samples[i] * gain * 32767f).toInt().coerceIn(-32768, 32767).toShort()
         }
+        var outPeak = 0
+        for (s in pcm) { val a = if (s < 0) -s.toInt() else s.toInt(); if (a > outPeak) outPeak = a }
+        Log.d(TAG, "toClip: ${samples.size} samples, srcPeak=$peak gain=$gain outPeak=$outPeak/32767")
         return Clip(pcm, audio.sampleRate)
     }
 
     private fun render(clip: Clip) {
         stop() // release any previous track first
+        // MODE_STREAM (not STATIC) — far less finicky about silent playback; the
+        // buffer holds the whole clip so there's no underrun. CONTENT_TYPE_MUSIC,
+        // not SPEECH: some OEM audio policies duck/route SPEECH oddly when it
+        // plays concurrently with media.
+        val bufBytes = AudioTrack.getMinBufferSize(
+            clip.sampleRate,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+        ).coerceAtLeast(clip.pcm.size * 2)
         val t = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                     .build(),
             )
             .setAudioFormat(
@@ -153,19 +165,34 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                     .build(),
             )
-            .setBufferSizeInBytes(clip.pcm.size * 2)
-            .setTransferMode(AudioTrack.MODE_STATIC)
+            .setBufferSizeInBytes(bufBytes)
+            .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
+        if (t.state != AudioTrack.STATE_INITIALIZED) {
+            Log.e(TAG, "AudioTrack not initialised (state=${t.state}, sr=${clip.sampleRate})")
+            runCatching { t.release() }
+            return
+        }
         track = t
-        t.setVolume(volume)
-        t.write(clip.pcm, 0, clip.pcm.size, AudioTrack.WRITE_BLOCKING)
+        t.setVolume(volume.coerceIn(0f, 1f))
         t.play()
 
-        // Wait out playback, then free the output — a lingering AudioTrack holds
-        // the media path open.
-        val playMs = clip.pcm.size * 1000L / clip.sampleRate + 150
+        var off = 0
+        while (off < clip.pcm.size && track === t) {
+            val n = t.write(clip.pcm, off, clip.pcm.size - off, AudioTrack.WRITE_BLOCKING)
+            if (n < 0) {
+                Log.e(TAG, "AudioTrack.write error $n")
+                break
+            }
+            off += n
+        }
+        Log.d(TAG, "render: wrote $off/${clip.pcm.size} @ ${clip.sampleRate}Hz " +
+            "vol=$volume playState=${t.playState}")
+
+        // Let the buffered tail drain, then free the output.
+        val tailMs = clip.pcm.size * 1000L / clip.sampleRate + 250
         try {
-            Thread.sleep(playMs)
+            Thread.sleep(tailMs)
         } catch (_: InterruptedException) {
             // stop() requested
         }

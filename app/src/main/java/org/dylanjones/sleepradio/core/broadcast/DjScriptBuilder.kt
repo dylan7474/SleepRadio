@@ -55,6 +55,17 @@ class ShowClock(private val config: BroadcastConfig) {
  */
 class DjScriptBuilder(private val rng: Random = Random.Default) {
 
+    /** Spoken once when a broadcast starts, before the first track. */
+    fun welcome(now: LocalTime = LocalTime.now()): String {
+        val greeting = when (now.hour) {
+            in 5..11 -> "Good morning"
+            in 12..17 -> "Good afternoon"
+            in 18..21 -> "Good evening"
+            else -> "Hello"
+        }
+        return "$greeting, and welcome to Sleep Radio. ${WELCOME_TAILS.random(rng)}"
+    }
+
     fun build(
         kind: LinkKind,
         previous: BroadcastTrack?,
@@ -92,6 +103,12 @@ class DjScriptBuilder(private val rng: Random = Random.Default) {
     }
 
     private companion object {
+        val WELCOME_TAILS = listOf(
+            "Let's begin.",
+            "Here's the music.",
+            "Settle in.",
+            "Let's get started.",
+        )
         val IDENTS = listOf(
             "You're listening to Sleep Radio.",
             "This is Sleep Radio — music through the night.",

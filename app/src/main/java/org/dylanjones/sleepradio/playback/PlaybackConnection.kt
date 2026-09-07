@@ -380,18 +380,40 @@ class PlaybackConnection @Inject constructor(
         scriptBuilder = DjScriptBuilder()
         voicePack = voice
 
+        currentBroadcast = selector?.next()
+        nextBroadcast = selector?.next()
+        val first = currentBroadcast ?: run { endBroadcastInternal(); return }
+
         if (voice != null) {
             if (ttsEngine == null) ttsEngine = OfflineTtsEngine()
             if (djPlayer == null) djPlayer = DjVoicePlayer(ttsEngine!!)
             val engine = ttsEngine!!
-            scope.launch(Dispatchers.Default) { engine.ensureLoaded(voice) }
+            val player = djPlayer!!
+            val builder = scriptBuilder!!
+            djSpeaking = true
+            // Load the voice, speak the welcome, THEN start the first track.
+            scope.launch {
+                val ready = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                    engine.ensureLoaded(voice) && player.preload(builder.welcome())
+                }
+                if (!isBroadcast) return@launch // switched away while we synthesised
+                if (ready) {
+                    Log.d(TAG, "broadcast: welcome link")
+                    player.playPreloaded(mixer.state.value.masterGain) {
+                        djSpeaking = false
+                        playSingleBroadcast(first)
+                        onBroadcastTrackStarted()
+                    }
+                } else {
+                    djSpeaking = false
+                    playSingleBroadcast(first)
+                    onBroadcastTrackStarted()
+                }
+            }
+        } else {
+            playSingleBroadcast(first)
+            onBroadcastTrackStarted()
         }
-
-        currentBroadcast = selector?.next()
-        nextBroadcast = selector?.next()
-        val first = currentBroadcast ?: run { endBroadcastInternal(); return }
-        playSingleBroadcast(first)
-        onBroadcastTrackStarted()
     }
 
     private fun playSingleBroadcast(t: BroadcastTrack) {
