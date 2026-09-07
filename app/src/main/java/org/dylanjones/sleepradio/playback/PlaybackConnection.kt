@@ -419,6 +419,19 @@ class PlaybackConnection @Inject constructor(
         }
     }
 
+    /**
+     * Begin loading [pack] into the TTS engine now, so the eventual
+     * [startBroadcast] doesn't stall on the ~1 s model load. Safe to call early
+     * (e.g. while the track pool is still being scanned).
+     */
+    fun prewarmVoice(pack: VoicePack?) {
+        if (pack == null) return
+        if (ttsEngine == null) ttsEngine = OfflineTtsEngine()
+        if (djPlayer == null) djPlayer = DjVoicePlayer(ttsEngine!!)
+        val engine = ttsEngine!!
+        scope.launch(Dispatchers.Default) { engine.ensureLoaded(pack) }
+    }
+
     private fun playSingleBroadcast(t: BroadcastTrack) {
         val c = controller ?: return
         c.setPlaybackParameters(PlaybackParameters(1f))

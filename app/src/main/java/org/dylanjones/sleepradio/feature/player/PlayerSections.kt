@@ -85,6 +85,7 @@ fun NowPlayingBlock(
     state: PlaybackState,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    starting: Boolean = false,
 ) {
     val skin = LocalAppSkin.current
     val c = skin.colors
@@ -112,11 +113,13 @@ fun NowPlayingBlock(
             Spacer(Modifier.width(16.dp))
             Column(Modifier.fillMaxWidth()) {
                 val (topLabel, topValue) = when {
+                    starting -> "Station" to "SleepRadio"
                     state.isRadio -> "Station" to (state.stationName ?: state.title ?: "—")
                     state.isAudiobook -> "Book" to (state.artist ?: "—")
                     else -> "Artist" to (state.artist ?: "—")
                 }
                 val (botLabel, botValue) = when {
+                    starting -> "Now playing" to "Tuning in…"
                     // ICY now-playing when the stream sends it, else the station
                     // description, else a plain "Live".
                     state.isRadio -> "Now playing" to (state.nowPlaying ?: state.artist ?: "Live")
@@ -131,7 +134,15 @@ fun NowPlayingBlock(
             }
         }
         Spacer(Modifier.height(8.dp))
-        if (state.isBroadcast) {
+        if (starting) {
+            Text(
+                text = "●  TUNING IN…",
+                color = c.accent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(4.dp))
+        } else if (state.isBroadcast) {
             Text(
                 text = if (state.djSpeaking) "🎙  ON AIR — DJ" else "●  ON AIR",
                 color = if (state.djSpeaking) c.accentAlt else c.accent,

@@ -8,6 +8,8 @@ import androidx.documentfile.provider.DocumentFile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import android.util.Log
+import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
 import org.dylanjones.sleepradio.core.data.Chapter
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.di.IoDispatcher
@@ -133,6 +135,48 @@ class MusicRepository @Inject constructor(
                     Chapter(i, (f.name ?: "Track ${i + 1}").substringBeforeLast('.'), f.uri.toString())
                 }
         }
+    }
+
+    /**
+     * Every audio file under [treeUri], for the Broadcast auto-DJ, in **one**
+     * tree walk. (Doing `folderAlbums` then `folderTracks` per album re-walked
+     * the whole SAF tree N times — ~30 s on a real library. This is one
+     * `listFiles()` per directory.)
+     */
+    @Volatile private var poolCache: Pair<String, List<BroadcastTrack>>? = null
+
+    suspend fun broadcastPool(treeUri: String): List<BroadcastTrack> = withContext(io) {
+        poolCache?.let { (uri, tracks) -> if (uri == treeUri && tracks.isNotEmpty()) return@withContext tracks }
+        val t0 = System.currentTimeMillis()
+        val root = DocumentFile.fromTreeUri(context, Uri.parse(treeUri)) ?: return@withContext emptyList()
+        val rootName = root.name ?: ""
+        val out = ArrayList<BroadcastTrack>()
+        var dirs = 0
+        // dir, depth, parent-folder-name
+        val pending = ArrayDeque<Triple<DocumentFile, Int, String>>()
+        pending.add(Triple(root, 0, ""))
+        while (pending.isNotEmpty()) {
+            val (dir, depth, parentName) = pending.removeFirst()
+            dirs++
+            val folderName = dir.name ?: "Music"
+            val artist = if (parentName.isNotBlank() && parentName != rootName) parentName else folderName
+            for (child in dir.listFiles()) {
+                if (child.isFile && isAudioFile(child)) {
+                    val raw = (child.name ?: "").substringBeforeLast('.')
+                    out += BroadcastTrack(
+                        uri = child.uri.toString(),
+                        title = raw.replace(Regex("^\\s*\\d{1,3}\\s*[-._)]+\\s*"), "").trim().ifEmpty { raw },
+                        artist = artist,
+                        album = folderName,
+                    )
+                } else if (child.isDirectory && depth < 3) {
+                    pending.add(Triple(child, depth + 1, folderName))
+                }
+            }
+        }
+        Log.d("MusicRepository", "broadcastPool: ${out.size} tracks from $dirs dirs in ${System.currentTimeMillis() - t0}ms")
+        poolCache = treeUri to out
+        out
     }
 
     private fun isAudioFile(file: DocumentFile): Boolean {

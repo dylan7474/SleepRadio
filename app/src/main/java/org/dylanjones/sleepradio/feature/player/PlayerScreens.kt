@@ -77,7 +77,7 @@ fun PlayerScreen(
     ) {
         PlayerHeader(onMenu = actions.onMenu) { Wordmark() }
         Spacer(Modifier.height(6.dp))
-        NowPlayingBlock(state = pb, onSeek = actions.onSeek)
+        NowPlayingBlock(state = pb, starting = state.broadcastStarting, onSeek = actions.onSeek)
         Spacer(Modifier.height(10.dp))
 
         SkinPanel(

@@ -83,6 +83,8 @@ data class PlayerUiState(
     val binauralLevel: Float = 0.4f,
     /** Saved ambient PATTERN slots (null = empty). */
     val patterns: List<AmbientPattern?> = List(AMBIENT_PATTERN_SLOTS) { null },
+    /** True between tapping the Broadcast preset and Channel A first playing. */
+    val broadcastStarting: Boolean = false,
 )
 
 @HiltViewModel
@@ -130,6 +132,7 @@ class PlayerViewModel @Inject constructor(
                 binaural = amb.binaural,
                 binauralLevel = mx.binauralLevel,
                 patterns = l.ambientPatterns,
+                broadcastStarting = l.broadcastStarting && !pb.isBroadcast,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayerUiState())
 
@@ -382,39 +385,35 @@ class PlayerViewModel @Inject constructor(
                 local.value = local.value.copy(nowPlayingRef = slot.refId)
             }
 
-            SourceType.BROADCAST -> viewModelScope.launch {
-                val tree = local.value.musicTreeUri ?: return@launch
-                val pool = musicRepository.folderAlbums(tree).flatMap { album ->
-                    musicRepository.folderTracks(tree, album.id).map { ch ->
-                        BroadcastTrack(
-                            uri = ch.uri,
-                            title = cleanTrackTitle(ch.title),
-                            artist = album.artist.ifBlank { album.title },
-                            album = album.title,
+            SourceType.BROADCAST -> {
+                local.update { it.copy(broadcastStarting = true) }
+                viewModelScope.launch {
+                    try {
+                        val tree = local.value.musicTreeUri ?: return@launch
+                        val voiceId = settings.broadcastVoice.first()
+                        val pack = if (voiceId == BROADCAST_VOICE_OFF) {
+                            null
+                        } else {
+                            VoicePackResolver(appContext).byId(voiceId)
+                        }
+                        // Load the voice model while the (slow, SAF) folder scan runs.
+                        playback.prewarmVoice(pack)
+                        val pool = musicRepository.broadcastPool(tree)
+                        if (pool.isEmpty()) return@launch
+                        val chat = Chattiness.fromId(settings.broadcastChattiness.first())
+                        playback.startBroadcast(
+                            pool,
+                            pack,
+                            BroadcastConfig(tracksPerLink = chat.tracksPerLink),
                         )
+                        local.value = local.value.copy(nowPlayingRef = slot.refId)
+                    } finally {
+                        local.update { it.copy(broadcastStarting = false) }
                     }
                 }
-                if (pool.isEmpty()) return@launch
-                val voiceId = settings.broadcastVoice.first()
-                val pack = if (voiceId == BROADCAST_VOICE_OFF) {
-                    null
-                } else {
-                    VoicePackResolver(appContext).byId(voiceId)
-                }
-                val chat = Chattiness.fromId(settings.broadcastChattiness.first())
-                playback.startBroadcast(
-                    pool,
-                    pack,
-                    BroadcastConfig(tracksPerLink = chat.tracksPerLink),
-                )
-                local.value = local.value.copy(nowPlayingRef = slot.refId)
             }
         }
     }
-
-    /** Strip a leading track number ("01 - ", "1. ", "007_") from a filename title. */
-    private fun cleanTrackTitle(raw: String): String =
-        raw.replace(Regex("^\\s*\\d{1,3}\\s*[-._)]+\\s*"), "").trim().ifEmpty { raw }
 
     fun playPause() = playback.playPause()
 
@@ -477,5 +476,6 @@ class PlayerViewModel @Inject constructor(
         val customStations: List<RadioStation> = emptyList(),
         val directoryResults: List<RadioStation> = emptyList(),
         val directorySearching: Boolean = false,
+        val broadcastStarting: Boolean = false,
     )
 }
