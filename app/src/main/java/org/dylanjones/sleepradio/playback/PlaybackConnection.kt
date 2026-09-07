@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -129,6 +130,8 @@ class PlaybackConnection @Inject constructor(
     private var djPlayer: DjVoicePlayer? = null
     private var currentBroadcast: BroadcastTrack? = null
     private var nextBroadcast: BroadcastTrack? = null
+    /** The in-flight "load voice + speak welcome" coroutine, so a restart cancels it. */
+    private var broadcastJob: Job? = null
     /** Link kind to play after the current track; NONE = straight into the next. */
     private var pendingLink: LinkKind = LinkKind.NONE
     private var linkPreloaded: Boolean = false
@@ -392,11 +395,11 @@ class PlaybackConnection @Inject constructor(
             val builder = scriptBuilder!!
             djSpeaking = true
             // Load the voice, speak the welcome, THEN start the first track.
-            scope.launch {
+            broadcastJob = scope.launch {
                 val ready = kotlinx.coroutines.withContext(Dispatchers.Default) {
                     engine.ensureLoaded(voice) && player.preload(builder.welcome())
                 }
-                if (!isBroadcast) return@launch // switched away while we synthesised
+                if (!isBroadcast || !isActive) return@launch // restarted / switched away
                 if (ready) {
                     Log.d(TAG, "broadcast: welcome link")
                     player.playPreloaded(mixer.state.value.masterGain) {
@@ -505,11 +508,14 @@ class PlaybackConnection @Inject constructor(
     /** Tear down broadcast state. Safe to call when not broadcasting. */
     private fun endBroadcastInternal() {
         if (!isBroadcast && selector == null) return
+        val wasBroadcasting = isBroadcast
         isBroadcast = false
         djSpeaking = false
         advancing = false
         pendingLink = LinkKind.NONE
         linkPreloaded = false
+        broadcastJob?.cancel()
+        broadcastJob = null
         selector = null
         showClock = null
         currentBroadcast = null
@@ -518,6 +524,9 @@ class PlaybackConnection @Inject constructor(
         duckGain = 1f
         djPlayer?.stop()
         djPlayer?.clearCache()
+        // Halt any leftover Channel-A playback so a restart's welcome doesn't
+        // talk over the previous run's track.
+        if (wasBroadcasting) runCatching { controller?.pause() }
         val engine = ttsEngine
         if (engine != null) scope.launch(Dispatchers.Default) { engine.release() }
     }

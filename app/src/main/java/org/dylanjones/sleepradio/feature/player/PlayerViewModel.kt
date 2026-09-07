@@ -216,10 +216,14 @@ class PlayerViewModel @Inject constructor(
     /** Tap a preset slot: play it if assigned, otherwise open the picker for it. */
     fun onPresetClicked(index: Int) {
         val slot = uiState.value.presets.getOrNull(index)
-        if (slot == null) {
-            local.value = local.value.copy(pickerForSlot = index)
-        } else {
-            playSlot(slot)
+        when {
+            slot == null ->
+                local.value = local.value.copy(pickerForSlot = index)
+            // Re-tapping the broadcast preset while it's already on air would
+            // restart the station (and talk a fresh welcome over the track).
+            slot.type == SourceType.BROADCAST && uiState.value.playback.isBroadcast ->
+                Unit
+            else -> playSlot(slot)
         }
     }
 
