@@ -63,6 +63,11 @@ interface SettingsRepository {
     val broadcastVoice: Flow<String>
 
     suspend fun setBroadcastVoice(id: String)
+
+    /** How chatty the auto-DJ is: a [org.dylanjones.sleepradio.core.broadcast.Chattiness] id. */
+    val broadcastChattiness: Flow<String>
+
+    suspend fun setBroadcastChattiness(id: String)
 }
 
 const val BROADCAST_VOICE_OFF = "off"

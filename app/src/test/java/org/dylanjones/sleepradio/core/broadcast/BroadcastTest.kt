@@ -62,11 +62,13 @@ class BroadcastSelectorTest {
 
 class ShowClockTest {
 
+    private val noon = LocalTime.of(13, 0)   // outside the 06–10 morning window
+    private val N = WindDownPhase.NORMAL
+
     @Test
     fun `link every N tracks, ident on the Mth link`() {
         val clock = ShowClock(BroadcastConfig(tracksPerLink = 3, linksPerIdent = 3, linksPerTimeCheck = 4))
-        val kinds = List(30) { clock.onTrackStarted() }
-        // tracks 1,2 -> NONE ; track 3 -> a link ; repeat
+        val kinds = List(30) { clock.onTrackStarted(noon, N) }
         assertEquals(LinkKind.NONE, kinds[0])
         assertEquals(LinkKind.NONE, kinds[1])
         assertEquals(LinkKind.LINK, kinds[2])
@@ -78,10 +80,39 @@ class ShowClockTest {
     @Test
     fun `reset restarts the cadence`() {
         val clock = ShowClock(BroadcastConfig(tracksPerLink = 2))
-        clock.onTrackStarted()
+        clock.onTrackStarted(noon, N)
         clock.reset()
-        assertEquals(LinkKind.NONE, clock.onTrackStarted())
-        assertEquals(LinkKind.LINK, clock.onTrackStarted())
+        assertEquals(LinkKind.NONE, clock.onTrackStarted(noon, N))
+        assertEquals(LinkKind.LINK, clock.onTrackStarted(noon, N))
+    }
+
+    @Test
+    fun `SILENT phase never speaks`() {
+        val clock = ShowClock(BroadcastConfig(tracksPerLink = 1))
+        repeat(20) {
+            assertEquals(LinkKind.NONE, clock.onTrackStarted(noon, WindDownPhase.SILENT))
+        }
+    }
+
+    @Test
+    fun `EASING doubles the gap and only ever LINKs`() {
+        val clock = ShowClock(BroadcastConfig(tracksPerLink = 2, linksPerIdent = 2, linksPerTimeCheck = 2))
+        val kinds = List(16) { clock.onTrackStarted(noon, WindDownPhase.EASING) }
+        // gap is 2*2 = 4, so links land on index 3, 7, 11, 15 — all LINK, no IDENT/TIME_CHECK
+        assertEquals(LinkKind.NONE, kinds[2])
+        assertEquals(LinkKind.LINK, kinds[3])
+        assertEquals(LinkKind.LINK, kinds[7])
+        assertTrue(kinds.none { it == LinkKind.IDENT || it == LinkKind.TIME_CHECK })
+    }
+
+    @Test
+    fun `mornings get more time checks`() {
+        val morning = LocalTime.of(8, 0)
+        val clock = ShowClock(BroadcastConfig(tracksPerLink = 1, linksPerIdent = 99, linksPerTimeCheck = 4))
+        val kinds = List(8) { clock.onTrackStarted(morning, WindDownPhase.NORMAL) }
+        // linksPerTimeCheck halves to 2 in the morning -> every 2nd link is a time check
+        assertEquals(LinkKind.TIME_CHECK, kinds[1])
+        assertEquals(LinkKind.TIME_CHECK, kinds[3])
     }
 }
 
@@ -113,6 +144,13 @@ class DjScriptBuilderTest {
     fun `ident is a station line`() {
         val s = DjScriptBuilder(Random(0)).build(LinkKind.IDENT, t1, t2)
         assertTrue(s, s.contains("Sleep Radio"))
+    }
+
+    @Test
+    fun `terse link is outro only, no next track`() {
+        val s = DjScriptBuilder(Random(0)).build(LinkKind.LINK, t1, t2, terse = true)
+        assertTrue(s, s.contains("Song One"))
+        assertTrue(s, !s.contains("Song Two"))
     }
 
     @Test

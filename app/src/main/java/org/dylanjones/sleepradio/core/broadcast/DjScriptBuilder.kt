@@ -8,20 +8,37 @@ import kotlin.random.Random
  * Call [onTrackStarted] once each time a track begins; it returns the link to
  * play in the gap **after** that track.
  *
+ * Wind-down ([WindDownPhase]) makes links sparser (EASING doubles the gap and
+ * drops idents/time-checks) then stops them (SILENT). In the morning
+ * (06:00–10:59) time checks come round twice as often.
+ *
  * Plain class, no Hilt. Not thread-safe — driven from the single playback thread.
  */
 class ShowClock(private val config: BroadcastConfig) {
     private var tracksSinceLink = 0
     private var linkCount = 0
 
-    fun onTrackStarted(): LinkKind {
+    fun onTrackStarted(
+        now: LocalTime = LocalTime.now(),
+        phase: WindDownPhase = WindDownPhase.NORMAL,
+    ): LinkKind {
+        if (phase == WindDownPhase.SILENT) {
+            tracksSinceLink = 0
+            return LinkKind.NONE
+        }
         tracksSinceLink++
-        if (tracksSinceLink < config.tracksPerLink) return LinkKind.NONE
+        val gap = if (phase == WindDownPhase.EASING) config.tracksPerLink * 2 else config.tracksPerLink
+        if (tracksSinceLink < gap) return LinkKind.NONE
         tracksSinceLink = 0
         linkCount++
+        if (phase == WindDownPhase.EASING) return LinkKind.LINK
+
+        val timeCheckEvery =
+            if (now.hour in 6..10) (config.linksPerTimeCheck / 2).coerceAtLeast(2)
+            else config.linksPerTimeCheck
         return when {
             linkCount % config.linksPerIdent == 0 -> LinkKind.IDENT
-            linkCount % config.linksPerTimeCheck == 0 -> LinkKind.TIME_CHECK
+            linkCount % timeCheckEvery == 0 -> LinkKind.TIME_CHECK
             else -> LinkKind.LINK
         }
     }
@@ -43,19 +60,24 @@ class DjScriptBuilder(private val rng: Random = Random.Default) {
         previous: BroadcastTrack?,
         next: BroadcastTrack?,
         now: LocalTime = LocalTime.now(),
+        terse: Boolean = false,
     ): String = when (kind) {
         LinkKind.NONE -> ""
         LinkKind.IDENT -> IDENTS.random(rng)
         LinkKind.TIME_CHECK -> {
             val time = spokenTime(now)
-            val tail = next?.let { " Here's ${trackPhrase(it)}." }.orEmpty()
+            val tail = if (terse) "" else next?.let { " Here's ${trackPhrase(it)}." }.orEmpty()
             "${TIME_LEADS.random(rng)} $time.$tail"
         }
         LinkKind.LINK -> {
-            val outro = previous?.let { "${OUTROS.random(rng)} ${trackPhrase(it)}. " }.orEmpty()
-            val intro = next?.let { "${INTROS.random(rng)} ${trackPhrase(it)}." }
-                ?: STATION_ONLY.random(rng)
-            (outro + intro).trim()
+            val outro = previous?.let { "${OUTROS.random(rng)} ${trackPhrase(it)}." }.orEmpty()
+            if (terse) {
+                outro.ifEmpty { STATION_ONLY.random(rng) }
+            } else {
+                val intro = next?.let { " ${INTROS.random(rng)} ${trackPhrase(it)}." }
+                    ?: " ${STATION_ONLY.random(rng)}"
+                (outro + intro).trim()
+            }
         }
     }
 

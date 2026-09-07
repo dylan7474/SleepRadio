@@ -23,6 +23,7 @@ import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.broadcast.BroadcastConfig
 import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
+import org.dylanjones.sleepradio.core.broadcast.Chattiness
 import org.dylanjones.sleepradio.core.data.AMBIENT_PATTERN_SLOTS
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
@@ -396,7 +397,12 @@ class PlayerViewModel @Inject constructor(
                 } else {
                     VoicePackResolver(appContext).byId(voiceId)
                 }
-                playback.startBroadcast(pool, pack, BroadcastConfig())
+                val chat = Chattiness.fromId(settings.broadcastChattiness.first())
+                playback.startBroadcast(
+                    pool,
+                    pack,
+                    BroadcastConfig(tracksPerLink = chat.tracksPerLink),
+                )
                 local.value = local.value.copy(nowPlayingRef = slot.refId)
             }
         }

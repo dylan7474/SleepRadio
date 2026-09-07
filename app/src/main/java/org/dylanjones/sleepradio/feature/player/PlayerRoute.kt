@@ -64,6 +64,7 @@ import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.RadioStation
+import org.dylanjones.sleepradio.core.broadcast.Chattiness
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_PERSONAL
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_STOCK
@@ -229,6 +230,7 @@ fun PlayerRoute(
                 BroadcastVoiceDialog(
                     state = voiceState,
                     onSelect = broadcastVoiceViewModel::select,
+                    onChattiness = broadcastVoiceViewModel::setChattiness,
                     onDownloadStock = broadcastVoiceViewModel::downloadStock,
                     onImport = {
                         importVoiceLauncher.launch(
@@ -416,6 +418,7 @@ private fun AboutDialog(onDismiss: () -> Unit) {
 private fun BroadcastVoiceDialog(
     state: BroadcastVoiceViewModel.UiState,
     onSelect: (String) -> Unit,
+    onChattiness: (Chattiness) -> Unit,
     onDownloadStock: () -> Unit,
     onImport: () -> Unit,
     onRemovePersonal: () -> Unit,
@@ -456,6 +459,30 @@ private fun BroadcastVoiceDialog(
                         onClick = { onSelect(BROADCAST_VOICE_PERSONAL) },
                     )
                 }
+
+                Spacer(Modifier.padding(4.dp))
+                SectionHeader("CHATTINESS")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Chattiness.entries.forEach { c ->
+                        val on = state.chattiness == c
+                        Text(
+                            text = when (c) {
+                                Chattiness.CHATTY -> "Chatty"
+                                Chattiness.BALANCED -> "Balanced"
+                                Chattiness.MINIMAL -> "Minimal"
+                            },
+                            fontSize = 13.sp,
+                            fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier
+                                .clickable { onChattiness(c) }
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                        )
+                    }
+                }
+                Text(
+                    "A spoken link every ${state.chattiness.tracksPerLink} tracks.",
+                    fontSize = 11.sp,
+                )
 
                 Spacer(Modifier.padding(6.dp))
                 when (val s = state.install) {

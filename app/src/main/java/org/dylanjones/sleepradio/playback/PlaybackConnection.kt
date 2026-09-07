@@ -37,12 +37,14 @@ import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
 import org.dylanjones.sleepradio.core.broadcast.DjScriptBuilder
 import org.dylanjones.sleepradio.core.broadcast.LinkKind
 import org.dylanjones.sleepradio.core.broadcast.ShowClock
+import org.dylanjones.sleepradio.core.broadcast.WindDownPhase
 import org.dylanjones.sleepradio.core.data.Chapter
 import org.dylanjones.sleepradio.core.tts.DjVoicePlayer
 import org.dylanjones.sleepradio.core.tts.OfflineTtsEngine
 import org.dylanjones.sleepradio.core.tts.VoicePack
 import org.dylanjones.sleepradio.di.MainDispatcher
 import org.dylanjones.sleepradio.media.Track
+import java.time.LocalTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -415,20 +417,29 @@ class PlaybackConnection @Inject constructor(
         c.play()
     }
 
+    /** NORMAL, or wind the DJ down once the sleep timer is running. */
+    private fun windDownPhase(): WindDownPhase {
+        val st = _sleepTimer.value
+        if (!st.active) return WindDownPhase.NORMAL
+        return if (st.remainingMs > WINDDOWN_SILENT_MS) WindDownPhase.EASING else WindDownPhase.SILENT
+    }
+
     /** After a track starts: decide the link that plays when it ends, pre-synth it. */
     private fun onBroadcastTrackStarted() {
-        val kind = showClock?.onTrackStarted() ?: LinkKind.NONE
+        val phase = windDownPhase()
+        val kind = showClock?.onTrackStarted(LocalTime.now(), phase) ?: LinkKind.NONE
         pendingLink = kind
         linkPreloaded = false
         Log.d(TAG, "broadcast: now '${currentBroadcast?.title}' by ${currentBroadcast?.artist}; " +
-            "link after this track = $kind")
+            "link after this track = $kind (windDown=$phase)")
         val player = djPlayer
         val builder = scriptBuilder
         if (kind != LinkKind.NONE && voicePack != null && player != null && builder != null) {
             val prev = currentBroadcast
             val next = nextBroadcast
+            val terse = phase == WindDownPhase.EASING
             scope.launch(Dispatchers.Default) {
-                val text = builder.build(kind, prev, next)
+                val text = builder.build(kind, prev, next, LocalTime.now(), terse)
                 if (text.isNotBlank()) {
                     linkPreloaded = player.preload(text)
                     Log.d(TAG, "broadcast: link preloaded=$linkPreloaded — \"$text\"")
@@ -445,7 +456,7 @@ class PlaybackConnection @Inject constructor(
             djSpeaking = true
             pushSnapshot()
             Log.d(TAG, "broadcast: track ended → playing $pendingLink link")
-            player.playPreloaded {
+            player.playPreloaded(mixer.state.value.masterGain) {
                 djSpeaking = false
                 Log.d(TAG, "broadcast: link done → next track")
                 advanceBroadcast()
@@ -484,6 +495,7 @@ class PlaybackConnection @Inject constructor(
         voicePack = null
         duckGain = 1f
         djPlayer?.stop()
+        djPlayer?.clearCache()
         val engine = ttsEngine
         if (engine != null) scope.launch(Dispatchers.Default) { engine.release() }
     }
@@ -567,6 +579,8 @@ class PlaybackConnection @Inject constructor(
         const val TAG = "PlaybackConnection"
         const val POSITION_POLL_MS = 500L
         const val SLEEP_FADE_MS = 20_000L
+        /** Broadcast: with less than this left on the sleep timer, the DJ goes silent. */
+        const val WINDDOWN_SILENT_MS = 5 * 60_000L
     }
 }
 

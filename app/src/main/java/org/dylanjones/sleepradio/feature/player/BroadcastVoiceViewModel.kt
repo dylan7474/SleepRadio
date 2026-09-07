@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.dylanjones.sleepradio.core.broadcast.Chattiness
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_PERSONAL
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_STOCK
@@ -49,21 +50,32 @@ class BroadcastVoiceViewModel @Inject constructor(
         val selected: String = BROADCAST_VOICE_OFF,
         val stockInstalled: Boolean = false,
         val personalInstalled: Boolean = false,
+        val chattiness: Chattiness = Chattiness.DEFAULT,
         val install: VoicePackInstaller.InstallState = VoicePackInstaller.InstallState.Idle,
     )
 
     val uiState: StateFlow<UiState> =
-        combine(settings.broadcastVoice, installer.state, rescan) { selected, install, _ ->
+        combine(
+            settings.broadcastVoice,
+            settings.broadcastChattiness,
+            installer.state,
+            rescan,
+        ) { selected, chat, install, _ ->
             UiState(
                 selected = selected,
                 stockInstalled = resolver.isInstalled(VoicePackResolver.ID_STOCK),
                 personalInstalled = resolver.isInstalled(VoicePackResolver.ID_PERSONAL),
+                chattiness = Chattiness.fromId(chat),
                 install = install,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
 
     fun select(id: String) {
         viewModelScope.launch { settings.setBroadcastVoice(id) }
+    }
+
+    fun setChattiness(c: Chattiness) {
+        viewModelScope.launch { settings.setBroadcastChattiness(c.id) }
     }
 
     fun downloadStock() {

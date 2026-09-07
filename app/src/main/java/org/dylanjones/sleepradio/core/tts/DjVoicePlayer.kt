@@ -30,6 +30,12 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
 
     @Volatile private var track: AudioTrack? = null
     @Volatile private var pending: Clip? = null
+    @Volatile private var volume: Float = 1f
+
+    /** Small LRU of synthesised clips — idents and time-check leads recur. */
+    private val cache = object : LinkedHashMap<String, Clip>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Clip>?) = size > CACHE_MAX
+    }
 
     @Volatile
     var isSpeaking: Boolean = false
@@ -39,20 +45,33 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
     private class Clip(val pcm: ShortArray, val sampleRate: Int)
 
     /**
-     * Synthesise [text] now and hold the result for the next [playPreloaded].
-     * Blocks — call off the main thread. Returns false if synthesis failed.
+     * Synthesise [text] now (or reuse a cached clip) and hold the result for the
+     * next [playPreloaded]. Blocks — call off the main thread. Returns false if
+     * synthesis failed.
      */
     fun preload(text: String, speed: Float = 1.0f): Boolean {
+        val cached = synchronized(cache) { cache[text] }
+        if (cached != null) {
+            pending = cached
+            return true
+        }
         val audio = engine.synth(text, speed) ?: return false
-        pending = toClip(audio)
+        val clip = toClip(audio)
+        synchronized(cache) { cache[text] = clip }
+        pending = clip
         return true
+    }
+
+    fun clearCache() {
+        synchronized(cache) { cache.clear() }
     }
 
     /**
      * Play whatever [preload] last produced. No-op (calls [onDone]) if nothing
      * is preloaded. [onDone] runs on the main thread after playback finishes.
      */
-    fun playPreloaded(onDone: (() -> Unit)? = null) {
+    fun playPreloaded(volume: Float = 1f, onDone: (() -> Unit)? = null) {
+        this.volume = volume.coerceIn(0f, 1f)
         val clip = pending
         pending = null
         if (clip == null) {
@@ -74,7 +93,8 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
     }
 
     /** Synthesise and play [text] in one go (worker thread). */
-    fun speak(text: String, speed: Float = 1.0f, onDone: (() -> Unit)? = null) {
+    fun speak(text: String, speed: Float = 1.0f, volume: Float = 1f, onDone: (() -> Unit)? = null) {
+        this.volume = volume.coerceIn(0f, 1f)
         isSpeaking = true
         Thread({
             try {
@@ -137,6 +157,7 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
             .setTransferMode(AudioTrack.MODE_STATIC)
             .build()
         track = t
+        t.setVolume(volume)
         t.write(clip.pcm, 0, clip.pcm.size, AudioTrack.WRITE_BLOCKING)
         t.play()
 
@@ -157,5 +178,6 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
 
     private companion object {
         const val TAG = "DjVoicePlayer"
+        const val CACHE_MAX = 8
     }
 }
