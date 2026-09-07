@@ -18,7 +18,7 @@ enum class AudioChannel { MAIN, NOISE, BINAURAL }
  * gain that should be applied to each.
  *
  *   VOL knob  -> [masterGain]     scales all three channels
- *   BAL knob  -> [crossfade]      equal-power balance, MAIN <-> NOISE only
+ *   BAL knob  -> [crossfade]      tapered, equal-power balance, MAIN <-> NOISE only
  *   Settings  -> [binauralLevel]  fixed background level, untouched by BAL
  */
 data class MixerState(
@@ -30,13 +30,40 @@ data class MixerState(
     val binauralLevel: Float = 0.4f,
 ) {
     private val theta: Float
-        get() = crossfade.coerceIn(0f, 1f) * (Math.PI.toFloat() / 2f)
+        get() = taper(crossfade.coerceIn(0f, 1f)) * (Math.PI.toFloat() / 2f)
 
     /** Effective linear gain (0f..1f) to apply to [channel] right now. */
     fun effectiveGain(channel: AudioChannel): Float = when (channel) {
         AudioChannel.MAIN -> cos(theta) * masterGain
         AudioChannel.NOISE -> sin(theta) * masterGain
         AudioChannel.BINAURAL -> binauralLevel.coerceIn(0f, 1f) * masterGain
+    }
+
+    private companion object {
+        /**
+         * Perceptual taper for the BAL knob. [RotaryKnob] maps physical drag
+         * distance straight to `crossfade` (0..1), so without this the knob's
+         * travel is linear in `crossfade` — and since hearing is roughly
+         * logarithmic, that leaves almost no usable travel near each extreme
+         * (MAIN-only / NOISE-only), where the fading-in channel is quiet and a
+         * tiny nudge produces a big perceived loudness jump.
+         *
+         * This eases `crossfade` so it changes slowly near 0 and 1 and fastest
+         * through the middle — more knob travel spent where the fading-in
+         * channel is quiet, mimicking an audio-taper (log) pot — while leaving
+         * 0, 0.5 and 1 exactly where they were (silent, centred, silent).
+         *
+         * It's the N=4 member of Perlin's general smoothstep family: flat
+         * first *three* derivatives at each end (vs. two for the more common
+         * smootherstep), so it eases off harder right at the extremes and
+         * sweeps through the middle faster. If it still needs more bottom-end
+         * resolution, compose it again (`taper(taper(t))`) rather than hand-
+         * deriving a higher order — each pass pushes further the same way.
+         */
+        fun taper(t: Float): Float {
+            val x = t.coerceIn(0f, 1f)
+            return x * x * x * x * (x * (x * (x * -20f + 70f) - 84f) + 35f)
+        }
     }
 }
 

@@ -31,7 +31,9 @@ one shared control layout.
 - Stereo detuned sines; sits outside the BAL crossfade
 
 **Mixer & timer**
-- **VOL** = master gain, **BAL** = equal‑power A ↔ B crossfade
+- **VOL** = master gain, **BAL** = equal‑power A ↔ B crossfade with a perceptual
+  taper, so knob travel near each extreme gets finer control over the quiet channel
+  instead of being crammed into a few degrees
 - Sleep timer (5–90 min): fades Channel A over the last 20 s, then pauses it — B and C
   continue
 - Ambient survives the sleep timer *and* an app‑swipe (dedicated foreground service);
