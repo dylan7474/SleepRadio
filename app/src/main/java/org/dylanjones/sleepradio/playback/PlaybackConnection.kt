@@ -370,9 +370,12 @@ class PlaybackConnection @Inject constructor(
      * tracks. [voice] == null → music only, no links.
      */
     fun startBroadcast(tracks: List<BroadcastTrack>, voice: VoicePack?, config: BroadcastConfig) {
-        controller ?: return
+        val c = controller ?: return
         endBroadcastInternal()
         if (tracks.isEmpty()) return
+        // Silence whatever was on Channel A (e.g. an internet-radio stream) so
+        // the welcome doesn't talk over it while the first track is prepared.
+        runCatching { c.pause() }
 
         isRadio = false
         isAudiobook = false
@@ -397,7 +400,7 @@ class PlaybackConnection @Inject constructor(
             // Load the voice, speak the welcome, THEN start the first track.
             broadcastJob = scope.launch {
                 val ready = kotlinx.coroutines.withContext(Dispatchers.Default) {
-                    engine.ensureLoaded(voice) && player.preload(builder.welcome())
+                    engine.ensureLoaded(voice) && player.preload(builder.welcome(first))
                 }
                 if (!isBroadcast || !isActive) return@launch // restarted / switched away
                 if (ready) {

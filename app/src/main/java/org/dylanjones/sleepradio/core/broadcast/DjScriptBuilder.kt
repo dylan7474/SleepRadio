@@ -55,15 +55,23 @@ class ShowClock(private val config: BroadcastConfig) {
  */
 class DjScriptBuilder(private val rng: Random = Random.Default) {
 
-    /** Spoken once when a broadcast starts, before the first track. */
-    fun welcome(now: LocalTime = LocalTime.now()): String {
+    /**
+     * Spoken once when a broadcast starts, before the first track. When [first]
+     * is given the greeting rolls straight into announcing it.
+     */
+    fun welcome(first: BroadcastTrack? = null, now: LocalTime = LocalTime.now()): String {
         val greeting = when (now.hour) {
             in 5..11 -> "Good morning"
             in 12..17 -> "Good afternoon"
             in 18..21 -> "Good evening"
             else -> "Hello"
         }
-        return "$greeting, and welcome to Sleep Radio. ${WELCOME_TAILS.random(rng)}"
+        val opener = "$greeting, and welcome to Sleep Radio."
+        return if (first != null) {
+            "$opener ${OPENERS.random(rng)} ${trackPhrase(first)}."
+        } else {
+            "$opener ${WELCOME_TAILS.random(rng)}"
+        }
     }
 
     fun build(
@@ -108,6 +116,12 @@ class DjScriptBuilder(private val rng: Random = Random.Default) {
             "Here's the music.",
             "Settle in.",
             "Let's get started.",
+        )
+        val OPENERS = listOf(
+            "First up,",
+            "We begin with",
+            "Kicking off with",
+            "To start,",
         )
         val IDENTS = listOf(
             "You're listening to Sleep Radio.",

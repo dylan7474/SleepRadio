@@ -129,11 +129,18 @@ class DjScriptBuilderTest {
     @Test
     fun `welcome greets by time of day and names the station`() {
         val b = DjScriptBuilder(Random(0))
-        assertTrue(b.welcome(LocalTime.of(8, 0)).startsWith("Good morning"))
-        assertTrue(b.welcome(LocalTime.of(14, 0)).startsWith("Good afternoon"))
-        assertTrue(b.welcome(LocalTime.of(20, 0)).startsWith("Good evening"))
-        assertTrue(b.welcome(LocalTime.of(2, 0)).startsWith("Hello"))
-        assertTrue(b.welcome(LocalTime.of(20, 0)).contains("welcome to Sleep Radio"))
+        assertTrue(b.welcome(now = LocalTime.of(8, 0)).startsWith("Good morning"))
+        assertTrue(b.welcome(now = LocalTime.of(14, 0)).startsWith("Good afternoon"))
+        assertTrue(b.welcome(now = LocalTime.of(20, 0)).startsWith("Good evening"))
+        assertTrue(b.welcome(now = LocalTime.of(2, 0)).startsWith("Hello"))
+        assertTrue(b.welcome(now = LocalTime.of(20, 0)).contains("welcome to Sleep Radio"))
+    }
+
+    @Test
+    fun `welcome announces the first track when given one`() {
+        val s = DjScriptBuilder(Random(0)).welcome(first = t1, now = LocalTime.of(20, 0))
+        assertTrue(s, s.contains("welcome to Sleep Radio"))
+        assertTrue(s, s.contains("Song One") && s.contains("The Band"))
     }
 
     @Test
