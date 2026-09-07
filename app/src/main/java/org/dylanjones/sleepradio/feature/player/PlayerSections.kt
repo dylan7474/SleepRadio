@@ -131,6 +131,15 @@ fun NowPlayingBlock(
             }
         }
         Spacer(Modifier.height(8.dp))
+        if (state.isBroadcast) {
+            Text(
+                text = if (state.djSpeaking) "🎙  ON AIR — DJ" else "●  ON AIR",
+                color = if (state.djSpeaking) c.accentAlt else c.accent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(4.dp))
+        }
         if (state.isRadio) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("● LIVE", color = c.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)

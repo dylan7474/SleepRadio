@@ -15,3 +15,10 @@
 
 # The ambient service is reached from the manifest + a Hilt @EntryPoint.
 -keep class org.dylanjones.sleepradio.playback.AmbientPlaybackService { *; }
+
+# sherpa-onnx (Phase 9 TTS): its JNI layer resolves the Kotlin config/result
+# classes and their fields by name from native code, so R8 must not rename or
+# strip them. The AAR ships consumer rules, but keep this defensively — a wrong
+# guess here is an UnsatisfiedLinkError in the minified release build only.
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+-keepclasseswithmembernames class * { native <methods>; }

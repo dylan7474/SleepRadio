@@ -131,3 +131,14 @@ Nothing here is committed; it's the shortlist for after a few days of real bedsi
 
 Online station directory: **[radio‑browser.info](https://www.radio-browser.info/)**
 (community‑run, public domain). Everything else is first‑party.
+
+---
+
+## License
+
+**GPL‑3.0‑or‑later** — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+The upcoming Broadcast Radio mode does on‑device text‑to‑speech through
+sherpa‑onnx, which statically links **eSpeak‑NG (GPL‑3.0‑or‑later)** for
+phonemisation. A released APK therefore contains GPL code, so the whole project
+is GPL‑3.0‑or‑later. No voice model ships in the APK or lives in this repo.

@@ -31,6 +31,7 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -63,15 +64,22 @@ import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.RadioStation
+import org.dylanjones.sleepradio.core.broadcast.Chattiness
+import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
+import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_PERSONAL
+import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_STOCK
 import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.SkinId
 import org.dylanjones.sleepradio.core.design.skinFor
+import org.dylanjones.sleepradio.core.tts.VoicePackInstaller
+import org.dylanjones.sleepradio.core.tts.rememberDebugTtsTest
 import org.dylanjones.sleepradio.feature.root.RootViewModel
 
 @Composable
 fun PlayerRoute(
     rootViewModel: RootViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel(),
+    broadcastVoiceViewModel: BroadcastVoiceViewModel = hiltViewModel(),
 ) {
     val skinId by rootViewModel.skinId.collectAsStateWithLifecycle()
     val skinChosen by rootViewModel.skinChosen.collectAsStateWithLifecycle()
@@ -116,9 +124,18 @@ fun PlayerRoute(
         }
     }
 
+    val importVoiceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) broadcastVoiceViewModel.importVoice(uri, asPersonal = true)
+    }
+
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     fun closeDrawer() = scope.launch { drawerState.close() }
+
+    // Debug-only TTS smoke test (Phase 9 Chunk A); null in release builds.
+    val onTtsTest = rememberDebugTtsTest()
 
     var ambientDialogOpen by remember { mutableStateOf(false) }
     var sleepDialogOpen by remember { mutableStateOf(false) }
@@ -127,6 +144,7 @@ fun PlayerRoute(
     /** Slot to assign a directory pick to, or null = "play now" from the drawer. */
     var directoryAssignSlot by remember { mutableStateOf<Int?>(null) }
     var radioStationsOpen by remember { mutableStateOf(false) }
+    var broadcastVoiceOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
 
     val actions = PlayerActions(
@@ -154,8 +172,10 @@ fun PlayerRoute(
                 onAmbient = { closeDrawer(); ambientDialogOpen = true },
                 onSleep = { closeDrawer(); sleepDialogOpen = true },
                 onRadioStations = { closeDrawer(); radioStationsOpen = true },
+                onBroadcastVoice = { closeDrawer(); broadcastVoiceOpen = true },
                 onSkin = { rootViewModel.chooseSkin(it); closeDrawer() },
                 onAbout = { closeDrawer(); aboutOpen = true },
+                onTtsTest = onTtsTest?.let { test -> { closeDrawer(); test() } },
             )
         },
     ) {
@@ -205,6 +225,26 @@ fun PlayerRoute(
                 )
             }
 
+            if (broadcastVoiceOpen) {
+                val voiceState by broadcastVoiceViewModel.uiState.collectAsStateWithLifecycle()
+                BroadcastVoiceDialog(
+                    state = voiceState,
+                    onSelect = broadcastVoiceViewModel::select,
+                    onChattiness = broadcastVoiceViewModel::setChattiness,
+                    onDownloadStock = broadcastVoiceViewModel::downloadStock,
+                    onImport = {
+                        importVoiceLauncher.launch(
+                            arrayOf("application/zip", "application/octet-stream"),
+                        )
+                    },
+                    onRemovePersonal = broadcastVoiceViewModel::removePersonal,
+                    onDismiss = {
+                        broadcastVoiceViewModel.dismissInstallResult()
+                        broadcastVoiceOpen = false
+                    },
+                )
+            }
+
             if (aboutOpen) {
                 AboutDialog(onDismiss = { aboutOpen = false })
             }
@@ -221,6 +261,7 @@ fun PlayerRoute(
                     onRemoveStation = playerViewModel::removeStation,
                     onAddManual = { addStationOpen = true },
                     onBrowseDirectory = { directoryAssignSlot = slotIndex; directoryOpen = true },
+                    onPickBroadcast = { playerViewModel.assignBroadcastToSlot(slotIndex) },
                     onPickFolderAlbum = { playerViewModel.assignFolderAlbumToSlot(slotIndex, it) },
                     onPickAudiobook = { playerViewModel.assignAudiobookToSlot(slotIndex, it) },
                     onChooseAudiobooksFolder = { audiobooksFolderLauncher.launch(null) },
@@ -268,8 +309,10 @@ private fun AppDrawer(
     onAmbient: () -> Unit,
     onSleep: () -> Unit,
     onRadioStations: () -> Unit,
+    onBroadcastVoice: () -> Unit,
     onSkin: (SkinId) -> Unit,
     onAbout: () -> Unit,
+    onTtsTest: (() -> Unit)? = null,
 ) {
     ModalDrawerSheet {
         Column(
@@ -304,6 +347,11 @@ private fun AppDrawer(
                 selected = false,
                 onClick = onRadioStations,
             )
+            NavigationDrawerItem(
+                label = { Text("Broadcast voice") },
+                selected = false,
+                onClick = onBroadcastVoice,
+            )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SectionHeader("APPEARANCE")
             NavigationDrawerItem(
@@ -322,6 +370,13 @@ private fun AppDrawer(
                 selected = false,
                 onClick = onAbout,
             )
+            if (onTtsTest != null) {
+                NavigationDrawerItem(
+                    label = { Text("▶ Speak test line (debug)") },
+                    selected = false,
+                    onClick = onTtsTest,
+                )
+            }
         }
     }
 }
@@ -357,6 +412,131 @@ private fun AboutDialog(onDismiss: () -> Unit) {
             }
         },
     )
+}
+
+@Composable
+private fun BroadcastVoiceDialog(
+    state: BroadcastVoiceViewModel.UiState,
+    onSelect: (String) -> Unit,
+    onChattiness: (Chattiness) -> Unit,
+    onDownloadStock: () -> Unit,
+    onImport: () -> Unit,
+    onRemovePersonal: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text("Broadcast voice") },
+        text = {
+            Column {
+                Text(
+                    "The DJ reads short links between tracks. Fully offline — a voice " +
+                        "is only ever installed from a file or a plain download, never uploaded.",
+                    fontSize = 12.sp,
+                )
+                Spacer(Modifier.padding(4.dp))
+                SectionHeader("DJ VOICE")
+                VoiceOptionRow(
+                    selected = state.selected == BROADCAST_VOICE_OFF,
+                    title = "Off",
+                    subtitle = "Music only — no spoken links",
+                    onClick = { onSelect(BROADCAST_VOICE_OFF) },
+                )
+                VoiceOptionRow(
+                    selected = state.selected == BROADCAST_VOICE_STOCK,
+                    title = "Stock voice",
+                    subtitle = if (state.stockInstalled) "Ready" else "Not installed",
+                    enabled = state.stockInstalled,
+                    onClick = { onSelect(BROADCAST_VOICE_STOCK) },
+                )
+                if (state.personalInstalled) {
+                    VoiceOptionRow(
+                        selected = state.selected == BROADCAST_VOICE_PERSONAL,
+                        title = "My voice",
+                        subtitle = "Imported on this device",
+                        onClick = { onSelect(BROADCAST_VOICE_PERSONAL) },
+                    )
+                }
+
+                Spacer(Modifier.padding(4.dp))
+                SectionHeader("CHATTINESS")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Chattiness.entries.forEach { c ->
+                        val on = state.chattiness == c
+                        Text(
+                            text = when (c) {
+                                Chattiness.CHATTY -> "Chatty"
+                                Chattiness.BALANCED -> "Balanced"
+                                Chattiness.MINIMAL -> "Minimal"
+                            },
+                            fontSize = 13.sp,
+                            fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier
+                                .clickable { onChattiness(c) }
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                        )
+                    }
+                }
+                Text(
+                    "A spoken link every ${state.chattiness.tracksPerLink} tracks.",
+                    fontSize = 11.sp,
+                )
+
+                Spacer(Modifier.padding(6.dp))
+                when (val s = state.install) {
+                    is VoicePackInstaller.InstallState.Working -> Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(Modifier.padding(end = 10.dp))
+                        Text(
+                            if (s.pct < 0) "Installing…" else "Installing… ${s.pct}%",
+                            fontSize = 13.sp,
+                        )
+                    }
+                    is VoicePackInstaller.InstallState.Failed ->
+                        Text("Couldn't install: ${s.reason}", fontSize = 13.sp)
+                    VoicePackInstaller.InstallState.Ready ->
+                        Text("Installed ✓", fontSize = 13.sp)
+                    VoicePackInstaller.InstallState.Idle -> Unit
+                }
+
+                Row {
+                    if (!state.stockInstalled) {
+                        TextButton(onClick = onDownloadStock) { Text("Download stock voice") }
+                    }
+                    TextButton(onClick = onImport) { Text("Import a voice…") }
+                }
+                if (state.personalInstalled) {
+                    TextButton(onClick = onRemovePersonal) { Text("Remove my voice") }
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun VoiceOptionRow(
+    selected: Boolean,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onClick, enabled = enabled)
+        Column(Modifier.padding(start = 4.dp)) {
+            Text(title, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(subtitle, fontSize = 12.sp, maxLines = 1)
+        }
+    }
 }
 
 @Composable
@@ -457,6 +637,7 @@ private fun SourcePickerDialog(
     onRemoveStation: (String) -> Unit,
     onAddManual: () -> Unit,
     onBrowseDirectory: () -> Unit,
+    onPickBroadcast: () -> Unit,
     onPickFolderAlbum: (FolderAlbum) -> Unit,
     onPickAudiobook: (Audiobook) -> Unit,
     onChooseAudiobooksFolder: () -> Unit,
@@ -470,6 +651,20 @@ private fun SourcePickerDialog(
         title = { Text("Assign a source") },
         text = {
             LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                item { SectionHeader("BROADCAST") }
+                item {
+                    PickerRow(
+                        primary = "📻  SleepRadio broadcast",
+                        secondary = if (musicFolderChosen) {
+                            "Auto-DJ over your music folder"
+                        } else {
+                            "Choose a music folder first"
+                        },
+                        onClick = { if (musicFolderChosen) onPickBroadcast() },
+                    )
+                    HorizontalDivider()
+                }
+
                 item { SectionHeader("INTERNET RADIO") }
                 item {
                     PickerRow("＋  Add a station manually…", "Enter a name and stream URL", onAddManual)

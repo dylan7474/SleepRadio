@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -14,6 +15,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -29,9 +31,20 @@ import androidx.media3.common.PlaybackParameters
 import org.dylanjones.sleepradio.core.audio.AudioChannel
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.MixerController
+import org.dylanjones.sleepradio.core.broadcast.BroadcastConfig
+import org.dylanjones.sleepradio.core.broadcast.BroadcastSelector
+import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
+import org.dylanjones.sleepradio.core.broadcast.DjScriptBuilder
+import org.dylanjones.sleepradio.core.broadcast.LinkKind
+import org.dylanjones.sleepradio.core.broadcast.ShowClock
+import org.dylanjones.sleepradio.core.broadcast.WindDownPhase
 import org.dylanjones.sleepradio.core.data.Chapter
+import org.dylanjones.sleepradio.core.tts.DjVoicePlayer
+import org.dylanjones.sleepradio.core.tts.OfflineTtsEngine
+import org.dylanjones.sleepradio.core.tts.VoicePack
 import org.dylanjones.sleepradio.di.MainDispatcher
 import org.dylanjones.sleepradio.media.Track
+import java.time.LocalTime
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,6 +55,10 @@ data class PlaybackState(
     val isBuffering: Boolean = false,
     val isRadio: Boolean = false,
     val isAudiobook: Boolean = false,
+    /** Auto-DJ "SleepRadio broadcast" source is running on Channel A. */
+    val isBroadcast: Boolean = false,
+    /** A DJ voice link is playing right now (broadcast only). */
+    val djSpeaking: Boolean = false,
     val bookId: String? = null,
     val chapterIndex: Int = 0,
     val chapterCount: Int = 0,
@@ -89,6 +106,8 @@ class PlaybackConnection @Inject constructor(
     private var sleepJob: Job? = null
     /** 1f normally; ramped 1→0 by the sleep timer's fade, multiplied into Channel A gain. */
     private var sleepFade: Float = 1f
+    /** 1f normally; reserved for ducking music under a DJ link (Chunk D talk-over). */
+    private var duckGain: Float = 1f
 
     private var controller: MediaController? = null
     private var future: ListenableFuture<MediaController>? = null
@@ -96,6 +115,23 @@ class PlaybackConnection @Inject constructor(
     private var isRadio: Boolean = false
     private var isAudiobook: Boolean = false
     private var bookId: String? = null
+
+    // --- Broadcast (auto-DJ) state ---
+    private var isBroadcast: Boolean = false
+    private var djSpeaking: Boolean = false
+    /** True while an END-of-track is being handled, so onEvents doesn't re-enter. */
+    private var advancing: Boolean = false
+    private var selector: BroadcastSelector? = null
+    private var showClock: ShowClock? = null
+    private var scriptBuilder: DjScriptBuilder? = null
+    private var voicePack: VoicePack? = null
+    private var ttsEngine: OfflineTtsEngine? = null
+    private var djPlayer: DjVoicePlayer? = null
+    private var currentBroadcast: BroadcastTrack? = null
+    private var nextBroadcast: BroadcastTrack? = null
+    /** Link kind to play after the current track; NONE = straight into the next. */
+    private var pendingLink: LinkKind = LinkKind.NONE
+    private var linkPreloaded: Boolean = false
     /** Stable station name from the slot label; never overwritten by ICY metadata. */
     private var radioStationName: String? = null
     /** Station description (fallback "now playing" line when the stream sends no metadata). */
@@ -103,6 +139,9 @@ class PlaybackConnection @Inject constructor(
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
+            if (isBroadcast && !advancing && player.playbackState == Player.STATE_ENDED) {
+                onBroadcastTrackEnded()
+            }
             pushSnapshot()
             if (player.isPlaying) startTicker() else stopTicker()
         }
@@ -132,7 +171,7 @@ class PlaybackConnection @Inject constructor(
     }
 
     private fun applyMainGain() {
-        val gain = mixer.state.value.effectiveGain(AudioChannel.MAIN) * sleepFade
+        val gain = mixer.state.value.effectiveGain(AudioChannel.MAIN) * sleepFade * duckGain
         controller?.volume = gain.coerceIn(0f, 1f)
     }
 
@@ -180,6 +219,7 @@ class PlaybackConnection @Inject constructor(
 
     fun playTracks(tracks: List<Track>, startIndex: Int = 0) {
         val c = controller ?: return
+        endBroadcastInternal()
         isRadio = false
         isAudiobook = false
         bookId = null
@@ -193,6 +233,7 @@ class PlaybackConnection @Inject constructor(
     fun playFolderAlbum(files: List<Chapter>, albumTitle: String) {
         val c = controller ?: return
         if (files.isEmpty()) return
+        endBroadcastInternal()
         isRadio = false
         isAudiobook = false
         bookId = null
@@ -227,6 +268,7 @@ class PlaybackConnection @Inject constructor(
     ) {
         val c = controller ?: return
         if (chapters.isEmpty()) return
+        endBroadcastInternal()
         isRadio = false
         isAudiobook = true
         bookId = book
@@ -261,6 +303,7 @@ class PlaybackConnection @Inject constructor(
     /** Stream an internet-radio station on Channel A (live, no seek). */
     fun playRadio(url: String, name: String, description: String) {
         val c = controller ?: return
+        endBroadcastInternal()
         isRadio = true
         isAudiobook = false
         bookId = null
@@ -294,12 +337,167 @@ class PlaybackConnection @Inject constructor(
         if (c.isPlaying) c.pause() else c.play()
     }
 
-    fun next() = controller?.seekToNextMediaItem() ?: Unit
+    fun next() {
+        if (isBroadcast) {
+            // Skip straight to a freshly picked track (drop any pending link).
+            advancing = true
+            djPlayer?.stop()
+            djSpeaking = false
+            pendingLink = LinkKind.NONE
+            linkPreloaded = false
+            advanceBroadcast()
+        } else {
+            controller?.seekToNextMediaItem()
+        }
+    }
 
-    fun previous() = controller?.seekToPreviousMediaItem() ?: Unit
+    fun previous() {
+        if (isBroadcast) controller?.seekTo(0) else controller?.seekToPreviousMediaItem()
+    }
 
     fun seekTo(positionMs: Long) {
         controller?.seekTo(positionMs)
+    }
+
+    // --- Broadcast (auto-DJ) ---
+
+    /**
+     * Start "SleepRadio broadcast" on Channel A: a self-selecting rotation over
+     * [tracks], with the DJ ([voice]) reading a short link in the gap before some
+     * tracks. [voice] == null → music only, no links.
+     */
+    fun startBroadcast(tracks: List<BroadcastTrack>, voice: VoicePack?, config: BroadcastConfig) {
+        controller ?: return
+        endBroadcastInternal()
+        if (tracks.isEmpty()) return
+
+        isRadio = false
+        isAudiobook = false
+        bookId = null
+        isBroadcast = true
+        selector = BroadcastSelector(tracks)
+        showClock = ShowClock(config)
+        scriptBuilder = DjScriptBuilder()
+        voicePack = voice
+
+        if (voice != null) {
+            if (ttsEngine == null) ttsEngine = OfflineTtsEngine()
+            if (djPlayer == null) djPlayer = DjVoicePlayer(ttsEngine!!)
+            val engine = ttsEngine!!
+            scope.launch(Dispatchers.Default) { engine.ensureLoaded(voice) }
+        }
+
+        currentBroadcast = selector?.next()
+        nextBroadcast = selector?.next()
+        val first = currentBroadcast ?: run { endBroadcastInternal(); return }
+        playSingleBroadcast(first)
+        onBroadcastTrackStarted()
+    }
+
+    private fun playSingleBroadcast(t: BroadcastTrack) {
+        val c = controller ?: return
+        c.setPlaybackParameters(PlaybackParameters(1f))
+        c.setMediaItem(
+            MediaItem.Builder()
+                .setUri(t.uri)
+                .setMediaId(t.uri)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(t.title)
+                        .setArtist(t.artist)
+                        .setAlbumTitle(t.album)
+                        .setStation("SleepRadio")
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
+                        .build(),
+                )
+                .build(),
+        )
+        c.prepare()
+        c.play()
+    }
+
+    /** NORMAL, or wind the DJ down once the sleep timer is running. */
+    private fun windDownPhase(): WindDownPhase {
+        val st = _sleepTimer.value
+        if (!st.active) return WindDownPhase.NORMAL
+        return if (st.remainingMs > WINDDOWN_SILENT_MS) WindDownPhase.EASING else WindDownPhase.SILENT
+    }
+
+    /** After a track starts: decide the link that plays when it ends, pre-synth it. */
+    private fun onBroadcastTrackStarted() {
+        val phase = windDownPhase()
+        val kind = showClock?.onTrackStarted(LocalTime.now(), phase) ?: LinkKind.NONE
+        pendingLink = kind
+        linkPreloaded = false
+        Log.d(TAG, "broadcast: now '${currentBroadcast?.title}' by ${currentBroadcast?.artist}; " +
+            "link after this track = $kind (windDown=$phase)")
+        val player = djPlayer
+        val builder = scriptBuilder
+        if (kind != LinkKind.NONE && voicePack != null && player != null && builder != null) {
+            val prev = currentBroadcast
+            val next = nextBroadcast
+            val terse = phase == WindDownPhase.EASING
+            scope.launch(Dispatchers.Default) {
+                val text = builder.build(kind, prev, next, LocalTime.now(), terse)
+                if (text.isNotBlank()) {
+                    linkPreloaded = player.preload(text)
+                    Log.d(TAG, "broadcast: link preloaded=$linkPreloaded — \"$text\"")
+                }
+            }
+        }
+    }
+
+    /** Channel A hit STATE_ENDED during a broadcast. */
+    private fun onBroadcastTrackEnded() {
+        advancing = true
+        val player = djPlayer
+        if (pendingLink != LinkKind.NONE && linkPreloaded && player != null) {
+            djSpeaking = true
+            pushSnapshot()
+            Log.d(TAG, "broadcast: track ended → playing $pendingLink link")
+            player.playPreloaded(mixer.state.value.masterGain) {
+                djSpeaking = false
+                Log.d(TAG, "broadcast: link done → next track")
+                advanceBroadcast()
+            }
+        } else {
+            Log.d(TAG, "broadcast: track ended → next track (no link: " +
+                "kind=$pendingLink preloaded=$linkPreloaded)")
+            advanceBroadcast()
+        }
+    }
+
+    /** Move to the pre-picked next track and pick a new one behind it. */
+    private fun advanceBroadcast() {
+        if (!isBroadcast) { advancing = false; return }
+        val upcoming = nextBroadcast ?: selector?.next()
+        if (upcoming == null) { endBroadcastInternal(); return }
+        currentBroadcast = upcoming
+        nextBroadcast = selector?.next()
+        playSingleBroadcast(upcoming)
+        onBroadcastTrackStarted()
+        advancing = false
+    }
+
+    /** Tear down broadcast state. Safe to call when not broadcasting. */
+    private fun endBroadcastInternal() {
+        if (!isBroadcast && selector == null) return
+        isBroadcast = false
+        djSpeaking = false
+        advancing = false
+        pendingLink = LinkKind.NONE
+        linkPreloaded = false
+        selector = null
+        showClock = null
+        currentBroadcast = null
+        nextBroadcast = null
+        voicePack = null
+        duckGain = 1f
+        djPlayer?.stop()
+        djPlayer?.clearCache()
+        val engine = ttsEngine
+        if (engine != null) scope.launch(Dispatchers.Default) { engine.release() }
     }
 
     private fun startTicker() {
@@ -333,10 +531,12 @@ class PlaybackConnection @Inject constructor(
             isBuffering = c.playbackState == Player.STATE_BUFFERING,
             isRadio = isRadio,
             isAudiobook = isAudiobook,
+            isBroadcast = isBroadcast,
+            djSpeaking = djSpeaking,
             bookId = bookId,
             chapterIndex = if (isAudiobook) c.currentMediaItemIndex else 0,
             chapterCount = if (isAudiobook) c.mediaItemCount else 0,
-            stationName = if (isRadio) radioStationName else null,
+            stationName = if (isRadio) radioStationName else if (isBroadcast) "SleepRadio" else null,
             nowPlaying = icyNowPlaying,
             title = md.title?.toString(),
             artist = md.artist?.toString(),
@@ -349,8 +549,8 @@ class PlaybackConnection @Inject constructor(
             },
             positionMs = if (isRadio) 0L else c.currentPosition.coerceAtLeast(0L),
             durationMs = if (isRadio) 0L else c.duration.let { if (it > 0) it else 0L },
-            hasNext = !isRadio && c.hasNextMediaItem(),
-            hasPrevious = !isRadio && c.hasPreviousMediaItem(),
+            hasNext = isBroadcast || (!isRadio && c.hasNextMediaItem()),
+            hasPrevious = isBroadcast || (!isRadio && c.hasPreviousMediaItem()),
             queueSize = c.mediaItemCount,
         )
     }
@@ -376,8 +576,11 @@ class PlaybackConnection @Inject constructor(
     }
 
     private companion object {
+        const val TAG = "PlaybackConnection"
         const val POSITION_POLL_MS = 500L
         const val SLEEP_FADE_MS = 20_000L
+        /** Broadcast: with less than this left on the sleep timer, the DJ goes silent. */
+        const val WINDDOWN_SILENT_MS = 5 * 60_000L
     }
 }
 

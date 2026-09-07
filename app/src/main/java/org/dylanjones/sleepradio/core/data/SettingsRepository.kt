@@ -53,4 +53,23 @@ interface SettingsRepository {
     suspend fun addCustomStation(station: RadioStation)
 
     suspend fun removeCustomStation(id: String)
+
+    /**
+     * Which voice the Broadcast DJ uses: [BROADCAST_VOICE_OFF] (music-only, no
+     * spoken links — the default), [BROADCAST_VOICE_STOCK] or
+     * [BROADCAST_VOICE_PERSONAL]. Persisted; the pack must still be installed
+     * under `filesDir/tts/<id>/` for a non-off value to actually speak.
+     */
+    val broadcastVoice: Flow<String>
+
+    suspend fun setBroadcastVoice(id: String)
+
+    /** How chatty the auto-DJ is: a [org.dylanjones.sleepradio.core.broadcast.Chattiness] id. */
+    val broadcastChattiness: Flow<String>
+
+    suspend fun setBroadcastChattiness(id: String)
 }
+
+const val BROADCAST_VOICE_OFF = "off"
+const val BROADCAST_VOICE_STOCK = "stock"
+const val BROADCAST_VOICE_PERSONAL = "personal"

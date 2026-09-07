@@ -4,7 +4,7 @@ package org.dylanjones.sleepradio.core.data
 const val PRESET_COUNT = 4
 
 /** What a preset slot points at. See RETROSYNC_PLAN.md section 2. */
-enum class SourceType { ALBUM, MUSIC_FOLDER, AUDIOBOOK, RADIO }
+enum class SourceType { ALBUM, MUSIC_FOLDER, AUDIOBOOK, RADIO, BROADCAST }
 
 /** An "album" discovered by walking a SAF-granted music folder (any folder that
  *  directly contains audio files). [id] is that folder's document URI string. */
@@ -17,9 +17,11 @@ data class FolderAlbum(
 
 /**
  * A resolved preset slot. [refId] is interpreted by [type]:
- *  - ALBUM      -> MediaStore album id (as a string)
- *  - AUDIOBOOK  -> document-tree book path (Phase 4 chunk C)
- *  - RADIO      -> stream URL
+ *  - ALBUM        -> MediaStore album id (as a string)
+ *  - MUSIC_FOLDER -> folder-album document URI
+ *  - AUDIOBOOK    -> document-tree book path (Phase 4 chunk C)
+ *  - RADIO        -> stream URL
+ *  - BROADCAST    -> the literal "broadcast" (auto-DJ over the music folder)
  */
 data class SourceSlot(
     val index: Int,

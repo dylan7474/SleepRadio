@@ -90,6 +90,20 @@ class SettingsRepositoryImpl @Inject constructor(
         }
     }
 
+    override val broadcastVoice: Flow<String> =
+        dataStore.data.map { it[KEY_BROADCAST_VOICE] ?: BROADCAST_VOICE_OFF }
+
+    override suspend fun setBroadcastVoice(id: String) {
+        dataStore.edit { it[KEY_BROADCAST_VOICE] = id }
+    }
+
+    override val broadcastChattiness: Flow<String> =
+        dataStore.data.map { it[KEY_BROADCAST_CHATTINESS] ?: "balanced" }
+
+    override suspend fun setBroadcastChattiness(id: String) {
+        dataStore.edit { it[KEY_BROADCAST_CHATTINESS] = id }
+    }
+
     private companion object {
         val KEY_SKIN = stringPreferencesKey("skin_id")
         val KEY_AUDIOBOOKS_TREE = stringPreferencesKey("audiobooks_tree_uri")
@@ -97,6 +111,8 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_AMBIENT = stringPreferencesKey("ambient_current")
         val KEY_SLEEP_MIN = intPreferencesKey("sleep_duration_min")
         val KEY_CUSTOM_STATIONS = stringPreferencesKey("custom_stations")
+        val KEY_BROADCAST_VOICE = stringPreferencesKey("broadcast_voice")
+        val KEY_BROADCAST_CHATTINESS = stringPreferencesKey("broadcast_chattiness")
 
         fun patternKey(index: Int) = stringPreferencesKey("ambient_pattern_$index")
     }

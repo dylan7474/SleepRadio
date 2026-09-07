@@ -19,6 +19,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // sherpa-onnx (on-device Piper TTS for Broadcast mode) is only published
+        // via JitPack. Scoped to its group so nothing else resolves from here.
+        maven("https://jitpack.io") {
+            content { includeGroup("com.github.k2-fsa") }
+        }
     }
 }
 
