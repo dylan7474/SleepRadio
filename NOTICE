@@ -24,7 +24,7 @@ https://github.com/dylan7474/SleepRadio
 Third-party components
 ----------------------
 
-* sherpa-onnx .......... Apache-2.0        https://github.com/k2-fsa/sherpa-onnx
+* sherpa-onnx (1.13.4) . Apache-2.0        https://github.com/k2-fsa/sherpa-onnx
 * eSpeak-NG ............ GPL-3.0-or-later   https://github.com/espeak-ng/espeak-ng
     (statically linked inside sherpa-onnx's native library; also the source of
      the espeak-ng-data phoneme files installed at runtime)
@@ -42,3 +42,7 @@ No voice model is bundled in the APK or committed to this repository. The
 default ("stock") voice is installed on first use of Broadcast mode from a
 release asset or a user-supplied file. Any personal / cloned voice is imported
 by the user onto their own device and is never part of a build or a release.
+
+Piper voices carry their own licences (and their training-data licences — e.g.
+several are CC-BY-SA 4.0); those apply to the downloaded/imported model files,
+not to this source tree.

@@ -28,9 +28,9 @@ import java.util.zip.ZipInputStream
  * trips KSP2 on this toolchain — see the ambient generators). Suspend methods
  * do blocking IO; call them on [kotlinx.coroutines.Dispatchers.IO].
  */
-class VoicePackInstaller(context: Context) {
+class VoicePackInstaller internal constructor(private val root: File) {
 
-    private val root = File(context.filesDir, "tts")
+    constructor(context: Context) : this(File(context.filesDir, "tts"))
 
     private val _state = MutableStateFlow<InstallState>(InstallState.Idle)
     val state: StateFlow<InstallState> = _state.asStateFlow()

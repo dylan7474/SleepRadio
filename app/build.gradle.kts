@@ -80,6 +80,11 @@ android {
         // BuildConfig.DEBUG gates the Phase 9 TTS test action in the drawer.
         buildConfig = true
     }
+    testOptions {
+        // JVM unit tests: let android.jar stubs (android.util.Log) return
+        // defaults instead of throwing "not mocked".
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {

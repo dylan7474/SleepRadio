@@ -43,9 +43,9 @@ data class VoicePack(
  *
  * Plain class, no Hilt.
  */
-class VoicePackResolver(context: Context) {
+class VoicePackResolver internal constructor(private val root: File) {
 
-    private val root = File(context.filesDir, "tts")
+    constructor(context: Context) : this(File(context.filesDir, "tts"))
 
     /** Preferred id first, then stock, then the rest — only ids actually present. */
     private val order = listOf(ID_PERSONAL, ID_STOCK)
