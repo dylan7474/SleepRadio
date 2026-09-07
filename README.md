@@ -1,10 +1,11 @@
 # SleepRadio
 
 A bedside audio player for Android. It plays **one main source** — a local music
-folder, an audiobook, or an internet‑radio station — and layers **two ambient
-channels** underneath it: procedural coloured noise and binaural beats. A sleep
-timer fades and stops the main source on schedule; the ambient channels keep
-playing.
+folder, an audiobook, an internet‑radio station, or a **self‑hosted "Broadcast
+Radio" station** that auto‑DJs your music folder with an offline text‑to‑speech
+presenter — and layers **two ambient channels** underneath it: procedural
+coloured noise and binaural beats. A sleep timer fades and stops the main source
+on schedule; the ambient channels keep playing.
 
 Built for a Pixel 9, in Kotlin + Jetpack Compose. Two selectable visual skins
 (**Neon** — cyberpunk cyan/magenta; **Industrial** — brushed steel, blue/amber),
@@ -21,6 +22,21 @@ one shared control layout.
   online directory** (radio‑browser.info)
 - ICY / Shoutcast now‑playing metadata for radio, with a scrolling marquee for long titles
 - Embedded cover art (no image library — `MediaMetadataRetriever` / `loadThumbnail`)
+
+**Broadcast Radio — the auto‑DJ**
+- Assign a preset to **📻 SleepRadio broadcast**: it self‑selects tracks from your
+  music folder (recency‑ and artist‑spaced shuffle) and plays them back to back
+- An **offline text‑to‑speech presenter** (Piper / sherpa‑onnx, fully on‑device)
+  reads a short link in the gap before some tracks — a time‑of‑day welcome, then
+  "that was … / coming up …", the occasional station ident and a spoken time check
+- **Voice**: *Off* (music only), a **stock voice** (one‑tap download or file
+  import), or **your own** cloned Piper voice, imported on your device and never
+  uploaded or committed
+- **Chattiness**: a link every 2 / 3 / 5 tracks
+- **Wind‑down**: once the sleep timer is armed the DJ eases off, then goes silent
+  for the last few minutes while the music fades
+- No API keys, works with no network once the voice is installed (the only
+  network use is the one‑time voice download, which is also avoidable)
 
 **Channel B — coloured noise**
 - White · pink · brown · blue · deep space · ambient (pink + slow LFO)
@@ -44,7 +60,8 @@ one shared control layout.
 **Elsewhere**
 - Live audio‑reactive visualiser strip (`Visualizer` on the output mix; decorative
   fallback if `RECORD_AUDIO` is declined)
-- Navigation drawer: Now playing · Ambient mix · Sleep timer · Radio stations · skin · About
+- Navigation drawer: Now playing · Ambient mix · Sleep timer · Radio stations ·
+  Broadcast voice · skin · About
 - Portrait‑locked, edge‑to‑edge, predictive back, TalkBack labels on the controls
 
 ---
@@ -57,48 +74,71 @@ Requires the Android SDK (compileSdk 37) and a JDK 17+ (Android Studio's bundled
 # Debug APK
 ./gradlew :app:assembleDebug
 
-# Unit tests (mixer math, sleep scale, settings codecs)
+# Unit tests (mixer math, sleep scale, settings codecs, broadcast selector /
+# show-clock / DJ scripts / spoken time, voice-pack resolve & install)
 ./gradlew :app:testDebugUnitTest
 
-# Signed release APK (R8 minified, ~4.5 MB).
+# Signed release APK (R8 minified).
 # assembleRelease pulls lint-gradle; add the -x flags to skip it offline.
 ./gradlew :app:assembleRelease \
   -x lintVitalAnalyzeRelease -x lintVitalReportRelease -x lintVitalRelease
 ```
+
+The APK is **arm64‑v8a only** (`abiFilters`) and ~36 MB — the sherpa‑onnx TTS
+native libs (ONNX Runtime + eSpeak‑NG) are ~31 MB of that and can't be a
+post‑install download. App code minifies to ~4.5 MB. Voice models are **not** in
+the APK: the stock voice downloads on first use of Broadcast mode (or import a
+`.zip`), a personal voice is import‑only.
 
 Release signing reads `keystore.properties` at the repo root (git‑ignored, alongside
 the `.jks`); without it the release build falls back to debug signing.
 
 Distribution is sideload — `adb install -r app/build/outputs/apk/…/app-*.apk`.
 
+`tools/build-stock-voice.sh` builds the stock‑voice `.zip` that Broadcast mode
+downloads (Piper `en_GB-southern_english_female-low` + English‑only
+`espeak-ng-data`, ~1.8 MB), and prints its SHA‑256 for
+`VoicePackInstaller.STOCK_SHA256`.
+
 ### Stack
 
 Kotlin 2.2.10 · AGP 9.3.2 · KSP 2.2.10‑2.0.2 · Compose BOM 2026.02.01 ·
 Media3 1.9.4 · Hilt 2.60.1 · Room 2.8.4 · DataStore 1.2.1 · coroutines 1.11.0 ·
-`minSdk 31`, `target/compileSdk 37`.
+sherpa‑onnx 1.13.4 (Piper TTS, via JitPack) · `minSdk 31`, `target/compileSdk 37`.
 
 ### Layout
 
 ```
 core/audio      MixerState/Controller, NoiseGenerator, BinauralGenerator, AmbientPattern
+core/broadcast  BroadcastSelector, ShowClock, DjScriptBuilder (auto-DJ scripting)
 core/data       SourceModels, SettingsRepository (DataStore), RadioDirectory, Room DB
 core/design     AppSkin / SkinColors, Neon & Industrial skins, RotaryKnob, SkinComponents
-feature/player  PlayerRoute / PlayerViewModel / PlayerScreen + dialogs, AlbumArt, AudioVisualizer
+core/tts        OfflineTtsEngine (sherpa-onnx), DjVoicePlayer, VoicePack + install/resolve
+feature/player  PlayerRoute / PlayerViewModel / PlayerScreen + dialogs, BroadcastVoiceViewModel
 feature/root    RootViewModel (skin selection)
-playback        PlaybackService (Media3, Channel A), PlaybackConnection, AmbientPlaybackService (B/C)
+media           MusicRepository (SAF folder walk), AudiobookRepository
+playback        PlaybackService (Media3, Channel A), PlaybackConnection (+ broadcast sequencer),
+                AmbientPlaybackService (B/C)
+tools/          build-stock-voice.sh
 ```
 
-Full build history and design notes live in the commit log; the original phased plan
-covered Phase 0 → Phase 8 (foundation → shippable v1), all done.
+Full build history and design notes live in the commit log; the original phased
+plan covered Phase 0 → Phase 8 (foundation → shippable v1) plus Phase 9
+(Broadcast Radio), all done.
 
 ---
 
-## Roadmap — Phase 9 (post‑v1)
+## Roadmap (post‑v1)
 
-Nothing here is committed; it's the shortlist for after a few days of real bedside use.
+Phase 9 (Broadcast Radio) has landed. Nothing below is committed — it's the
+shortlist for after more real bedside use.
 
 **Audio & sources**
 - [ ] Auto‑reconnect for dropped radio streams (backoff + a "reconnecting…" state)
+- [ ] Broadcast: "talk over the intro" (duck the music under the link instead of a
+      clean gap); pull track/artist from embedded tags, not the folder name
+- [ ] Weather & news readouts for the Broadcast DJ (keyless sources, opt‑in,
+      inert offline)
 - [ ] Per‑station now‑playing providers — e.g. Radio Paradise's JSON API for cover art and
       exact track timing, ICY staying the generic fallback
 - [ ] "Stop at end of chapter / track" option for audiobooks (deferred from the sleep timer)
@@ -129,8 +169,14 @@ Nothing here is committed; it's the shortlist for after a few days of real bedsi
 
 ## Credits
 
-Online station directory: **[radio‑browser.info](https://www.radio-browser.info/)**
-(community‑run, public domain). Everything else is first‑party.
+- Online station directory: **[radio‑browser.info](https://www.radio-browser.info/)**
+  (community‑run, public domain)
+- On‑device TTS: **[sherpa‑onnx](https://github.com/k2-fsa/sherpa-onnx)** (Apache‑2.0),
+  **[Piper](https://github.com/rhasspy/piper)** VITS voices (MIT),
+  **[eSpeak‑NG](https://github.com/espeak-ng/espeak-ng)** phonemiser (GPL‑3.0‑or‑later)
+- The stock voice is Piper's `en_GB-southern_english_female-low` (dataset CC‑BY‑SA 4.0)
+
+Everything else is first‑party.
 
 ---
 
@@ -138,7 +184,7 @@ Online station directory: **[radio‑browser.info](https://www.radio-browser.inf
 
 **GPL‑3.0‑or‑later** — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-The upcoming Broadcast Radio mode does on‑device text‑to‑speech through
-sherpa‑onnx, which statically links **eSpeak‑NG (GPL‑3.0‑or‑later)** for
-phonemisation. A released APK therefore contains GPL code, so the whole project
-is GPL‑3.0‑or‑later. No voice model ships in the APK or lives in this repo.
+Broadcast Radio mode does on‑device text‑to‑speech through sherpa‑onnx, which
+statically links **eSpeak‑NG (GPL‑3.0‑or‑later)** for phonemisation. A released
+APK therefore contains GPL code, so the whole project is GPL‑3.0‑or‑later. No
+voice model ships in the APK or lives in this repo.
