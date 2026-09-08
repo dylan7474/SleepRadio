@@ -462,25 +462,31 @@ private fun BroadcastVoiceDialog(
 
                 Spacer(Modifier.padding(4.dp))
                 SectionHeader("CHATTINESS")
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     Chattiness.entries.forEach { c ->
                         val on = state.chattiness == c
                         Text(
                             text = when (c) {
+                                Chattiness.MAXIMUM -> "Maximum"
                                 Chattiness.CHATTY -> "Chatty"
                                 Chattiness.BALANCED -> "Balanced"
                                 Chattiness.MINIMAL -> "Minimal"
                             },
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
                             modifier = Modifier
                                 .clickable { onChattiness(c) }
-                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                                .padding(vertical = 8.dp, horizontal = 2.dp),
                         )
                     }
                 }
                 Text(
-                    "A spoken link every ${state.chattiness.tracksPerLink} tracks.",
+                    when (state.chattiness) {
+                        Chattiness.MAXIMUM ->
+                            "A link before every track — back-announces what just played and " +
+                                "introduces what's next."
+                        else -> "A spoken link every ${state.chattiness.tracksPerLink} tracks."
+                    },
                     fontSize = 11.sp,
                 )
 

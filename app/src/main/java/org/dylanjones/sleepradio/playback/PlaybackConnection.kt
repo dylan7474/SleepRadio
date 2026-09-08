@@ -6,8 +6,10 @@ import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.media3.common.PlaybackParameters
 import org.dylanjones.sleepradio.core.audio.AudioChannel
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
@@ -45,6 +48,7 @@ import org.dylanjones.sleepradio.core.tts.OfflineTtsEngine
 import org.dylanjones.sleepradio.core.tts.VoicePack
 import org.dylanjones.sleepradio.di.MainDispatcher
 import org.dylanjones.sleepradio.media.Track
+import java.time.Duration
 import java.time.LocalTime
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -94,7 +98,7 @@ data class SleepTimerState(
 @Singleton
 class PlaybackConnection @Inject constructor(
     @ApplicationContext private val appContext: Context,
-    @MainDispatcher mainDispatcher: CoroutineDispatcher,
+    @MainDispatcher private val mainDispatcher: CoroutineDispatcher,
     private val mixer: MixerController,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
@@ -135,6 +139,10 @@ class PlaybackConnection @Inject constructor(
     /** Link kind to play after the current track; NONE = straight into the next. */
     private var pendingLink: LinkKind = LinkKind.NONE
     private var linkPreloaded: Boolean = false
+    /** Maximum-chattiness: back-announce every track and keep time checks naming tracks. */
+    private var announceEveryTrack: Boolean = false
+    /** Consecutive broadcast tracks that failed to play; a full pool of duds stops the show. */
+    private var broadcastErrorStreak: Int = 0
     /** Stable station name from the slot label; never overwritten by ICY metadata. */
     private var radioStationName: String? = null
     /** Station description (fallback "now playing" line when the stream sends no metadata). */
@@ -142,11 +150,33 @@ class PlaybackConnection @Inject constructor(
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
+            if (isBroadcast && player.playbackState == Player.STATE_READY) {
+                broadcastErrorStreak = 0 // this track loaded fine
+            }
             if (isBroadcast && !advancing && player.playbackState == Player.STATE_ENDED) {
                 onBroadcastTrackEnded()
             }
             pushSnapshot()
             if (player.isPlaying) startTicker() else stopTicker()
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            // An unreadable/corrupt track in the broadcast pool would otherwise
+            // stall the whole show (no STATE_ENDED ever arrives). Skip past it;
+            // give up only if the pool is nothing but bad files.
+            if (!isBroadcast || advancing) return
+            broadcastErrorStreak++
+            Log.w(TAG, "broadcast: '${currentBroadcast?.title}' failed to play " +
+                "(${error.errorCodeName}); skipping (streak=$broadcastErrorStreak)")
+            if (broadcastErrorStreak >= MAX_BROADCAST_ERROR_STREAK) {
+                Log.w(TAG, "broadcast: too many failed tracks in a row — stopping")
+                endBroadcastInternal()
+            } else {
+                advancing = true
+                pendingLink = LinkKind.NONE
+                linkPreloaded = false
+                advanceBroadcast()
+            }
         }
     }
 
@@ -384,6 +414,7 @@ class PlaybackConnection @Inject constructor(
         selector = BroadcastSelector(tracks)
         showClock = ShowClock(config)
         scriptBuilder = DjScriptBuilder()
+        announceEveryTrack = config.announceEveryTrack
         voicePack = voice
 
         currentBroadcast = selector?.next()
@@ -479,14 +510,45 @@ class PlaybackConnection @Inject constructor(
             val prev = currentBroadcast
             val next = nextBroadcast
             val terse = phase == WindDownPhase.EASING
+            val everyTrack = announceEveryTrack
             scope.launch(Dispatchers.Default) {
-                val text = builder.build(kind, prev, next, LocalTime.now(), terse)
+                // This link is spoken in the gap AFTER the current track, minutes
+                // from now. A time check must read the clock as it will be when
+                // heard, so wind it forward past the track's remaining play time.
+                val spokenAt = if (kind == LinkKind.TIME_CHECK) {
+                    val ahead = awaitTrackRemainingMs()
+                    Log.d(TAG, "broadcast: time check projected ${ahead}ms ahead " +
+                        "(${LocalTime.now()} -> ${LocalTime.now().plus(Duration.ofMillis(ahead))})")
+                    LocalTime.now().plus(Duration.ofMillis(ahead))
+                } else {
+                    LocalTime.now()
+                }
+                val text = builder.build(kind, prev, next, spokenAt, terse, everyTrack)
                 if (text.isNotBlank()) {
                     linkPreloaded = player.preload(text)
                     Log.d(TAG, "broadcast: link preloaded=$linkPreloaded — \"$text\"")
                 }
             }
         }
+    }
+
+    /**
+     * Best-effort remaining play time of the current Channel-A track. Polls the
+     * controller (on the main thread) until its duration resolves, up to ~2 s;
+     * returns 0 if it never does (unknown length / not ready).
+     */
+    private suspend fun awaitTrackRemainingMs(): Long {
+        repeat(10) {
+            val remaining = withContext(mainDispatcher) {
+                val c = controller ?: return@withContext -1L
+                val d = c.duration
+                if (d == C.TIME_UNSET || d <= 0L) -1L
+                else (d - c.currentPosition).coerceAtLeast(0L)
+            }
+            if (remaining >= 0L) return remaining
+            delay(200)
+        }
+        return 0L
     }
 
     /** Channel A hit STATE_ENDED during a broadcast. */
@@ -530,6 +592,8 @@ class PlaybackConnection @Inject constructor(
         advancing = false
         pendingLink = LinkKind.NONE
         linkPreloaded = false
+        announceEveryTrack = false
+        broadcastErrorStreak = 0
         broadcastJob?.cancel()
         broadcastJob = null
         selector = null
@@ -628,6 +692,8 @@ class PlaybackConnection @Inject constructor(
         const val SLEEP_FADE_MS = 20_000L
         /** Broadcast: with less than this left on the sleep timer, the DJ goes silent. */
         const val WINDDOWN_SILENT_MS = 5 * 60_000L
+        /** Broadcast: bail out after this many unplayable tracks back to back. */
+        const val MAX_BROADCAST_ERROR_STREAK = 6
     }
 }
 

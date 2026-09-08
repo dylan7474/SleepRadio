@@ -37,7 +37,7 @@ class ShowClock(private val config: BroadcastConfig) {
             if (now.hour in 6..10) (config.linksPerTimeCheck / 2).coerceAtLeast(2)
             else config.linksPerTimeCheck
         return when {
-            linkCount % config.linksPerIdent == 0 -> LinkKind.IDENT
+            !config.announceEveryTrack && linkCount % config.linksPerIdent == 0 -> LinkKind.IDENT
             linkCount % timeCheckEvery == 0 -> LinkKind.TIME_CHECK
             else -> LinkKind.LINK
         }
@@ -80,13 +80,24 @@ class DjScriptBuilder(private val rng: Random = Random.Default) {
         next: BroadcastTrack?,
         now: LocalTime = LocalTime.now(),
         terse: Boolean = false,
+        /** Maximum chattiness: a time check also back-announces the track that just played. */
+        announceEveryTrack: Boolean = false,
     ): String = when (kind) {
         LinkKind.NONE -> ""
         LinkKind.IDENT -> IDENTS.random(rng)
         LinkKind.TIME_CHECK -> {
-            val time = spokenTime(now)
-            val tail = if (terse) "" else next?.let { " Here's ${trackPhrase(it)}." }.orEmpty()
-            "${TIME_LEADS.random(rng)} $time.$tail"
+            val lead = "${TIME_LEADS.random(rng)} ${spokenTime(now)}."
+            if (terse) {
+                lead
+            } else {
+                val outro = if (announceEveryTrack) {
+                    previous?.let { "${OUTROS.random(rng)} ${trackPhrase(it)}. " }.orEmpty()
+                } else {
+                    ""
+                }
+                val intro = next?.let { " Here's ${trackPhrase(it)}." }.orEmpty()
+                "$outro$lead$intro"
+            }
         }
         LinkKind.LINK -> {
             val outro = previous?.let { "${OUTROS.random(rng)} ${trackPhrase(it)}." }.orEmpty()
@@ -128,8 +139,12 @@ class DjScriptBuilder(private val rng: Random = Random.Default) {
             "This is Sleep Radio — music through the night.",
             "Sleep Radio. Stay with us.",
         )
-        val OUTROS = listOf("That was", "You just heard", "Before that,")
-        val INTROS = listOf("Coming up,", "Here's", "Next,", "Let's stay with")
+        // Back-announce a track that has just finished. Each reads as
+        // "<outro> <title>, by <artist>." — so no "before that" (nothing came
+        // before it) and nothing that assumes the next track's artist.
+        val OUTROS = listOf("That was", "You just heard", "We just heard")
+        // Introduce the next track: "<intro> <title>, by <artist>."
+        val INTROS = listOf("Coming up,", "Next up,", "Here's", "Let's hear")
         val TIME_LEADS = listOf("It's coming up to", "The time is", "It's just gone")
         val STATION_ONLY = listOf(
             "You're with Sleep Radio.",

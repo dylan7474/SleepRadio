@@ -21,6 +21,8 @@ enum class WindDownPhase { NORMAL, EASING, SILENT }
 
 /** How chatty the auto-DJ is. Maps to [BroadcastConfig.tracksPerLink]. */
 enum class Chattiness(val id: String, val tracksPerLink: Int) {
+    /** A link before every track: names what just played and what's next, no bare idents. */
+    MAXIMUM("maximum", 1),
     CHATTY("chatty", 2),
     BALANCED("balanced", 3),
     MINIMAL("minimal", 5);
@@ -42,4 +44,10 @@ data class BroadcastConfig(
     val linksPerIdent: Int = 3,
     /** Every Kth link is a time check instead of a track link. */
     val linksPerTimeCheck: Int = 4,
+    /**
+     * Maximum chattiness: never drop to a bare station ident, and have time
+     * checks still name the track that just played and the one coming up, so
+     * every track is introduced and back-announced.
+     */
+    val announceEveryTrack: Boolean = false,
 )

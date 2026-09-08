@@ -114,6 +114,33 @@ class ShowClockTest {
         assertEquals(LinkKind.TIME_CHECK, kinds[1])
         assertEquals(LinkKind.TIME_CHECK, kinds[3])
     }
+
+    @Test
+    fun `maximum chattiness links every track and never bare idents`() {
+        val clock = ShowClock(
+            BroadcastConfig(
+                tracksPerLink = 1,
+                linksPerIdent = 3,
+                linksPerTimeCheck = 4,
+                announceEveryTrack = true,
+            ),
+        )
+        val kinds = List(24) { clock.onTrackStarted(noon, N) }
+        assertTrue("every gap speaks", kinds.none { it == LinkKind.NONE })
+        assertTrue("no bare idents", kinds.none { it == LinkKind.IDENT })
+        assertTrue("still checks the time", kinds.any { it == LinkKind.TIME_CHECK })
+    }
+}
+
+class ChattinessTest {
+    @Test fun `maximum maps to a link every track`() {
+        assertEquals(Chattiness.MAXIMUM, Chattiness.fromId("maximum"))
+        assertEquals(1, Chattiness.MAXIMUM.tracksPerLink)
+    }
+
+    @Test fun `unknown id falls back to the default`() {
+        assertEquals(Chattiness.DEFAULT, Chattiness.fromId("bogus"))
+    }
 }
 
 class DjScriptBuilderTest {
@@ -151,6 +178,20 @@ class DjScriptBuilderTest {
     }
 
     @Test
+    fun `link back-announces then introduces, no dangling phrases`() {
+        repeat(40) {
+            val s = DjScriptBuilder(Random(it.toLong())).build(LinkKind.LINK, t1, t2)
+            // finished track named first, next track after it
+            assertTrue(s, s.indexOf("Song One") < s.indexOf("Song Two"))
+            // opens with a real back-announce, not "Before that," (no antecedent)
+            assertTrue(s, Regex("^(That was|You just heard|We just heard) ").containsMatchIn(s))
+            assertTrue(s, !s.contains("Before that"))
+            // never claims we're staying with an artist when the next one differs
+            assertTrue(s, !s.contains("Let's stay with"))
+        }
+    }
+
+    @Test
     fun `artist hidden when it equals the title`() {
         val odd = BroadcastTrack("c", "Raindrops", "Raindrops", "Album")
         val s = DjScriptBuilder(Random(0)).build(LinkKind.LINK, odd, null)
@@ -175,6 +216,21 @@ class DjScriptBuilderTest {
         val s = DjScriptBuilder(Random(0)).build(LinkKind.TIME_CHECK, t1, t2, LocalTime.of(23, 16))
         assertTrue(s, s.contains("quarter past eleven"))
         assertTrue(s, s.none { it.isDigit() })
+    }
+
+    @Test
+    fun `time check names only the next track by default`() {
+        val s = DjScriptBuilder(Random(0)).build(LinkKind.TIME_CHECK, t1, t2, LocalTime.of(23, 16))
+        assertTrue(s, s.contains("Song Two"))
+        assertTrue(s, !s.contains("Song One"))
+    }
+
+    @Test
+    fun `time check back-announces the previous track at maximum chattiness`() {
+        val s = DjScriptBuilder(Random(0))
+            .build(LinkKind.TIME_CHECK, t1, t2, LocalTime.of(23, 16), announceEveryTrack = true)
+        assertTrue(s, s.contains("Song One") && s.contains("Song Two"))
+        assertTrue(s, s.contains("quarter past eleven"))
     }
 }
 

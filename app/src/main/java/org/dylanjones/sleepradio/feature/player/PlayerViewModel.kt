@@ -404,7 +404,10 @@ class PlayerViewModel @Inject constructor(
                         playback.startBroadcast(
                             pool,
                             pack,
-                            BroadcastConfig(tracksPerLink = chat.tracksPerLink),
+                            BroadcastConfig(
+                                tracksPerLink = chat.tracksPerLink,
+                                announceEveryTrack = chat == Chattiness.MAXIMUM,
+                            ),
                         )
                         local.value = local.value.copy(nowPlayingRef = slot.refId)
                     } finally {
