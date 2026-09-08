@@ -574,16 +574,16 @@ class PlaybackConnection @Inject constructor(
         val everyTrack = announceEveryTrack
 
         fun planFor(spokenAt: LocalTime): List<SegueStep> = buildList {
+            val talkyKind = kind == LinkKind.LINK || kind == LinkKind.TIME_CHECK
             when {
-                jingleDue && hasVoice && kind == LinkKind.LINK -> {
-                    add(SegueStep.Say(builder!!.outroLine(prev)))
+                // Jingle with the DJ talking: always back-announce → jingle →
+                // next-track intro. A time check folds into the back-announce.
+                jingleDue && hasVoice && talkyKind -> {
+                    val back = builder!!.outroLine(prev) +
+                        if (kind == LinkKind.TIME_CHECK) " ${builder.timeLine(spokenAt)}" else ""
+                    add(SegueStep.Say(back))
                     add(SegueStep.Jingle)
                     if (!terse) add(SegueStep.Say(builder.introLine(next)))
-                }
-                jingleDue && hasVoice && kind == LinkKind.TIME_CHECK -> {
-                    builder!!.build(kind, prev, next, spokenAt, terse, everyTrack)
-                        .takeIf { it.isNotBlank() }?.let { add(SegueStep.Say(it)) }
-                    add(SegueStep.Jingle)
                 }
                 jingleDue -> add(SegueStep.Jingle) // NONE / IDENT, or no voice
                 hasVoice && kind != LinkKind.NONE -> {

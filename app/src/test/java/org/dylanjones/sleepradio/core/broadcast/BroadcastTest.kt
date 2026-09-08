@@ -192,6 +192,14 @@ class DjScriptBuilderTest {
     }
 
     @Test
+    fun `time line is the clock alone, no track intro`() {
+        val s = DjScriptBuilder(Random(0)).timeLine(LocalTime.of(19, 31))
+        assertTrue(s, s.contains("half past seven"))
+        assertTrue(s, !s.contains("Here's") && !s.contains("Song"))
+        assertTrue(s, s.none { it.isDigit() })
+    }
+
+    @Test
     fun `outro and intro fall back to a filler line when a track is missing`() {
         val b = DjScriptBuilder(Random(0))
         // No track to name, but never an empty utterance or a dangling "by".

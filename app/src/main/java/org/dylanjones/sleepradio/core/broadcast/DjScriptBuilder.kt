@@ -116,6 +116,10 @@ class DjScriptBuilder(private val rng: Random = Random.Default) {
     fun introLine(next: BroadcastTrack?): String =
         next?.let { "${INTROS.random(rng)} ${trackPhrase(it)}." } ?: STATION_ONLY.random(rng)
 
+    /** Just the spoken clock ("It's just gone half past seven."). */
+    fun timeLine(now: LocalTime = LocalTime.now()): String =
+        "${TIME_LEADS.random(rng)} ${spokenTime(now)}."
+
     /** "Song by Artist", or just the title when the artist is unknown/blank/==title. */
     private fun trackPhrase(t: BroadcastTrack): String {
         val title = t.title.trim().ifEmpty { "that one" }
