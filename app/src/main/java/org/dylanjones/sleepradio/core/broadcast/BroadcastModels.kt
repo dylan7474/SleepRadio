@@ -50,4 +50,8 @@ data class BroadcastConfig(
      * every track is introduced and back-announced.
      */
     val announceEveryTrack: Boolean = false,
+    /** DJ voice level, 0..1, multiplied by the master VOL. */
+    val announcerVolume: Float = 1f,
+    /** DJ speech rate: 1.0 = the voice's natural rate, higher is faster. */
+    val announcerSpeed: Float = 1f,
 )

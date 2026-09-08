@@ -68,6 +68,16 @@ interface SettingsRepository {
     val broadcastChattiness: Flow<String>
 
     suspend fun setBroadcastChattiness(id: String)
+
+    /** DJ voice level, 0..1, applied on top of the master VOL. Default 1. */
+    val broadcastAnnouncerVolume: Flow<Float>
+
+    suspend fun setBroadcastAnnouncerVolume(value: Float)
+
+    /** DJ speech rate: 1.0 = the voice's natural rate, higher is faster. Default 1. */
+    val broadcastAnnouncerSpeed: Flow<Float>
+
+    suspend fun setBroadcastAnnouncerSpeed(value: Float)
 }
 
 const val BROADCAST_VOICE_OFF = "off"

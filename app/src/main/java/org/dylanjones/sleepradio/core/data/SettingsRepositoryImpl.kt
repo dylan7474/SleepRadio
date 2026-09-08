@@ -3,6 +3,7 @@ package org.dylanjones.sleepradio.core.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
@@ -104,6 +105,20 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_BROADCAST_CHATTINESS] = id }
     }
 
+    override val broadcastAnnouncerVolume: Flow<Float> =
+        dataStore.data.map { (it[KEY_BROADCAST_ANNOUNCER_VOLUME] ?: 1f).coerceIn(0f, 1f) }
+
+    override suspend fun setBroadcastAnnouncerVolume(value: Float) {
+        dataStore.edit { it[KEY_BROADCAST_ANNOUNCER_VOLUME] = value.coerceIn(0f, 1f) }
+    }
+
+    override val broadcastAnnouncerSpeed: Flow<Float> =
+        dataStore.data.map { (it[KEY_BROADCAST_ANNOUNCER_SPEED] ?: 1f).coerceIn(0.5f, 2f) }
+
+    override suspend fun setBroadcastAnnouncerSpeed(value: Float) {
+        dataStore.edit { it[KEY_BROADCAST_ANNOUNCER_SPEED] = value.coerceIn(0.5f, 2f) }
+    }
+
     private companion object {
         val KEY_SKIN = stringPreferencesKey("skin_id")
         val KEY_AUDIOBOOKS_TREE = stringPreferencesKey("audiobooks_tree_uri")
@@ -113,6 +128,8 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_CUSTOM_STATIONS = stringPreferencesKey("custom_stations")
         val KEY_BROADCAST_VOICE = stringPreferencesKey("broadcast_voice")
         val KEY_BROADCAST_CHATTINESS = stringPreferencesKey("broadcast_chattiness")
+        val KEY_BROADCAST_ANNOUNCER_VOLUME = floatPreferencesKey("broadcast_announcer_volume")
+        val KEY_BROADCAST_ANNOUNCER_SPEED = floatPreferencesKey("broadcast_announcer_speed")
 
         fun patternKey(index: Int) = stringPreferencesKey("ambient_pattern_$index")
     }

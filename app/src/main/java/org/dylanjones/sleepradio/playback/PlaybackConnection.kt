@@ -141,6 +141,10 @@ class PlaybackConnection @Inject constructor(
     private var linkPreloaded: Boolean = false
     /** Maximum-chattiness: back-announce every track and keep time checks naming tracks. */
     private var announceEveryTrack: Boolean = false
+    /** DJ voice level (0..1), applied on top of the master VOL. */
+    private var announcerVolume: Float = 1f
+    /** DJ speech rate (1.0 = natural, higher is faster). */
+    private var announcerSpeed: Float = 1f
     /** Consecutive broadcast tracks that failed to play; a full pool of duds stops the show. */
     private var broadcastErrorStreak: Int = 0
     /** Stable station name from the slot label; never overwritten by ICY metadata. */
@@ -415,6 +419,8 @@ class PlaybackConnection @Inject constructor(
         showClock = ShowClock(config)
         scriptBuilder = DjScriptBuilder()
         announceEveryTrack = config.announceEveryTrack
+        announcerVolume = config.announcerVolume.coerceIn(0f, 1f)
+        announcerSpeed = config.announcerSpeed.coerceIn(0.5f, 2f)
         voicePack = voice
 
         currentBroadcast = selector?.next()
@@ -431,12 +437,13 @@ class PlaybackConnection @Inject constructor(
             // Load the voice, speak the welcome, THEN start the first track.
             broadcastJob = scope.launch {
                 val ready = kotlinx.coroutines.withContext(Dispatchers.Default) {
-                    engine.ensureLoaded(voice) && player.preload(builder.welcome(first))
+                    engine.ensureLoaded(voice) &&
+                        player.preload(builder.welcome(first), announcerSpeed)
                 }
                 if (!isBroadcast || !isActive) return@launch // restarted / switched away
                 if (ready) {
                     Log.d(TAG, "broadcast: welcome link")
-                    player.playPreloaded(mixer.state.value.masterGain) {
+                    player.playPreloaded(mixer.state.value.masterGain * announcerVolume) {
                         djSpeaking = false
                         playSingleBroadcast(first)
                         onBroadcastTrackStarted()
@@ -525,7 +532,7 @@ class PlaybackConnection @Inject constructor(
                 }
                 val text = builder.build(kind, prev, next, spokenAt, terse, everyTrack)
                 if (text.isNotBlank()) {
-                    linkPreloaded = player.preload(text)
+                    linkPreloaded = player.preload(text, announcerSpeed)
                     Log.d(TAG, "broadcast: link preloaded=$linkPreloaded — \"$text\"")
                 }
             }
@@ -559,7 +566,7 @@ class PlaybackConnection @Inject constructor(
             djSpeaking = true
             pushSnapshot()
             Log.d(TAG, "broadcast: track ended → playing $pendingLink link")
-            player.playPreloaded(mixer.state.value.masterGain) {
+            player.playPreloaded(mixer.state.value.masterGain * announcerVolume) {
                 djSpeaking = false
                 Log.d(TAG, "broadcast: link done → next track")
                 advanceBroadcast()
@@ -593,6 +600,8 @@ class PlaybackConnection @Inject constructor(
         pendingLink = LinkKind.NONE
         linkPreloaded = false
         announceEveryTrack = false
+        announcerVolume = 1f
+        announcerSpeed = 1f
         broadcastErrorStreak = 0
         broadcastJob?.cancel()
         broadcastJob = null

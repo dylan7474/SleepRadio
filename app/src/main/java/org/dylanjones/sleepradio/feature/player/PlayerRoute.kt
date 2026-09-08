@@ -231,6 +231,8 @@ fun PlayerRoute(
                     state = voiceState,
                     onSelect = broadcastVoiceViewModel::select,
                     onChattiness = broadcastVoiceViewModel::setChattiness,
+                    onAnnouncerVolume = broadcastVoiceViewModel::setAnnouncerVolume,
+                    onAnnouncerSpeed = broadcastVoiceViewModel::setAnnouncerSpeed,
                     onDownloadStock = broadcastVoiceViewModel::downloadStock,
                     onImport = {
                         importVoiceLauncher.launch(
@@ -419,6 +421,8 @@ private fun BroadcastVoiceDialog(
     state: BroadcastVoiceViewModel.UiState,
     onSelect: (String) -> Unit,
     onChattiness: (Chattiness) -> Unit,
+    onAnnouncerVolume: (Float) -> Unit,
+    onAnnouncerSpeed: (Float) -> Unit,
     onDownloadStock: () -> Unit,
     onImport: () -> Unit,
     onRemovePersonal: () -> Unit,
@@ -430,7 +434,7 @@ private fun BroadcastVoiceDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
         title = { Text("Broadcast voice") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
                     "The DJ reads short links between tracks. Fully offline — a voice " +
                         "is only ever installed from a file or a plain download, never uploaded.",
@@ -488,6 +492,33 @@ private fun BroadcastVoiceDialog(
                         else -> "A spoken link every ${state.chattiness.tracksPerLink} tracks."
                     },
                     fontSize = 11.sp,
+                )
+
+                Spacer(Modifier.padding(4.dp))
+                SectionHeader("ANNOUNCER")
+                Text(
+                    "Volume  ${(state.announcerVolume * 100).toInt()}%  (of the VOL knob)",
+                    fontSize = 11.sp,
+                )
+                Slider(
+                    value = state.announcerVolume,
+                    onValueChange = onAnnouncerVolume,
+                    valueRange = 0f..1f,
+                )
+                Text(
+                    "Speed  ${(state.announcerSpeed * 100).toInt()}%" +
+                        when {
+                            state.announcerSpeed < 0.98f -> "  (slower)"
+                            state.announcerSpeed > 1.02f -> "  (faster)"
+                            else -> "  (natural)"
+                        },
+                    fontSize = 11.sp,
+                )
+                Slider(
+                    value = state.announcerSpeed,
+                    onValueChange = onAnnouncerSpeed,
+                    valueRange = 0.7f..1.3f,
+                    steps = 11,
                 )
 
                 Spacer(Modifier.padding(6.dp))

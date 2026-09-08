@@ -407,6 +407,8 @@ class PlayerViewModel @Inject constructor(
                             BroadcastConfig(
                                 tracksPerLink = chat.tracksPerLink,
                                 announceEveryTrack = chat == Chattiness.MAXIMUM,
+                                announcerVolume = settings.broadcastAnnouncerVolume.first(),
+                                announcerSpeed = settings.broadcastAnnouncerSpeed.first(),
                             ),
                         )
                         local.value = local.value.copy(nowPlayingRef = slot.refId)

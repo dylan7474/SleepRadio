@@ -51,6 +51,8 @@ class BroadcastVoiceViewModel @Inject constructor(
         val stockInstalled: Boolean = false,
         val personalInstalled: Boolean = false,
         val chattiness: Chattiness = Chattiness.DEFAULT,
+        val announcerVolume: Float = 1f,
+        val announcerSpeed: Float = 1f,
         val install: VoicePackInstaller.InstallState = VoicePackInstaller.InstallState.Idle,
     )
 
@@ -58,14 +60,20 @@ class BroadcastVoiceViewModel @Inject constructor(
         combine(
             settings.broadcastVoice,
             settings.broadcastChattiness,
+            combine(
+                settings.broadcastAnnouncerVolume,
+                settings.broadcastAnnouncerSpeed,
+            ) { vol, speed -> vol to speed },
             installer.state,
             rescan,
-        ) { selected, chat, install, _ ->
+        ) { selected, chat, (vol, speed), install, _ ->
             UiState(
                 selected = selected,
                 stockInstalled = resolver.isInstalled(VoicePackResolver.ID_STOCK),
                 personalInstalled = resolver.isInstalled(VoicePackResolver.ID_PERSONAL),
                 chattiness = Chattiness.fromId(chat),
+                announcerVolume = vol,
+                announcerSpeed = speed,
                 install = install,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
@@ -76,6 +84,14 @@ class BroadcastVoiceViewModel @Inject constructor(
 
     fun setChattiness(c: Chattiness) {
         viewModelScope.launch { settings.setBroadcastChattiness(c.id) }
+    }
+
+    fun setAnnouncerVolume(value: Float) {
+        viewModelScope.launch { settings.setBroadcastAnnouncerVolume(value) }
+    }
+
+    fun setAnnouncerSpeed(value: Float) {
+        viewModelScope.launch { settings.setBroadcastAnnouncerSpeed(value) }
     }
 
     fun downloadStock() {
