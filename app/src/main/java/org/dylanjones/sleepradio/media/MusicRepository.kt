@@ -212,6 +212,31 @@ class MusicRepository @Inject constructor(
         list
     }
 
+    /**
+     * Every audio file under [treeUri] (the user's jingle folder), as document
+     * URI strings sorted by name. Shallow walk — jingle folders are small — and
+     * uncached so a freshly-dropped-in jingle is picked up next broadcast.
+     */
+    suspend fun jingleFiles(treeUri: String): List<String> = withContext(io) {
+        val tree = Uri.parse(treeUri)
+        val rootDocId = runCatching { DocumentsContract.getTreeDocumentId(tree) }.getOrNull()
+            ?: return@withContext emptyList()
+        val out = ArrayList<String>()
+        val pending = ArrayDeque<Pair<String, Int>>()
+        pending.add(rootDocId to 0)
+        while (pending.isNotEmpty()) {
+            val (docId, depth) = pending.removeFirst()
+            for (ch in queryChildren(tree, docId)) {
+                if (ch.isDir) {
+                    if (depth < 2) pending.add(ch.docId to depth + 1)
+                } else if (isAudio(ch.name, ch.mime)) {
+                    out += DocumentsContract.buildDocumentUriUsingTree(tree, ch.docId).toString()
+                }
+            }
+        }
+        out.sorted()
+    }
+
     private data class SafChild(val docId: String, val name: String, val mime: String) {
         val isDir: Boolean get() = mime == DocumentsContract.Document.MIME_TYPE_DIR
     }

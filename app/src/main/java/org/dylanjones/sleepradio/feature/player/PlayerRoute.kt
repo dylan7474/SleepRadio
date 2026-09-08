@@ -33,6 +33,7 @@ import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
@@ -74,6 +75,7 @@ import org.dylanjones.sleepradio.core.design.skinFor
 import org.dylanjones.sleepradio.core.tts.VoicePackInstaller
 import org.dylanjones.sleepradio.core.tts.rememberDebugTtsTest
 import org.dylanjones.sleepradio.feature.root.RootViewModel
+import kotlin.math.roundToInt
 
 @Composable
 fun PlayerRoute(
@@ -121,6 +123,15 @@ fun PlayerRoute(
         if (uri != null) {
             persistTreeGrant(uri)
             playerViewModel.onMusicFolderChosen(uri.toString())
+        }
+    }
+
+    val jinglesFolderLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) {
+            persistTreeGrant(uri)
+            playerViewModel.onJinglesFolderChosen(uri.toString())
         }
     }
 
@@ -233,6 +244,9 @@ fun PlayerRoute(
                     onChattiness = broadcastVoiceViewModel::setChattiness,
                     onAnnouncerVolume = broadcastVoiceViewModel::setAnnouncerVolume,
                     onAnnouncerSpeed = broadcastVoiceViewModel::setAnnouncerSpeed,
+                    onChooseJinglesFolder = { jinglesFolderLauncher.launch(null) },
+                    onJingleEnabled = broadcastVoiceViewModel::setJingleEnabled,
+                    onJingleEvery = broadcastVoiceViewModel::setJingleEvery,
                     onDownloadStock = broadcastVoiceViewModel::downloadStock,
                     onImport = {
                         importVoiceLauncher.launch(
@@ -423,6 +437,9 @@ private fun BroadcastVoiceDialog(
     onChattiness: (Chattiness) -> Unit,
     onAnnouncerVolume: (Float) -> Unit,
     onAnnouncerSpeed: (Float) -> Unit,
+    onChooseJinglesFolder: () -> Unit,
+    onJingleEnabled: (Boolean) -> Unit,
+    onJingleEvery: (Int) -> Unit,
     onDownloadStock: () -> Unit,
     onImport: () -> Unit,
     onRemovePersonal: () -> Unit,
@@ -520,6 +537,46 @@ private fun BroadcastVoiceDialog(
                     valueRange = 0.7f..1.3f,
                     steps = 11,
                 )
+
+                Spacer(Modifier.padding(4.dp))
+                SectionHeader("JINGLES")
+                Text(
+                    "Drop your own jingle files in between tracks. Pick a folder of " +
+                        "short audio clips; they play shuffled.",
+                    fontSize = 11.sp,
+                )
+                TextButton(onClick = onChooseJinglesFolder) {
+                    Text(
+                        if (state.jinglesFolderSet) "Change jingles folder…"
+                        else "Choose jingles folder…",
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Play jingles" +
+                            if (!state.jinglesFolderSet) "  (choose a folder first)" else "",
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = state.jingleEnabled,
+                        onCheckedChange = onJingleEnabled,
+                        enabled = state.jinglesFolderSet,
+                    )
+                }
+                if (state.jingleEnabled && state.jinglesFolderSet) {
+                    Text(
+                        "Every ${state.jingleEvery} track" +
+                            if (state.jingleEvery == 1) "" else "s",
+                        fontSize = 11.sp,
+                    )
+                    Slider(
+                        value = state.jingleEvery.toFloat(),
+                        onValueChange = { onJingleEvery(it.roundToInt()) },
+                        valueRange = 1f..10f,
+                        steps = 8,
+                    )
+                }
 
                 Spacer(Modifier.padding(6.dp))
                 when (val s = state.install) {

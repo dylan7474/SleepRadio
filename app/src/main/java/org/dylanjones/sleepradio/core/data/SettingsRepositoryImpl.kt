@@ -2,6 +2,7 @@ package org.dylanjones.sleepradio.core.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -119,6 +120,27 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_BROADCAST_ANNOUNCER_SPEED] = value.coerceIn(0.5f, 2f) }
     }
 
+    override val jinglesTreeUri: Flow<String?> =
+        dataStore.data.map { it[KEY_JINGLES_TREE] }
+
+    override suspend fun setJinglesTreeUri(uri: String) {
+        dataStore.edit { it[KEY_JINGLES_TREE] = uri }
+    }
+
+    override val broadcastJingleEnabled: Flow<Boolean> =
+        dataStore.data.map { it[KEY_JINGLE_ENABLED] ?: false }
+
+    override suspend fun setBroadcastJingleEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_JINGLE_ENABLED] = enabled }
+    }
+
+    override val broadcastJingleEvery: Flow<Int> =
+        dataStore.data.map { (it[KEY_JINGLE_EVERY] ?: 4).coerceIn(1, 10) }
+
+    override suspend fun setBroadcastJingleEvery(tracks: Int) {
+        dataStore.edit { it[KEY_JINGLE_EVERY] = tracks.coerceIn(1, 10) }
+    }
+
     private companion object {
         val KEY_SKIN = stringPreferencesKey("skin_id")
         val KEY_AUDIOBOOKS_TREE = stringPreferencesKey("audiobooks_tree_uri")
@@ -130,6 +152,9 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_BROADCAST_CHATTINESS = stringPreferencesKey("broadcast_chattiness")
         val KEY_BROADCAST_ANNOUNCER_VOLUME = floatPreferencesKey("broadcast_announcer_volume")
         val KEY_BROADCAST_ANNOUNCER_SPEED = floatPreferencesKey("broadcast_announcer_speed")
+        val KEY_JINGLES_TREE = stringPreferencesKey("jingles_tree_uri")
+        val KEY_JINGLE_ENABLED = booleanPreferencesKey("broadcast_jingle_enabled")
+        val KEY_JINGLE_EVERY = intPreferencesKey("broadcast_jingle_every")
 
         fun patternKey(index: Int) = stringPreferencesKey("ambient_pattern_$index")
     }

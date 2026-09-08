@@ -78,6 +78,21 @@ interface SettingsRepository {
     val broadcastAnnouncerSpeed: Flow<Float>
 
     suspend fun setBroadcastAnnouncerSpeed(value: Float)
+
+    /** Persisted SAF tree URI for the folder holding the user's jingle files, or null. */
+    val jinglesTreeUri: Flow<String?>
+
+    suspend fun setJinglesTreeUri(uri: String)
+
+    /** Whether the Broadcast DJ drops in a jingle between tracks. Default false. */
+    val broadcastJingleEnabled: Flow<Boolean>
+
+    suspend fun setBroadcastJingleEnabled(enabled: Boolean)
+
+    /** Tracks between jingles, 1..10 (only used when [broadcastJingleEnabled]). Default 4. */
+    val broadcastJingleEvery: Flow<Int>
+
+    suspend fun setBroadcastJingleEvery(tracks: Int)
 }
 
 const val BROADCAST_VOICE_OFF = "off"

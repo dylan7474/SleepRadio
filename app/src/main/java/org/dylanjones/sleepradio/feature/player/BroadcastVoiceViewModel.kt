@@ -53,6 +53,9 @@ class BroadcastVoiceViewModel @Inject constructor(
         val chattiness: Chattiness = Chattiness.DEFAULT,
         val announcerVolume: Float = 1f,
         val announcerSpeed: Float = 1f,
+        val jinglesFolderSet: Boolean = false,
+        val jingleEnabled: Boolean = false,
+        val jingleEvery: Int = 4,
         val install: VoicePackInstaller.InstallState = VoicePackInstaller.InstallState.Idle,
     )
 
@@ -64,9 +67,13 @@ class BroadcastVoiceViewModel @Inject constructor(
                 settings.broadcastAnnouncerVolume,
                 settings.broadcastAnnouncerSpeed,
             ) { vol, speed -> vol to speed },
-            installer.state,
-            rescan,
-        ) { selected, chat, (vol, speed), install, _ ->
+            combine(
+                settings.broadcastJingleEnabled,
+                settings.broadcastJingleEvery,
+                settings.jinglesTreeUri,
+            ) { enabled, every, tree -> Triple(enabled, every, tree != null) },
+            combine(installer.state, rescan) { install, _ -> install },
+        ) { selected, chat, (vol, speed), (jinEnabled, jinEvery, jinSet), install ->
             UiState(
                 selected = selected,
                 stockInstalled = resolver.isInstalled(VoicePackResolver.ID_STOCK),
@@ -74,6 +81,9 @@ class BroadcastVoiceViewModel @Inject constructor(
                 chattiness = Chattiness.fromId(chat),
                 announcerVolume = vol,
                 announcerSpeed = speed,
+                jinglesFolderSet = jinSet,
+                jingleEnabled = jinEnabled,
+                jingleEvery = jinEvery,
                 install = install,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
@@ -92,6 +102,14 @@ class BroadcastVoiceViewModel @Inject constructor(
 
     fun setAnnouncerSpeed(value: Float) {
         viewModelScope.launch { settings.setBroadcastAnnouncerSpeed(value) }
+    }
+
+    fun setJingleEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setBroadcastJingleEnabled(enabled) }
+    }
+
+    fun setJingleEvery(tracks: Int) {
+        viewModelScope.launch { settings.setBroadcastJingleEvery(tracks) }
     }
 
     fun downloadStock() {

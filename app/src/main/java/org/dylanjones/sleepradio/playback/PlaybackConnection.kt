@@ -91,6 +91,12 @@ data class SleepTimerState(
     val totalMs: Long = 0L,
 )
 
+/** One step in the gap between two Broadcast tracks: a spoken line or a jingle sting. */
+private sealed interface SegueStep {
+    data class Say(val text: String) : SegueStep
+    object Jingle : SegueStep
+}
+
 /**
  * Owns a [MediaController] bound to [PlaybackService] and exposes its state as a
  * [StateFlow]. All controller access happens on the main thread.
@@ -136,15 +142,31 @@ class PlaybackConnection @Inject constructor(
     private var nextBroadcast: BroadcastTrack? = null
     /** The in-flight "load voice + speak welcome" coroutine, so a restart cancels it. */
     private var broadcastJob: Job? = null
-    /** Link kind to play after the current track; NONE = straight into the next. */
-    private var pendingLink: LinkKind = LinkKind.NONE
-    private var linkPreloaded: Boolean = false
+    /**
+     * What plays in the gap AFTER the current track: an ordered list of spoken
+     * lines and/or a jingle. Built (and its speech pre-synthesised) when the
+     * track starts; drained by [runNextSegueStep] when it ends.
+     */
+    private var seguePlan: ArrayDeque<SegueStep> = ArrayDeque()
+    /** True while a jingle MediaItem is on Channel A, so its STATE_ENDED continues the segue. */
+    private var playingJingle: Boolean = false
+    /** True once the gap's segue has started draining, so a late pre-synth can't refill it. */
+    private var segueRunning: Boolean = false
+    /** Bumped each track start / (re)start, so a stale pre-synth coroutine can't install its plan. */
+    private var broadcastGen: Int = 0
     /** Maximum-chattiness: back-announce every track and keep time checks naming tracks. */
     private var announceEveryTrack: Boolean = false
     /** DJ voice level (0..1), applied on top of the master VOL. */
     private var announcerVolume: Float = 1f
     /** DJ speech rate (1.0 = natural, higher is faster). */
     private var announcerSpeed: Float = 1f
+    /** Jingle folder contents (document URIs) + cadence; [jingleEvery] 0 = jingles off. */
+    private var jingleUris: List<String> = emptyList()
+    private var jingleEvery: Int = 0
+    private var tracksSinceJingle: Int = 0
+    /** Shuffled play order, refilled (avoiding an immediate repeat) when drained. */
+    private val jingleQueue: ArrayDeque<String> = ArrayDeque()
+    private var lastJingleUri: String? = null
     /** Consecutive broadcast tracks that failed to play; a full pool of duds stops the show. */
     private var broadcastErrorStreak: Int = 0
     /** Stable station name from the slot label; never overwritten by ICY metadata. */
@@ -157,18 +179,31 @@ class PlaybackConnection @Inject constructor(
             if (isBroadcast && player.playbackState == Player.STATE_READY) {
                 broadcastErrorStreak = 0 // this track loaded fine
             }
-            if (isBroadcast && !advancing && player.playbackState == Player.STATE_ENDED) {
-                onBroadcastTrackEnded()
+            if (isBroadcast && player.playbackState == Player.STATE_ENDED) {
+                if (playingJingle) {
+                    playingJingle = false
+                    runNextSegueStep()
+                } else if (!advancing) {
+                    onBroadcastTrackEnded()
+                }
             }
             pushSnapshot()
             if (player.isPlaying) startTicker() else stopTicker()
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            if (!isBroadcast) return
+            // A bad jingle file must not freeze the segue — skip it and carry on.
+            if (playingJingle) {
+                Log.w(TAG, "broadcast: jingle failed (${error.errorCodeName}); skipping")
+                playingJingle = false
+                runNextSegueStep()
+                return
+            }
             // An unreadable/corrupt track in the broadcast pool would otherwise
             // stall the whole show (no STATE_ENDED ever arrives). Skip past it;
             // give up only if the pool is nothing but bad files.
-            if (!isBroadcast || advancing) return
+            if (advancing) return
             broadcastErrorStreak++
             Log.w(TAG, "broadcast: '${currentBroadcast?.title}' failed to play " +
                 "(${error.errorCodeName}); skipping (streak=$broadcastErrorStreak)")
@@ -177,8 +212,7 @@ class PlaybackConnection @Inject constructor(
                 endBroadcastInternal()
             } else {
                 advancing = true
-                pendingLink = LinkKind.NONE
-                linkPreloaded = false
+                seguePlan.clear()
                 advanceBroadcast()
             }
         }
@@ -376,12 +410,13 @@ class PlaybackConnection @Inject constructor(
 
     fun next() {
         if (isBroadcast) {
-            // Skip straight to a freshly picked track (drop any pending link).
+            // Skip straight to a freshly picked track (drop the pending segue).
             advancing = true
             djPlayer?.stop()
             djSpeaking = false
-            pendingLink = LinkKind.NONE
-            linkPreloaded = false
+            playingJingle = false
+            segueRunning = false
+            seguePlan.clear()
             advanceBroadcast()
         } else {
             controller?.seekToNextMediaItem()
@@ -401,9 +436,15 @@ class PlaybackConnection @Inject constructor(
     /**
      * Start "SleepRadio broadcast" on Channel A: a self-selecting rotation over
      * [tracks], with the DJ ([voice]) reading a short link in the gap before some
-     * tracks. [voice] == null → music only, no links.
+     * tracks and — when [config].jingleEvery > 0 — a [jingles] sting mixed in.
+     * [voice] == null → music (and jingles) only, no spoken links.
      */
-    fun startBroadcast(tracks: List<BroadcastTrack>, voice: VoicePack?, config: BroadcastConfig) {
+    fun startBroadcast(
+        tracks: List<BroadcastTrack>,
+        voice: VoicePack?,
+        jingles: List<String>,
+        config: BroadcastConfig,
+    ) {
         val c = controller ?: return
         endBroadcastInternal()
         if (tracks.isEmpty()) return
@@ -415,12 +456,18 @@ class PlaybackConnection @Inject constructor(
         isAudiobook = false
         bookId = null
         isBroadcast = true
+        broadcastGen++
         selector = BroadcastSelector(tracks)
         showClock = ShowClock(config)
         scriptBuilder = DjScriptBuilder()
         announceEveryTrack = config.announceEveryTrack
         announcerVolume = config.announcerVolume.coerceIn(0f, 1f)
         announcerSpeed = config.announcerSpeed.coerceIn(0.5f, 2f)
+        jingleUris = jingles
+        jingleEvery = if (jingles.isEmpty()) 0 else config.jingleEvery.coerceIn(0, 10)
+        tracksSinceJingle = 0
+        jingleQueue.clear()
+        lastJingleUri = null
         voicePack = voice
 
         currentBroadcast = selector?.next()
@@ -503,40 +550,106 @@ class PlaybackConnection @Inject constructor(
         return if (st.remainingMs > WINDDOWN_SILENT_MS) WindDownPhase.EASING else WindDownPhase.SILENT
     }
 
-    /** After a track starts: decide the link that plays when it ends, pre-synth it. */
+    /**
+     * After a track starts: work out what fills the gap when it ends — a spoken
+     * link, a jingle, or both (back-announce → jingle → next-track intro). The
+     * plan is built and installed **synchronously** so a very short track can't
+     * outrun it; a background pass then pre-synthesises the speech and, for a
+     * time check, swaps in the clock projected to when it will actually be heard.
+     */
     private fun onBroadcastTrackStarted() {
+        val gen = ++broadcastGen
         val phase = windDownPhase()
         val kind = showClock?.onTrackStarted(LocalTime.now(), phase) ?: LinkKind.NONE
-        pendingLink = kind
-        linkPreloaded = false
+        val jingleDue = jingleDueThisGap(phase)
         Log.d(TAG, "broadcast: now '${currentBroadcast?.title}' by ${currentBroadcast?.artist}; " +
-            "link after this track = $kind (windDown=$phase)")
-        val player = djPlayer
+            "after this track: link=$kind jingle=$jingleDue (windDown=$phase)")
+
         val builder = scriptBuilder
-        if (kind != LinkKind.NONE && voicePack != null && player != null && builder != null) {
-            val prev = currentBroadcast
-            val next = nextBroadcast
-            val terse = phase == WindDownPhase.EASING
-            val everyTrack = announceEveryTrack
-            scope.launch(Dispatchers.Default) {
-                // This link is spoken in the gap AFTER the current track, minutes
-                // from now. A time check must read the clock as it will be when
-                // heard, so wind it forward past the track's remaining play time.
-                val spokenAt = if (kind == LinkKind.TIME_CHECK) {
-                    val ahead = awaitTrackRemainingMs()
-                    Log.d(TAG, "broadcast: time check projected ${ahead}ms ahead " +
-                        "(${LocalTime.now()} -> ${LocalTime.now().plus(Duration.ofMillis(ahead))})")
-                    LocalTime.now().plus(Duration.ofMillis(ahead))
-                } else {
-                    LocalTime.now()
+        val player = djPlayer
+        val hasVoice = voicePack != null && builder != null && player != null
+        val prev = currentBroadcast
+        val next = nextBroadcast
+        val terse = phase == WindDownPhase.EASING
+        val everyTrack = announceEveryTrack
+
+        fun planFor(spokenAt: LocalTime): List<SegueStep> = buildList {
+            when {
+                jingleDue && hasVoice && kind == LinkKind.LINK -> {
+                    add(SegueStep.Say(builder!!.outroLine(prev)))
+                    add(SegueStep.Jingle)
+                    if (!terse) add(SegueStep.Say(builder.introLine(next)))
                 }
-                val text = builder.build(kind, prev, next, spokenAt, terse, everyTrack)
-                if (text.isNotBlank()) {
-                    linkPreloaded = player.preload(text, announcerSpeed)
-                    Log.d(TAG, "broadcast: link preloaded=$linkPreloaded — \"$text\"")
+                jingleDue && hasVoice && kind == LinkKind.TIME_CHECK -> {
+                    builder!!.build(kind, prev, next, spokenAt, terse, everyTrack)
+                        .takeIf { it.isNotBlank() }?.let { add(SegueStep.Say(it)) }
+                    add(SegueStep.Jingle)
+                }
+                jingleDue -> add(SegueStep.Jingle) // NONE / IDENT, or no voice
+                hasVoice && kind != LinkKind.NONE -> {
+                    builder!!.build(kind, prev, next, spokenAt, terse, everyTrack)
+                        .takeIf { it.isNotBlank() }?.let { add(SegueStep.Say(it)) }
                 }
             }
         }
+
+        segueRunning = false
+        val steps = planFor(LocalTime.now())
+        seguePlan = ArrayDeque(steps)
+        Log.d(TAG, "broadcast: segue = " + steps.joinToString {
+            if (it is SegueStep.Say) "say(\"${it.text}\")" else "jingle"
+        })
+        if (steps.isEmpty()) return
+
+        scope.launch(Dispatchers.Default) {
+            // For a time check, redo the plan with the clock projected to when it
+            // will actually be heard (past the track's remaining play time), then
+            // pre-synthesise every spoken line so the segue plays gaplessly.
+            val projected = if (kind == LinkKind.TIME_CHECK && hasVoice) {
+                val ahead = awaitTrackRemainingMs()
+                Log.d(TAG, "broadcast: time check projected ${ahead}ms ahead " +
+                    "(${LocalTime.now()} -> ${LocalTime.now().plus(Duration.ofMillis(ahead))})")
+                planFor(LocalTime.now().plus(Duration.ofMillis(ahead)))
+            } else {
+                null
+            }
+            val toSynth = projected ?: steps
+            player?.let { p ->
+                toSynth.forEach { if (it is SegueStep.Say) p.preload(it.text, announcerSpeed) }
+            }
+            if (projected != null) {
+                withContext(mainDispatcher) {
+                    // Only swap in the projected text if the segue hasn't started.
+                    if (isBroadcast && gen == broadcastGen && !segueRunning) {
+                        seguePlan = ArrayDeque(projected)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Advance the jingle counter and say whether one lands in the next gap. */
+    private fun jingleDueThisGap(phase: WindDownPhase): Boolean {
+        if (jingleEvery <= 0 || jingleUris.isEmpty()) return false
+        tracksSinceJingle++
+        // Jingles are attention-grabbers — hold them once the sleep timer is winding down.
+        if (phase != WindDownPhase.NORMAL) return false
+        if (tracksSinceJingle < jingleEvery) return false
+        tracksSinceJingle = 0
+        return true
+    }
+
+    /** Next jingle to play: shuffled, never the same one twice running. */
+    private fun nextJingleUri(): String? {
+        if (jingleUris.isEmpty()) return null
+        if (jingleQueue.isEmpty()) {
+            val shuffled = jingleUris.shuffled().toMutableList()
+            if (shuffled.size > 1 && shuffled.first() == lastJingleUri) {
+                shuffled.add(shuffled.removeAt(0))
+            }
+            jingleQueue.addAll(shuffled)
+        }
+        return jingleQueue.removeFirst().also { lastJingleUri = it }
     }
 
     /**
@@ -558,24 +671,69 @@ class PlaybackConnection @Inject constructor(
         return 0L
     }
 
-    /** Channel A hit STATE_ENDED during a broadcast. */
+    /** Channel A hit STATE_ENDED during a broadcast: run the gap's segue, then advance. */
     private fun onBroadcastTrackEnded() {
         advancing = true
-        val player = djPlayer
-        if (pendingLink != LinkKind.NONE && linkPreloaded && player != null) {
-            djSpeaking = true
-            pushSnapshot()
-            Log.d(TAG, "broadcast: track ended → playing $pendingLink link")
-            player.playPreloaded(mixer.state.value.masterGain * announcerVolume) {
-                djSpeaking = false
-                Log.d(TAG, "broadcast: link done → next track")
-                advanceBroadcast()
+        segueRunning = true
+        runNextSegueStep()
+    }
+
+    /** Play the next spoken line / jingle in [seguePlan]; when it's empty, move on. */
+    private fun runNextSegueStep() {
+        val step = if (seguePlan.isEmpty()) null else seguePlan.removeFirst()
+        when (step) {
+            null -> advanceBroadcast()
+            is SegueStep.Say -> {
+                val player = djPlayer ?: run { runNextSegueStep(); return }
+                djSpeaking = true
+                pushSnapshot()
+                scope.launch(Dispatchers.Default) {
+                    val ok = player.preload(step.text, announcerSpeed)
+                    withContext(mainDispatcher) {
+                        Log.d(TAG, "broadcast: segue say (ok=$ok) — \"${step.text}\"")
+                        if (ok) {
+                            player.playPreloaded(mixer.state.value.masterGain * announcerVolume) {
+                                djSpeaking = false
+                                runNextSegueStep()
+                            }
+                        } else {
+                            djSpeaking = false
+                            runNextSegueStep()
+                        }
+                    }
+                }
             }
-        } else {
-            Log.d(TAG, "broadcast: track ended → next track (no link: " +
-                "kind=$pendingLink preloaded=$linkPreloaded)")
-            advanceBroadcast()
+            SegueStep.Jingle -> {
+                val uri = nextJingleUri()
+                if (uri == null) { runNextSegueStep(); return }
+                Log.d(TAG, "broadcast: segue jingle — $uri")
+                playingJingle = true
+                pushSnapshot()
+                playJingleItem(uri)
+                // STATE_ENDED (or onPlayerError) for the jingle continues the segue.
+            }
         }
+    }
+
+    private fun playJingleItem(uri: String) {
+        val c = controller ?: run { playingJingle = false; runNextSegueStep(); return }
+        c.setPlaybackParameters(PlaybackParameters(1f))
+        c.setMediaItem(
+            MediaItem.Builder()
+                .setUri(uri)
+                .setMediaId(uri)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle("Station ident")
+                        .setStation("SleepRadio")
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
+                        .build(),
+                )
+                .build(),
+        )
+        c.prepare()
+        c.play()
     }
 
     /** Move to the pre-picked next track and pick a new one behind it. */
@@ -597,11 +755,18 @@ class PlaybackConnection @Inject constructor(
         isBroadcast = false
         djSpeaking = false
         advancing = false
-        pendingLink = LinkKind.NONE
-        linkPreloaded = false
+        broadcastGen++
+        seguePlan.clear()
+        playingJingle = false
+        segueRunning = false
         announceEveryTrack = false
         announcerVolume = 1f
         announcerSpeed = 1f
+        jingleUris = emptyList()
+        jingleEvery = 0
+        tracksSinceJingle = 0
+        jingleQueue.clear()
+        lastJingleUri = null
         broadcastErrorStreak = 0
         broadcastJob?.cancel()
         broadcastJob = null

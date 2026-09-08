@@ -216,6 +216,10 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { settings.setMusicTreeUri(treeUri) }
     }
 
+    fun onJinglesFolderChosen(treeUri: String) {
+        viewModelScope.launch { settings.setJinglesTreeUri(treeUri) }
+    }
+
     /** Tap a preset slot: play it if assigned, otherwise open the picker for it. */
     fun onPresetClicked(index: Int) {
         val slot = uiState.value.presets.getOrNull(index)
@@ -401,14 +405,25 @@ class PlayerViewModel @Inject constructor(
                         val pool = musicRepository.broadcastPool(tree)
                         if (pool.isEmpty()) return@launch
                         val chat = Chattiness.fromId(settings.broadcastChattiness.first())
+                        val jingleOn = settings.broadcastJingleEnabled.first()
+                        val jingleTree = settings.jinglesTreeUri.first()
+                        val jingles = if (jingleOn && jingleTree != null) {
+                            runCatching { musicRepository.jingleFiles(jingleTree) }.getOrDefault(emptyList())
+                        } else {
+                            emptyList()
+                        }
+                        val jingleEvery =
+                            if (jingles.isNotEmpty()) settings.broadcastJingleEvery.first() else 0
                         playback.startBroadcast(
                             pool,
                             pack,
+                            jingles,
                             BroadcastConfig(
                                 tracksPerLink = chat.tracksPerLink,
                                 announceEveryTrack = chat == Chattiness.MAXIMUM,
                                 announcerVolume = settings.broadcastAnnouncerVolume.first(),
                                 announcerSpeed = settings.broadcastAnnouncerSpeed.first(),
+                                jingleEvery = jingleEvery,
                             ),
                         )
                         local.value = local.value.copy(nowPlayingRef = slot.refId)

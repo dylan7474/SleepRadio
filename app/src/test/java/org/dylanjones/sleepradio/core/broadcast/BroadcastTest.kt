@@ -178,6 +178,30 @@ class DjScriptBuilderTest {
     }
 
     @Test
+    fun `outro and intro lines split the link for a jingle segue`() {
+        val b = DjScriptBuilder(Random(0))
+        val outro = b.outroLine(t1)
+        val intro = b.introLine(t2)
+        // outro names only the finished track, intro only the next
+        assertTrue(outro, outro.contains("Song One") && !outro.contains("Song Two"))
+        assertTrue(intro, intro.contains("Song Two") && !intro.contains("Song One"))
+        // each is a complete sentence
+        assertTrue(outro, outro.endsWith("."))
+        assertTrue(intro, intro.endsWith("."))
+        assertTrue(outro, !outro.contains("Before that"))
+    }
+
+    @Test
+    fun `outro and intro fall back to a filler line when a track is missing`() {
+        val b = DjScriptBuilder(Random(0))
+        // No track to name, but never an empty utterance or a dangling "by".
+        for (line in listOf(b.outroLine(null), b.introLine(null))) {
+            assertTrue(line, line.isNotBlank() && line.endsWith("."))
+            assertTrue(line, !line.contains(", by "))
+        }
+    }
+
+    @Test
     fun `link back-announces then introduces, no dangling phrases`() {
         repeat(40) {
             val s = DjScriptBuilder(Random(it.toLong())).build(LinkKind.LINK, t1, t2)

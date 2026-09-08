@@ -99,17 +99,22 @@ class DjScriptBuilder(private val rng: Random = Random.Default) {
                 "$outro$lead$intro"
             }
         }
-        LinkKind.LINK -> {
-            val outro = previous?.let { "${OUTROS.random(rng)} ${trackPhrase(it)}." }.orEmpty()
-            if (terse) {
-                outro.ifEmpty { STATION_ONLY.random(rng) }
-            } else {
-                val intro = next?.let { " ${INTROS.random(rng)} ${trackPhrase(it)}." }
-                    ?: " ${STATION_ONLY.random(rng)}"
-                (outro + intro).trim()
-            }
-        }
+        LinkKind.LINK ->
+            if (terse) outroLine(previous)
+            else "${outroLine(previous)} ${introLine(next)}"
     }
+
+    /**
+     * Back-announce the track that just finished ("That was …"). Used on its own
+     * when a jingle splits the link — the DJ speaks this, the jingle plays, then
+     * [introLine] brings in the next track.
+     */
+    fun outroLine(previous: BroadcastTrack?): String =
+        previous?.let { "${OUTROS.random(rng)} ${trackPhrase(it)}." } ?: STATION_ONLY.random(rng)
+
+    /** Introduce the next track ("Coming up, …"). */
+    fun introLine(next: BroadcastTrack?): String =
+        next?.let { "${INTROS.random(rng)} ${trackPhrase(it)}." } ?: STATION_ONLY.random(rng)
 
     /** "Song by Artist", or just the title when the artist is unknown/blank/==title. */
     private fun trackPhrase(t: BroadcastTrack): String {
