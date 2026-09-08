@@ -7,6 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import kotlin.math.abs
+import kotlin.math.sqrt
+import kotlin.math.tanh
 
 /**
  * Plays the DJ's spoken links. Owns one short-lived [AudioTrack] per phrase
@@ -122,21 +124,43 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
 
     private fun toClip(audio: TtsAudio): Clip {
         val samples = audio.samples
-        // Piper output peaks well below full scale (~0.5), lower on quiet
-        // phrases — normalise toward 0 dBFS before the 16-bit conversion, with
-        // a cap so near-silence isn't blown up.
+        if (samples.isEmpty()) return Clip(ShortArray(0), audio.sampleRate)
+
+        // Piper speech has a high crest factor — brief peaks over a low average —
+        // so peak-normalising alone still leaves it much quieter than music.
+        // Push the RMS up to a broadcast-speech target instead, and soft-limit
+        // the few peaks that would clip (inaudible on speech, keeps it clean).
         var peak = 0f
+        var sumSq = 0.0
         for (s in samples) {
             val a = abs(s)
             if (a > peak) peak = a
+            sumSq += s.toDouble() * s
         }
-        val gain = if (peak > 0f) (0.97f / peak).coerceAtMost(8f) else 1f
+        val rms = sqrt(sumSq / samples.size).toFloat()
+        val gain = if (rms > 1e-5f) (TARGET_RMS / rms).coerceIn(1f, MAX_GAIN) else 1f
+
         val pcm = ShortArray(samples.size) { i ->
-            (samples[i] * gain * 32767f).toInt().coerceIn(-32768, 32767).toShort()
+            val x = samples[i] * gain
+            val ax = abs(x)
+            val y = if (ax > LIMIT_KNEE) {
+                val over = (ax - LIMIT_KNEE) / (1f - LIMIT_KNEE)
+                (if (x < 0f) -1f else 1f) * (LIMIT_KNEE + (1f - LIMIT_KNEE) * tanh(over))
+            } else {
+                x
+            }
+            (y * 32767f).toInt().coerceIn(-32768, 32767).toShort()
         }
+
         var outPeak = 0
-        for (s in pcm) { val a = if (s < 0) -s.toInt() else s.toInt(); if (a > outPeak) outPeak = a }
-        Log.d(TAG, "toClip: ${samples.size} samples, srcPeak=$peak gain=$gain outPeak=$outPeak/32767")
+        var outSq = 0.0
+        for (s in pcm) {
+            val a = abs(s.toInt())
+            if (a > outPeak) outPeak = a
+            outSq += s.toDouble() * s
+        }
+        Log.d(TAG, "toClip: ${samples.size} samples, srcPeak=$peak srcRms=$rms gain=$gain " +
+            "outPeak=$outPeak/32767 outRms=${sqrt(outSq / samples.size).toInt()}")
         return Clip(pcm, audio.sampleRate)
     }
 
@@ -206,5 +230,15 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
     private companion object {
         const val TAG = "DjVoicePlayer"
         const val CACHE_MAX = 8
+        /**
+         * Target RMS for the spoken clip (~ -10 dBFS) — loud-radio speech level,
+         * so the DJ sits clearly over a music bed. Bump toward 0.35 if it still
+         * reads quiet; drop toward 0.22 if it sounds squashed/harsh.
+         */
+        const val TARGET_RMS = 0.30f
+        /** Never boost a near-silent synth by more than this. */
+        const val MAX_GAIN = 12f
+        /** Soft-limit anything above this fraction of full scale (speech has few peaks). */
+        const val LIMIT_KNEE = 0.70f
     }
 }
