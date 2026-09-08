@@ -39,6 +39,7 @@ import org.dylanjones.sleepradio.core.broadcast.BroadcastConfig
 import org.dylanjones.sleepradio.core.broadcast.BroadcastSelector
 import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
 import org.dylanjones.sleepradio.core.broadcast.DjScriptBuilder
+import org.dylanjones.sleepradio.core.broadcast.JingleClip
 import org.dylanjones.sleepradio.core.broadcast.LinkKind
 import org.dylanjones.sleepradio.core.broadcast.ShowClock
 import org.dylanjones.sleepradio.core.broadcast.WindDownPhase
@@ -91,10 +92,11 @@ data class SleepTimerState(
     val totalMs: Long = 0L,
 )
 
-/** One step in the gap between two Broadcast tracks: a spoken line or a jingle sting. */
+/** One step in a Broadcast segue: a spoken line, or a jingle sting. */
 private sealed interface SegueStep {
     data class Say(val text: String) : SegueStep
-    object Jingle : SegueStep
+    /** [uri] null = pull the next one from the shuffle; set = play this exact clip. */
+    data class Jingle(val uri: String? = null) : SegueStep
 }
 
 /**
@@ -167,6 +169,10 @@ class PlaybackConnection @Inject constructor(
     /** Shuffled play order, refilled (avoiding an immediate repeat) when drained. */
     private val jingleQueue: ArrayDeque<String> = ArrayDeque()
     private var lastJingleUri: String? = null
+    /** A short (< 45 s) jingle to open the show with, after the welcome; null = none. */
+    private var startupJingleUri: String? = null
+    /** The first track, held while the opening welcome/jingle plays. */
+    private var startupFirst: BroadcastTrack? = null
     /** Consecutive broadcast tracks that failed to play; a full pool of duds stops the show. */
     private var broadcastErrorStreak: Int = 0
     /** Stable station name from the slot label; never overwritten by ICY metadata. */
@@ -416,6 +422,7 @@ class PlaybackConnection @Inject constructor(
             djSpeaking = false
             playingJingle = false
             segueRunning = false
+            startupFirst = null
             seguePlan.clear()
             advanceBroadcast()
         } else {
@@ -442,7 +449,7 @@ class PlaybackConnection @Inject constructor(
     fun startBroadcast(
         tracks: List<BroadcastTrack>,
         voice: VoicePack?,
-        jingles: List<String>,
+        jingles: List<JingleClip>,
         config: BroadcastConfig,
     ) {
         val c = controller ?: return
@@ -463,11 +470,14 @@ class PlaybackConnection @Inject constructor(
         announceEveryTrack = config.announceEveryTrack
         announcerVolume = config.announcerVolume.coerceIn(0f, 1f)
         announcerSpeed = config.announcerSpeed.coerceIn(0.5f, 2f)
-        jingleUris = jingles
+        jingleUris = jingles.map { it.uri }
         jingleEvery = if (jingles.isEmpty()) 0 else config.jingleEvery.coerceIn(0, 10)
         tracksSinceJingle = 0
         jingleQueue.clear()
         lastJingleUri = null
+        // Open the show with one of the shorter jingles (under 45 s), if there is one.
+        startupJingleUri = jingles.filter { it.durationMs in 1 until STARTUP_JINGLE_MAX_MS }
+            .map { it.uri }.shuffled().firstOrNull()
         voicePack = voice
 
         currentBroadcast = selector?.next()
@@ -480,26 +490,37 @@ class PlaybackConnection @Inject constructor(
             val engine = ttsEngine!!
             val player = djPlayer!!
             val builder = scriptBuilder!!
+            // Opening sequence: welcome → (short jingle) → first-track intro → track 1.
+            // Runs through the same segue machinery; startupFirst tells its tail
+            // to play the first track instead of advancing to the next.
             djSpeaking = true
-            // Load the voice, speak the welcome, THEN start the first track.
+            advancing = true
+            segueRunning = true
+            startupFirst = first
+            val gen = broadcastGen
+            val opener = startupJingleUri
             broadcastJob = scope.launch {
-                val ready = kotlinx.coroutines.withContext(Dispatchers.Default) {
-                    engine.ensureLoaded(voice) &&
-                        player.preload(builder.welcome(first), announcerSpeed)
+                val loaded = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                    engine.ensureLoaded(voice)
                 }
-                if (!isBroadcast || !isActive) return@launch // restarted / switched away
-                if (ready) {
-                    Log.d(TAG, "broadcast: welcome link")
-                    player.playPreloaded(mixer.state.value.masterGain * announcerVolume) {
-                        djSpeaking = false
-                        playSingleBroadcast(first)
-                        onBroadcastTrackStarted()
-                    }
-                } else {
-                    djSpeaking = false
-                    playSingleBroadcast(first)
-                    onBroadcastTrackStarted()
+                if (!isBroadcast || !isActive || gen != broadcastGen) return@launch
+                val steps = ArrayList<SegueStep>()
+                if (loaded && opener != null) {
+                    steps += SegueStep.Say(builder.welcomeGreeting())
+                    steps += SegueStep.Jingle(opener)
+                    steps += SegueStep.Say(builder.welcomeFirstTrack(first))
+                } else if (loaded) {
+                    steps += SegueStep.Say(builder.welcome(first))
                 }
+                kotlinx.coroutines.withContext(Dispatchers.Default) {
+                    steps.forEach { if (it is SegueStep.Say) player.preload(it.text, announcerSpeed) }
+                }
+                if (!isBroadcast || !isActive || gen != broadcastGen) return@launch
+                Log.d(TAG, "broadcast: opening = " + steps.joinToString {
+                    if (it is SegueStep.Say) "say(\"${it.text}\")" else "jingle"
+                })
+                seguePlan = ArrayDeque(steps)
+                runNextSegueStep()
             }
         } else {
             playSingleBroadcast(first)
@@ -582,10 +603,10 @@ class PlaybackConnection @Inject constructor(
                     val back = builder!!.outroLine(prev) +
                         if (kind == LinkKind.TIME_CHECK) " ${builder.timeLine(spokenAt)}" else ""
                     add(SegueStep.Say(back))
-                    add(SegueStep.Jingle)
+                    add(SegueStep.Jingle())
                     if (!terse) add(SegueStep.Say(builder.introLine(next)))
                 }
-                jingleDue -> add(SegueStep.Jingle) // NONE / IDENT, or no voice
+                jingleDue -> add(SegueStep.Jingle()) // NONE / IDENT, or no voice
                 hasVoice && kind != LinkKind.NONE -> {
                     builder!!.build(kind, prev, next, spokenAt, terse, everyTrack)
                         .takeIf { it.isNotBlank() }?.let { add(SegueStep.Say(it)) }
@@ -682,7 +703,19 @@ class PlaybackConnection @Inject constructor(
     private fun runNextSegueStep() {
         val step = if (seguePlan.isEmpty()) null else seguePlan.removeFirst()
         when (step) {
-            null -> advanceBroadcast()
+            null -> {
+                val opening = startupFirst
+                if (opening != null) {
+                    // End of the opening sequence: start track 1 (don't advance).
+                    startupFirst = null
+                    segueRunning = false
+                    playSingleBroadcast(opening)
+                    onBroadcastTrackStarted()
+                    advancing = false
+                } else {
+                    advanceBroadcast()
+                }
+            }
             is SegueStep.Say -> {
                 val player = djPlayer ?: run { runNextSegueStep(); return }
                 djSpeaking = true
@@ -703,8 +736,8 @@ class PlaybackConnection @Inject constructor(
                     }
                 }
             }
-            SegueStep.Jingle -> {
-                val uri = nextJingleUri()
+            is SegueStep.Jingle -> {
+                val uri = step.uri ?: nextJingleUri()
                 if (uri == null) { runNextSegueStep(); return }
                 Log.d(TAG, "broadcast: segue jingle — $uri")
                 playingJingle = true
@@ -767,6 +800,8 @@ class PlaybackConnection @Inject constructor(
         tracksSinceJingle = 0
         jingleQueue.clear()
         lastJingleUri = null
+        startupJingleUri = null
+        startupFirst = null
         broadcastErrorStreak = 0
         broadcastJob?.cancel()
         broadcastJob = null
@@ -868,6 +903,8 @@ class PlaybackConnection @Inject constructor(
         const val WINDDOWN_SILENT_MS = 5 * 60_000L
         /** Broadcast: bail out after this many unplayable tracks back to back. */
         const val MAX_BROADCAST_ERROR_STREAK = 6
+        /** Broadcast: only a jingle shorter than this opens the show. */
+        const val STARTUP_JINGLE_MAX_MS = 45_000L
     }
 }
 

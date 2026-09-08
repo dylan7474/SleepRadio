@@ -2,6 +2,7 @@ package org.dylanjones.sleepradio.media
 
 import android.content.ContentUris
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
@@ -17,6 +18,7 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
+import org.dylanjones.sleepradio.core.broadcast.JingleClip
 import org.dylanjones.sleepradio.core.data.Chapter
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.di.IoDispatcher
@@ -213,15 +215,17 @@ class MusicRepository @Inject constructor(
     }
 
     /**
-     * Every audio file under [treeUri] (the user's jingle folder), as document
-     * URI strings sorted by name. Shallow walk — jingle folders are small — and
-     * uncached so a freshly-dropped-in jingle is picked up next broadcast.
+     * Every audio file under [treeUri] (the user's jingle folder) with its
+     * duration, sorted by name. Shallow walk — jingle folders are small — and
+     * uncached so a freshly-dropped-in jingle is picked up next broadcast. The
+     * duration probe (one [MediaMetadataRetriever] per file) lets the show pick
+     * a short clip for the opening; a file it can't read comes back as 0 ms.
      */
-    suspend fun jingleFiles(treeUri: String): List<String> = withContext(io) {
+    suspend fun jingleFiles(treeUri: String): List<JingleClip> = withContext(io) {
         val tree = Uri.parse(treeUri)
         val rootDocId = runCatching { DocumentsContract.getTreeDocumentId(tree) }.getOrNull()
             ?: return@withContext emptyList()
-        val out = ArrayList<String>()
+        val uris = ArrayList<String>()
         val pending = ArrayDeque<Pair<String, Int>>()
         pending.add(rootDocId to 0)
         while (pending.isNotEmpty()) {
@@ -230,11 +234,19 @@ class MusicRepository @Inject constructor(
                 if (ch.isDir) {
                     if (depth < 2) pending.add(ch.docId to depth + 1)
                 } else if (isAudio(ch.name, ch.mime)) {
-                    out += DocumentsContract.buildDocumentUriUsingTree(tree, ch.docId).toString()
+                    uris += DocumentsContract.buildDocumentUriUsingTree(tree, ch.docId).toString()
                 }
             }
         }
-        out.sorted()
+        uris.sorted().map { uri ->
+            val ms = runCatching {
+                MediaMetadataRetriever().use { mmr ->
+                    mmr.setDataSource(context, Uri.parse(uri))
+                    mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                }
+            }.getOrDefault(0L)
+            JingleClip(uri, ms)
+        }
     }
 
     private data class SafChild(val docId: String, val name: String, val mime: String) {

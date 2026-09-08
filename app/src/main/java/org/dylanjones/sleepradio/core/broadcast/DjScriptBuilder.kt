@@ -57,22 +57,30 @@ class DjScriptBuilder(private val rng: Random = Random.Default) {
 
     /**
      * Spoken once when a broadcast starts, before the first track. When [first]
-     * is given the greeting rolls straight into announcing it.
+     * is given the greeting rolls straight into announcing it; when a jingle
+     * plays between them, use [welcomeGreeting] + [welcomeFirstTrack] instead.
      */
-    fun welcome(first: BroadcastTrack? = null, now: LocalTime = LocalTime.now()): String {
+    fun welcome(first: BroadcastTrack? = null, now: LocalTime = LocalTime.now()): String =
+        if (first != null) {
+            "${welcomeGreeting(now)} ${welcomeFirstTrack(first)}"
+        } else {
+            "${welcomeGreeting(now)} ${WELCOME_TAILS.random(rng)}"
+        }
+
+    /** Just the time-of-day greeting — used when a jingle sits before the first track. */
+    fun welcomeGreeting(now: LocalTime = LocalTime.now()): String {
         val greeting = when (now.hour) {
             in 5..11 -> "Good morning"
             in 12..17 -> "Good afternoon"
             in 18..21 -> "Good evening"
             else -> "Hello"
         }
-        val opener = "$greeting, and welcome to Sleep Radio."
-        return if (first != null) {
-            "$opener ${OPENERS.random(rng)} ${trackPhrase(first)}."
-        } else {
-            "$opener ${WELCOME_TAILS.random(rng)}"
-        }
+        return "$greeting, and welcome to Sleep Radio."
     }
+
+    /** Bring in the very first track of the show ("We begin with …"). */
+    fun welcomeFirstTrack(first: BroadcastTrack): String =
+        "${OPENERS.random(rng)} ${trackPhrase(first)}."
 
     fun build(
         kind: LinkKind,

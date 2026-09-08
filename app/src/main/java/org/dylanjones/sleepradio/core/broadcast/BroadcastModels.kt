@@ -8,6 +8,9 @@ data class BroadcastTrack(
     val album: String,
 )
 
+/** A jingle clip from the user's jingle folder. */
+data class JingleClip(val uri: String, val durationMs: Long)
+
 /** What the DJ says in the gap before a track (or nothing). */
 enum class LinkKind { NONE, LINK, IDENT, TIME_CHECK }
 

@@ -171,6 +171,18 @@ class DjScriptBuilderTest {
     }
 
     @Test
+    fun `welcome greeting and first-track lines split for an opening jingle`() {
+        val b = DjScriptBuilder(Random(0))
+        val greeting = b.welcomeGreeting(LocalTime.of(20, 0))
+        val firstTrack = b.welcomeFirstTrack(t1)
+        assertTrue(greeting, greeting.contains("Good evening") && greeting.contains("Sleep Radio"))
+        assertTrue(greeting, !greeting.contains("Song One")) // no track name in the greeting half
+        assertTrue(greeting, greeting.endsWith("."))
+        assertTrue(firstTrack, firstTrack.contains("Song One") && firstTrack.contains("The Band"))
+        assertTrue(firstTrack, firstTrack.endsWith("."))
+    }
+
+    @Test
     fun `link names both tracks`() {
         val s = DjScriptBuilder(Random(0)).build(LinkKind.LINK, t1, t2)
         assertTrue(s, s.contains("Song One") && s.contains("Song Two"))
