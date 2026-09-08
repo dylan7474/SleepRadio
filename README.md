@@ -28,13 +28,21 @@ one shared control layout.
   music folder (recency‑ and artist‑spaced shuffle) and plays them back to back
 - An **offline text‑to‑speech presenter** (Piper / sherpa‑onnx, fully on‑device)
   reads a short link in the gap before some tracks — a time‑of‑day welcome, then
-  "that was … / coming up …", the occasional station ident and a spoken time check
+  "that was … / coming up …", the occasional station ident, and a spoken time
+  check that reads the clock as it will be when *heard*, not when it was prepared
 - **Voice**: *Off* (music only), a **stock voice** (one‑tap download or file
   import), or **your own** cloned Piper voice, imported on your device and never
   uploaded or committed
-- **Chattiness**: a link every 2 / 3 / 5 tracks
-- **Wind‑down**: once the sleep timer is armed the DJ eases off, then goes silent
-  for the last few minutes while the music fades
+- **Announcer level & speed** sliders — the DJ voice rides on top of the VOL knob,
+  and reads slower or faster (70–130 %) to taste
+- **Chattiness**: a link every 1 / 2 / 3 / 5 tracks — *Maximum* introduces and
+  back‑announces every single track
+- **Jingles**: point it at a folder of your own station idents / stings and one
+  drops in every N tracks (1–10), shuffled with no immediate repeat and sequenced
+  back‑announce → jingle → next‑track intro
+- **Wind‑down**: once the sleep timer is armed the DJ eases off (and jingles
+  stop), then goes silent for the last few minutes while the music fades
+- A track that won't decode is skipped instead of stalling the show
 - No API keys, works with no network once the voice is installed (the only
   network use is the one‑time voice download, which is also avoidable)
 
@@ -116,8 +124,9 @@ core/design     AppSkin / SkinColors, Neon & Industrial skins, RotaryKnob, SkinC
 core/tts        OfflineTtsEngine (sherpa-onnx), DjVoicePlayer, VoicePack + install/resolve
 feature/player  PlayerRoute / PlayerViewModel / PlayerScreen + dialogs, BroadcastVoiceViewModel
 feature/root    RootViewModel (skin selection)
-media           MusicRepository (SAF folder walk), AudiobookRepository
-playback        PlaybackService (Media3, Channel A), PlaybackConnection (+ broadcast sequencer),
+media           MusicRepository (SAF folder walk + jingle folder), AudiobookRepository
+playback        PlaybackService (Media3, Channel A),
+                PlaybackConnection (+ broadcast segue: links, jingles, time checks),
                 AmbientPlaybackService (B/C)
 tools/          build-stock-voice.sh
 ```
@@ -130,8 +139,10 @@ plan covered Phase 0 → Phase 8 (foundation → shippable v1) plus Phase 9
 
 ## Roadmap (post‑v1)
 
-Phase 9 (Broadcast Radio) has landed. Nothing below is committed — it's the
-shortlist for after more real bedside use.
+Phase 9 (Broadcast Radio) has landed, plus a round of post‑v1 Broadcast polish
+(Maximum chattiness, announcer level/speed, bring‑your‑own jingles, time checks
+timed to when they're heard, decode‑error skip). Nothing below is committed —
+it's the shortlist for after more real bedside use.
 
 **Audio & sources**
 - [ ] Auto‑reconnect for dropped radio streams (backoff + a "reconnecting…" state)
