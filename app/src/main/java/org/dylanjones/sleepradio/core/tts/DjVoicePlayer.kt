@@ -8,6 +8,7 @@ import android.os.Looper
 import android.util.Log
 import org.dylanjones.sleepradio.core.audio.VoiceEq
 import kotlin.math.abs
+import kotlin.math.min
 import kotlin.math.sqrt
 import kotlin.math.tanh
 
@@ -34,6 +35,11 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
     @Volatile private var track: AudioTrack? = null
     @Volatile private var pending: Clip? = null
     @Volatile private var volume: Float = 1f
+
+    /** Called on the playback thread with the peak (0..1, post-volume) of each
+     *  ~40 ms slice as it's written — lets the Studio skin's VU meters show the
+     *  DJ voice, which plays on its own [AudioTrack] outside the ExoPlayer sink. */
+    @Volatile var onLevel: ((Float) -> Unit)? = null
 
     /** Small LRU of synthesised clips — idents and time-check leads recur. */
     private val cache = object : LinkedHashMap<String, Clip>(16, 0.75f, true) {
@@ -206,6 +212,7 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
         t.setVolume(volume.coerceIn(0f, 1f))
         t.play()
 
+        // The buffer holds the whole clip, so this returns fast.
         var off = 0
         while (off < clip.pcm.size && track === t) {
             val n = t.write(clip.pcm, off, clip.pcm.size - off, AudioTrack.WRITE_BLOCKING)
@@ -218,10 +225,42 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
         Log.d(TAG, "render: wrote $off/${clip.pcm.size} @ ${clip.sampleRate}Hz " +
             "vol=$volume playState=${t.playState}")
 
-        // Let the buffered tail drain, then free the output.
-        val tailMs = clip.pcm.size * 1000L / clip.sampleRate + 250
+        // Follow the actual playback head to the end (that's how long a DJ clip
+        // takes), feeding onLevel() the peak of the ~40 ms window playing now so
+        // the Studio skin's VU meters move with the voice — not in a burst at
+        // the start (WRITE_BLOCKING doesn't pace against a clip-sized buffer).
+        val cb = onLevel
+        val vol = volume.coerceIn(0f, 1f)
+        val win = (clip.sampleRate / 25).coerceAtLeast(256)
+        var ticks = 0
+        var maxLvl = 0f
+        while (track === t) {
+            val pos = t.playbackHeadPosition
+            if (pos >= clip.pcm.size) break
+            if (cb != null && pos >= 0) {
+                val start = pos.coerceIn(0, clip.pcm.size - 1)
+                val end = min(start + win, clip.pcm.size)
+                var pk = 0
+                var i = start
+                while (i < end) {
+                    val a = abs(clip.pcm[i].toInt())
+                    if (a > pk) pk = a
+                    i++
+                }
+                val lvl = pk / 32768f * vol
+                if (lvl > maxLvl) maxLvl = lvl
+                cb(lvl)
+            }
+            ticks++
+            try {
+                Thread.sleep(33)
+            } catch (_: InterruptedException) {
+                break // stop() requested
+            }
+        }
+        Log.d(TAG, "render: $ticks VU ticks, peak level ${"%.3f".format(maxLvl)}")
         try {
-            Thread.sleep(tailMs)
+            Thread.sleep(150) // let the last buffer flush
         } catch (_: InterruptedException) {
             // stop() requested
         }

@@ -60,6 +60,23 @@ class MixerController @Inject constructor() {
         _vu.value = levels
     }
 
+    /** Latest DJ-voice peak (0..1), folded into the VU meters by the
+     *  [org.dylanjones.sleepradio.playback.PlaybackService] sampler so the
+     *  announcer moves the needles too. Written from the DJ playback thread. */
+    @Volatile private var djPeak = 0f
+
+    fun reportDjPeak(peak: Float) {
+        val v = peak.coerceIn(0f, 1f)
+        if (v > djPeak) djPeak = v
+    }
+
+    /** Read the DJ peak since the last call, then reset. */
+    fun takeDjPeak(): Float {
+        val v = djPeak
+        djPeak = 0f
+        return v
+    }
+
     /** VOL knob, 0..1 — master volume of the combined mix. */
     fun setVolume(value: Float) {
         _state.update { it.copy(masterGain = value.coerceIn(0f, 1f)) }

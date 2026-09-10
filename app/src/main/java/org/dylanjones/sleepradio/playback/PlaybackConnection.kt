@@ -541,7 +541,9 @@ class PlaybackConnection @Inject constructor(
 
         if (voice != null) {
             if (ttsEngine == null) ttsEngine = OfflineTtsEngine()
-            if (djPlayer == null) djPlayer = DjVoicePlayer(ttsEngine!!)
+            if (djPlayer == null) {
+            djPlayer = DjVoicePlayer(ttsEngine!!).apply { onLevel = mixer::reportDjPeak }
+        }
             val engine = ttsEngine!!
             val player = djPlayer!!
             val builder = scriptBuilder!!
@@ -591,7 +593,9 @@ class PlaybackConnection @Inject constructor(
     fun prewarmVoice(pack: VoicePack?) {
         if (pack == null) return
         if (ttsEngine == null) ttsEngine = OfflineTtsEngine()
-        if (djPlayer == null) djPlayer = DjVoicePlayer(ttsEngine!!)
+        if (djPlayer == null) {
+            djPlayer = DjVoicePlayer(ttsEngine!!).apply { onLevel = mixer::reportDjPeak }
+        }
         val engine = ttsEngine!!
         scope.launch(Dispatchers.Default) { engine.ensureLoaded(pack) }
     }

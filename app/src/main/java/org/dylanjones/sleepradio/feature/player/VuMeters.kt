@@ -1,8 +1,8 @@
 package org.dylanjones.sleepradio.feature.player
 
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -62,9 +62,10 @@ fun VuMeterPair(levels: VuLevels, modifier: Modifier = Modifier) {
 @Composable
 private fun AnalogVuMeter(level: Float, label: String, modifier: Modifier) {
     val c = LocalAppSkin.current.colors
+    // Snappy with a touch of overshoot — an underdamped needle, not a slow crawl.
     val frac by animateFloatAsState(
         targetValue = vuNeedleFraction(level),
-        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium),
         label = "vu-$label",
     )
 

@@ -85,8 +85,9 @@ class PlaybackService : MediaSessionService() {
             var r = 0f
             while (isActive) {
                 val (pkL, pkR) = gainProcessor.readLevels()
-                l = max(pkL, l * VU_DECAY)
-                r = max(pkR, r * VU_DECAY)
+                val dj = mixer.takeDjPeak() // announcer's own AudioTrack, mono → both meters
+                l = max(max(pkL, dj), l * VU_DECAY)
+                r = max(max(pkR, dj), r * VU_DECAY)
                 mixer.setVu(VuLevels(l, r))
                 delay(VU_SAMPLE_MS)
             }
@@ -128,9 +129,10 @@ class PlaybackService : MediaSessionService() {
     }
 
     private companion object {
-        const val VU_SAMPLE_MS = 40L
-        /** Per-tick multiplier applied to the held level when no new peak arrives. */
-        const val VU_DECAY = 0.80f
+        const val VU_SAMPLE_MS = 33L
+        /** Per-tick multiplier applied to the held level when no new peak arrives
+         *  (≈ 0.78 → −10 % over ~40 ms; a lively return swing, not a slow VU crawl). */
+        const val VU_DECAY = 0.78f
     }
 }
 
