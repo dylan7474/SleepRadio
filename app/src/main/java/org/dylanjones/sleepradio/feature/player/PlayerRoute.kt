@@ -141,6 +141,28 @@ fun PlayerRoute(
         if (uri != null) broadcastVoiceViewModel.importVoice(uri, asPersonal = true)
     }
 
+    // VU-sync mic calibration (Phase 16B) needs RECORD_AUDIO.
+    var pendingCalBluetooth by remember { mutableStateOf<Boolean?>(null) }
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val bt = pendingCalBluetooth
+        pendingCalBluetooth = null
+        if (granted && bt != null) playerViewModel.startVuCalibration(bt)
+    }
+    fun beginVuCalibration(bluetooth: Boolean) {
+        if (
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.RECORD_AUDIO,
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            playerViewModel.startVuCalibration(bluetooth)
+        } else {
+            pendingCalBluetooth = bluetooth
+            micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     fun closeDrawer() = scope.launch { drawerState.close() }
@@ -216,16 +238,20 @@ fun PlayerRoute(
                 val btMs by playerViewModel.vuDelayBluetoothMs.collectAsStateWithLifecycle()
                 val customMs by playerViewModel.vuDelayCustomMs.collectAsStateWithLifecycle()
                 val activeMs by playerViewModel.activeVuDelayMs.collectAsStateWithLifecycle()
+                val calState by playerViewModel.vuCal.collectAsStateWithLifecycle()
                 VuSyncDialog(
                     auto = auto,
                     phoneMs = phoneMs,
                     bluetoothMs = btMs,
                     customMs = customMs,
                     activeMs = activeMs,
+                    calState = calState,
                     onAuto = playerViewModel::setVuSyncAuto,
                     onPhoneMs = playerViewModel::setVuDelayPhoneMs,
                     onBluetoothMs = playerViewModel::setVuDelayBluetoothMs,
                     onCustomMs = playerViewModel::setVuDelayCustomMs,
+                    onCalibrate = ::beginVuCalibration,
+                    onCalDismiss = playerViewModel::dismissVuCalibration,
                     onDismiss = { vuSyncOpen = false },
                 )
             }

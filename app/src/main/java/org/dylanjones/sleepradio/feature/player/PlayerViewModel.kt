@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,7 @@ import org.dylanjones.sleepradio.core.audio.AmbientPattern
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.audio.NoiseColor
+import org.dylanjones.sleepradio.core.audio.VuCalibrator
 import org.dylanjones.sleepradio.core.audio.VuLevels
 import org.dylanjones.sleepradio.core.broadcast.BroadcastConfig
 import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
@@ -121,6 +123,35 @@ class PlayerViewModel @Inject constructor(
     fun setVuDelayPhoneMs(ms: Int) = viewModelScope.launch { settings.setVuDelayPhoneMs(ms) }
     fun setVuDelayBluetoothMs(ms: Int) = viewModelScope.launch { settings.setVuDelayBluetoothMs(ms) }
     fun setVuDelayCustomMs(ms: Int) = viewModelScope.launch { settings.setVuDelayCustomMs(ms) }
+
+    /** Mic auto-calibration state (Phase 16B); null = not running / dismissed. */
+    private val _vuCal = MutableStateFlow<VuCalibrator.Progress?>(null)
+    val vuCal: StateFlow<VuCalibrator.Progress?> = _vuCal
+    private var vuCalJob: Job? = null
+
+    /** Play beeps, measure the audio→meter latency via the mic, save it for [bluetooth]. */
+    fun startVuCalibration(bluetooth: Boolean) {
+        vuCalJob?.cancel()
+        if (uiState.value.playback.isPlaying) playback.playPause()
+        _vuCal.value = VuCalibrator.Progress.Measuring(0, 0, 0)
+        vuCalJob = viewModelScope.launch {
+            VuCalibrator(appContext).run(bluetooth) { p ->
+                _vuCal.value = p
+                if (p is VuCalibrator.Progress.Done) {
+                    viewModelScope.launch {
+                        if (bluetooth) settings.setVuDelayBluetoothMs(p.delayMs)
+                        else settings.setVuDelayPhoneMs(p.delayMs)
+                    }
+                }
+            }
+        }
+    }
+
+    fun dismissVuCalibration() {
+        vuCalJob?.cancel()
+        vuCalJob = null
+        _vuCal.value = null
+    }
 
     val uiState: StateFlow<PlayerUiState> =
         combine(
