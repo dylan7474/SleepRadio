@@ -6,6 +6,7 @@ import android.media.AudioTrack
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import org.dylanjones.sleepradio.core.audio.VoiceEq
 import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlin.math.tanh
@@ -125,6 +126,10 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
     private fun toClip(audio: TtsAudio): Clip {
         val samples = audio.samples
         if (samples.isEmpty()) return Clip(ShortArray(0), audio.sampleRate)
+
+        // Phase 13A: broadcast-voice EQ (de-mud + presence) before the leveller,
+        // so the RMS target and limiter absorb whatever it cuts or boosts.
+        VoiceEq.process(samples, audio.sampleRate)
 
         // Piper speech has a high crest factor — brief peaks over a low average —
         // so peak-normalising alone still leaves it much quieter than music.
