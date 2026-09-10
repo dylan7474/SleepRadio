@@ -27,14 +27,31 @@ class TrackProbe(
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
     /**
-     * @property gain    Phase 12 levelling gain (1f on any failure).
-     * @property startMs Clip start — 0 unless real leading silence was found in range.
-     * @property endMs   Clip end — 0 (= no clip, play to the natural end) unless
-     *                   real trailing silence was found in range.
+     * @property gain       Phase 12 levelling gain (1f on any failure).
+     * @property startMs    Clip start — 0 unless real leading silence was found in range.
+     * @property endMs      Clip end — 0 (= no clip, play to the natural end) unless
+     *                      real trailing silence was found in range.
+     * @property durationMs Container duration in ms, or -1 if unknown. With
+     *                      [startMs] / [endMs] this gives the actual played
+     *                      length, used to time the DJ's spoken time checks
+     *                      without waiting on `Player.duration`.
      */
-    data class TrackScan(val gain: Float, val startMs: Long, val endMs: Long) {
+    data class TrackScan(
+        val gain: Float,
+        val startMs: Long,
+        val endMs: Long,
+        val durationMs: Long = -1L,
+    ) {
+        /** Length actually played (clip-aware), or -1 if not derivable. */
+        val playableMs: Long
+            get() = when {
+                endMs > 0L -> endMs - startMs
+                durationMs > 0L -> durationMs - startMs
+                else -> -1L
+            }
+
         companion object {
-            val NONE = TrackScan(1f, 0L, 0L)
+            val NONE = TrackScan(1f, 0L, 0L, -1L)
         }
     }
 
@@ -52,7 +69,8 @@ class TrackProbe(
         synchronized(cache) { cache[uri] = scan }
         Log.d(
             TAG,
-            "scan gain=${"%.2f".format(scan.gain)} clip=[${scan.startMs}..${scan.endMs}]ms for $uri",
+            "scan gain=${"%.2f".format(scan.gain)} clip=[${scan.startMs}..${scan.endMs}]ms " +
+                "dur=${scan.durationMs} playable=${scan.playableMs} for $uri",
         )
         scan
     }
@@ -114,7 +132,7 @@ class TrackProbe(
 
         val fileEndMs = if (durationMs > 0L) durationMs else lastSoundEndMs
         val trim = edgeTrim(fileEndMs, firstSoundMs, lastSoundEndMs)
-        return TrackScan(gain, trim[0], trim[1])
+        return TrackScan(gain, trim[0], trim[1], durationMs)
     }
 
     private class WindowScan(

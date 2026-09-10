@@ -741,7 +741,15 @@ class PlaybackConnection @Inject constructor(
      * returns 0 if it never does (unknown length / not ready).
      */
     private suspend fun awaitTrackRemainingMs(): Long {
-        repeat(10) {
+        // Prefer the length TrackProbe already decoded for this track: right
+        // after prepare() the controller's duration is usually still TIME_UNSET,
+        // and timing out here used to return 0 — so the time check was spoken as
+        // of the track *start*, minutes stale.
+        scannedRemainingMs()?.let {
+            Log.d(TAG, "broadcast: remaining ${it}ms from scan")
+            return it
+        }
+        repeat(15) {
             val remaining = withContext(mainDispatcher) {
                 val c = controller ?: return@withContext -1L
                 val d = c.duration
@@ -752,6 +760,18 @@ class PlaybackConnection @Inject constructor(
             delay(200)
         }
         return 0L
+    }
+
+    /** Remaining play time of the current broadcast track from its pre-scan
+     *  (clip-aware container duration minus the current position); null if the
+     *  scan isn't cached or carries no usable duration. */
+    private suspend fun scannedRemainingMs(): Long? {
+        val uri = currentBroadcast?.uri ?: return null
+        val playable = trackProbe.cached(uri)?.playableMs?.takeIf { it > 0L } ?: return null
+        val pos = withContext(mainDispatcher) {
+            controller?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        }
+        return (playable - pos).coerceAtLeast(0L)
     }
 
     /** Channel A hit STATE_ENDED during a broadcast: run the gap's segue, then advance. */
