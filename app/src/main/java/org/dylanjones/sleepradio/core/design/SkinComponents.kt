@@ -203,6 +203,55 @@ fun CircleGlyphButton(
     }
 }
 
+/** The big glowing play/pause disc, with its own pulsing ring. */
+@Composable
+fun PlayPauseButton(
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 84.dp,
+) {
+    val c = LocalAppSkin.current.colors
+    val pulse = rememberInfiniteTransition(label = "ring")
+    val glow by pulse.animateFloat(
+        initialValue = if (isPlaying) 0.15f else 0.28f,
+        targetValue = if (isPlaying) 0.55f else 0.28f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "glow",
+    )
+    Box(modifier.size(size), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(listOf(c.glow.copy(alpha = glow), Color.Transparent)),
+                ),
+        )
+        Box(
+            Modifier
+                .size(size * 0.83f)
+                .clip(CircleShape)
+                .background(c.panelTop)
+                .border(2.dp, c.accent, CircleShape)
+                .clickable(
+                    onClickLabel = if (isPlaying) "Pause" else "Play",
+                    onClick = onClick,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = if (isPlaying) "⏸" else "▶",
+                color = c.textPrimary,
+                fontSize = (size.value * 0.31f).sp,
+            )
+        }
+    }
+}
+
 /** prev · big glowing play/pause · next */
 @Composable
 fun TransportCluster(
@@ -215,19 +264,6 @@ fun TransportCluster(
     modifier: Modifier = Modifier,
     isAudiobook: Boolean = false,
 ) {
-    val c = LocalAppSkin.current.colors
-
-    val pulse = rememberInfiniteTransition(label = "ring")
-    val glow by pulse.animateFloat(
-        initialValue = if (isPlaying) 0.15f else 0.28f,
-        targetValue = if (isPlaying) 0.55f else 0.28f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "glow",
-    )
-
     androidx.compose.foundation.layout.Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally),
@@ -239,39 +275,7 @@ fun TransportCluster(
             onClick = onPrevious,
             enabled = hasPrevious,
         )
-        Box(
-            Modifier.size(84.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                Modifier
-                    .size(84.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            listOf(c.glow.copy(alpha = glow), Color.Transparent),
-                        ),
-                    ),
-            )
-            Box(
-                Modifier
-                    .size(70.dp)
-                    .clip(CircleShape)
-                    .background(c.panelTop)
-                    .border(2.dp, c.accent, CircleShape)
-                    .clickable(
-                        onClickLabel = if (isPlaying) "Pause" else "Play",
-                        onClick = onPlayPause,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = if (isPlaying) "⏸" else "▶",
-                    color = c.textPrimary,
-                    fontSize = 26.sp,
-                )
-            }
-        }
+        PlayPauseButton(isPlaying = isPlaying, onClick = onPlayPause)
         CircleGlyphButton(
             "⏭",
             contentDescription = if (isAudiobook) "Forward one minute" else "Next",

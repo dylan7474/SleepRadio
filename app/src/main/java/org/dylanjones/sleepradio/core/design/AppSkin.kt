@@ -6,11 +6,20 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 /**
- * The two selectable visual skins. See RETROSYNC_PLAN.md section 3. Each skin is
- * a full `PlayerScreen` layout (not just a recolour); [AppSkin] carries the
- * shared token vocabulary both layouts draw from.
+ * The selectable visual skins. See RETROSYNC_PLAN.md section 3. Neon and
+ * Industrial share one player layout and differ only in colour / texture;
+ * Studio ([PlayerLayout.CONSOLE]) rearranges the lower half. [AppSkin] carries
+ * the shared token vocabulary they all draw from.
  */
-enum class SkinId { NEON, INDUSTRIAL }
+enum class SkinId { NEON, INDUSTRIAL, STUDIO }
+
+/**
+ * Which player layout a skin uses for the lower half of the screen.
+ *  - [CLASSIC]  transport cluster over a VOL/BAL knob row; FFT visualiser strip.
+ *  - [CONSOLE]  one row — RWD · VOL · PAUSE · BAL · FFWD; half-height SLEEP/NOISE
+ *    tiles; analogue L/R VU meters in the reclaimed space; no visualiser strip.
+ */
+enum class PlayerLayout { CLASSIC, CONSOLE }
 
 /** Semantic colour tokens for a skin. */
 @Immutable
@@ -37,6 +46,7 @@ interface AppSkin {
     val id: SkinId
     val displayName: String
     val colors: SkinColors
+    val layout: PlayerLayout get() = PlayerLayout.CLASSIC
 }
 
 fun SkinColors.screenBrush(): Brush = Brush.verticalGradient(listOf(screenTop, screenBottom))
@@ -52,4 +62,5 @@ val LocalAppSkin = staticCompositionLocalOf<AppSkin> { NeonSkin }
 fun skinFor(id: SkinId): AppSkin = when (id) {
     SkinId.NEON -> NeonSkin
     SkinId.INDUSTRIAL -> IndustrialSkin
+    SkinId.STUDIO -> StudioSkin
 }

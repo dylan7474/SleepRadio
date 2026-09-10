@@ -6,7 +6,9 @@ import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.common.util.UnstableApi
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.abs
 import kotlin.math.exp
+import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.tanh
 
@@ -33,10 +35,26 @@ class GainAudioProcessor : BaseAudioProcessor() {
 
     /** Per-sample smoothing coefficient, derived from the configured sample rate. */
     private var smoothK: Float = 1f
+    private var channels: Int = 2
+
+    /** Peak output level (0..1) per stereo channel since the last [readLevels].
+     *  Written on the audio thread, read by the VU sampler — [Volatile] floats,
+     *  so a lost buffer at the read/reset boundary is harmless for a meter. */
+    @Volatile private var peakL: Float = 0f
+    @Volatile private var peakR: Float = 0f
 
     /** Set the target Channel-A gain. 1f = unchanged; clamped to sane bounds. */
     fun setGain(gain: Float) {
         targetGain = gain.coerceIn(MixerController.MIN_ITEM_GAIN, MixerController.MAX_ITEM_GAIN)
+    }
+
+    /** `[left, right]` peak since the previous call, then reset to 0. */
+    fun readLevels(): FloatArray {
+        val l = peakL
+        val r = peakR
+        peakL = 0f
+        peakR = 0f
+        return floatArrayOf(l, r)
     }
 
     override fun onConfigure(
@@ -45,6 +63,7 @@ class GainAudioProcessor : BaseAudioProcessor() {
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT) {
             return AudioProcessor.AudioFormat.NOT_SET
         }
+        channels = inputAudioFormat.channelCount.coerceAtLeast(1)
         smoothK = (1.0 - exp(-1.0 / (SMOOTH_TAU_S * inputAudioFormat.sampleRate)))
             .toFloat().coerceIn(1e-5f, 1f)
         return inputAudioFormat
@@ -59,31 +78,43 @@ class GainAudioProcessor : BaseAudioProcessor() {
         targetGain = 1f
         currentGain = 1f
         smoothK = 1f
+        peakL = 0f
+        peakR = 0f
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         val size = inputBuffer.remaining()
         if (size == 0) return
         val output = replaceOutputBuffer(size).order(ByteOrder.LITTLE_ENDIAN)
+        inputBuffer.order(ByteOrder.LITTLE_ENDIAN)
 
         val target = targetGain
-        if (nearUnity(currentGain) && nearUnity(target)) {
-            currentGain = target
-            output.put(inputBuffer)
-            output.flip()
-            return
-        }
+        val passthrough = nearUnity(currentGain) && nearUnity(target)
+        if (passthrough) currentGain = target
 
-        inputBuffer.order(ByteOrder.LITTLE_ENDIAN)
+        val stereo = channels >= 2
         val end = inputBuffer.limit()
         var i = inputBuffer.position()
         var g = currentGain
+        var idx = 0
+        var pkL = 0f
+        var pkR = 0f
         while (i < end - 1) {
-            g += (target - g) * smoothK
-            output.putShort(limitSample(inputBuffer.getShort(i).toInt(), g).toShort())
+            val out = if (passthrough) {
+                inputBuffer.getShort(i).toInt()
+            } else {
+                g += (target - g) * smoothK
+                limitSample(inputBuffer.getShort(i).toInt(), g)
+            }
+            output.putShort(out.toShort())
+            val a = abs(out) / 32768f
+            if (stereo && (idx and 1) == 1) { if (a > pkR) pkR = a } else if (a > pkL) pkL = a
+            idx++
             i += 2
         }
-        currentGain = g
+        if (!passthrough) currentGain = g
+        peakL = max(peakL, pkL)
+        peakR = max(peakR, if (stereo) pkR else pkL)
         inputBuffer.position(end)
         output.flip()
     }

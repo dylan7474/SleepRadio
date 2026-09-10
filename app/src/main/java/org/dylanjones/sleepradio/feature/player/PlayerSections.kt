@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.dylanjones.sleepradio.core.design.LocalAppSkin
+import org.dylanjones.sleepradio.core.design.PlayerLayout
 import org.dylanjones.sleepradio.core.design.SkinId
 import org.dylanjones.sleepradio.core.design.panelBrush
 import org.dylanjones.sleepradio.playback.PlaybackState
@@ -182,14 +183,17 @@ fun NowPlayingBlock(
                 ),
             )
         }
-        AudioVisualizerStrip(
-            playing = state.isPlaying,
-            color = c.accent,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(18.dp)
-                .padding(top = 4.dp),
-        )
+        // The Studio (CONSOLE) skin shows analogue VU meters lower down instead.
+        if (skin.layout != PlayerLayout.CONSOLE) {
+            AudioVisualizerStrip(
+                playing = state.isPlaying,
+                color = c.accent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(18.dp)
+                    .padding(top = 4.dp),
+            )
+        }
     }
 }
 

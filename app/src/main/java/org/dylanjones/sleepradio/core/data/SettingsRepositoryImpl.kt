@@ -24,6 +24,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override val skin: Flow<SkinId> = dataStore.data.map { prefs ->
         when (prefs[KEY_SKIN]) {
             SkinId.INDUSTRIAL.name -> SkinId.INDUSTRIAL
+            SkinId.STUDIO.name -> SkinId.STUDIO
             else -> SkinId.NEON
         }
     }

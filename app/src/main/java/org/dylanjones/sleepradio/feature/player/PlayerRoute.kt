@@ -191,7 +191,7 @@ fun PlayerRoute(
         },
     ) {
         SkinBackground(skin) {
-            PlayerScreen(state, actions, Modifier.fillMaxSize())
+            PlayerScreen(state, actions, Modifier.fillMaxSize(), vu = playerViewModel.vu)
 
             if (!skinChosen) {
                 SkinPickerOverlay(onPick = rootViewModel::chooseSkin)
@@ -379,6 +379,11 @@ private fun AppDrawer(
                 label = { Text("Industrial") },
                 selected = currentSkin == SkinId.INDUSTRIAL,
                 onClick = { onSkin(SkinId.INDUSTRIAL) },
+            )
+            NavigationDrawerItem(
+                label = { Text("Studio") },
+                selected = currentSkin == SkinId.STUDIO,
+                onClick = { onSkin(SkinId.STUDIO) },
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             NavigationDrawerItem(
@@ -698,6 +703,8 @@ private fun SkinPickerOverlay(onPick: (SkinId) -> Unit) {
             SkinChoiceCard("NEON", "Cyberpunk cyan & magenta") { onPick(SkinId.NEON) }
             Spacer(Modifier.padding(6.dp))
             SkinChoiceCard("INDUSTRIAL", "Brushed steel, blue & amber") { onPick(SkinId.INDUSTRIAL) }
+            Spacer(Modifier.padding(6.dp))
+            SkinChoiceCard("STUDIO", "Warm console with L/R VU meters") { onPick(SkinId.STUDIO) }
         }
     }
 }

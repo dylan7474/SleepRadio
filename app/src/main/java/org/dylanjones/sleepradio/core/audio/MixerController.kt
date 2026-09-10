@@ -7,6 +7,13 @@ import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Peak output level per stereo channel, 0..1. */
+data class VuLevels(val left: Float, val right: Float) {
+    companion object {
+        val SILENT = VuLevels(0f, 0f)
+    }
+}
+
 /**
  * Holds the live [MixerState] (VOL / BAL / binaural level) and [AmbientState]
  * (noise / binaural on-off + config). Pure state — the players read these:
@@ -37,6 +44,20 @@ class MixerController @Inject constructor() {
 
     fun setItemGain(value: Float) {
         _itemGain.value = value.coerceIn(MIN_ITEM_GAIN, MAX_ITEM_GAIN)
+    }
+
+    /**
+     * Live Channel-A output level, per stereo channel (0..1 peak). Fed by a
+     * sampler in [org.dylanjones.sleepradio.playback.PlaybackService] reading the
+     * sink's `GainAudioProcessor`; drives the Studio skin's analogue VU meters.
+     * Only the music path — ambient noise / binaural / DJ voice are on their own
+     * `AudioTrack`s and never reach here.
+     */
+    private val _vu = MutableStateFlow(VuLevels.SILENT)
+    val vu: StateFlow<VuLevels> = _vu.asStateFlow()
+
+    fun setVu(levels: VuLevels) {
+        _vu.value = levels
     }
 
     /** VOL knob, 0..1 — master volume of the combined mix. */

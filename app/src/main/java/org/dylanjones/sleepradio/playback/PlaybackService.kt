@@ -22,10 +22,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.dylanjones.sleepradio.core.audio.GainAudioProcessor
 import org.dylanjones.sleepradio.core.audio.MixerController
+import org.dylanjones.sleepradio.core.audio.VuLevels
+import kotlin.math.max
 
 /**
  * Channel A (main audio) playback host. Runs as a [MediaSessionService] so
@@ -72,6 +77,21 @@ class PlaybackService : MediaSessionService() {
             .onEach { gainProcessor.setGain(it) }
             .launchIn(scope)
 
+        // Sample the sink's per-channel peak off the audio thread and publish it
+        // for the Studio skin's VU meters. Decay toward 0 so the needles fall
+        // when playback stops (no buffers -> readLevels() returns 0).
+        scope.launch {
+            var l = 0f
+            var r = 0f
+            while (isActive) {
+                val (pkL, pkR) = gainProcessor.readLevels()
+                l = max(pkL, l * VU_DECAY)
+                r = max(pkR, r * VU_DECAY)
+                mixer.setVu(VuLevels(l, r))
+                delay(VU_SAMPLE_MS)
+            }
+        }
+
         val player = ExoPlayer.Builder(this)
             .setRenderersFactory(NormalisingRenderersFactory(this, gainProcessor))
             .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(dataSourceFactory))
@@ -105,6 +125,12 @@ class PlaybackService : MediaSessionService() {
         }
         mediaSession = null
         super.onDestroy()
+    }
+
+    private companion object {
+        const val VU_SAMPLE_MS = 40L
+        /** Per-tick multiplier applied to the held level when no new peak arrives. */
+        const val VU_DECAY = 0.80f
     }
 }
 

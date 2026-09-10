@@ -21,6 +21,7 @@ import org.dylanjones.sleepradio.core.audio.AmbientPattern
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.audio.NoiseColor
+import org.dylanjones.sleepradio.core.audio.VuLevels
 import org.dylanjones.sleepradio.core.broadcast.BroadcastConfig
 import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
 import org.dylanjones.sleepradio.core.broadcast.Chattiness
@@ -100,6 +101,10 @@ class PlayerViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalState())
+
+    /** Live Channel-A L/R output level for the Studio skin's VU meters. Kept off
+     *  [uiState] so its ~25 Hz updates don't recompose the whole player. */
+    val vu: StateFlow<VuLevels> = mixer.vu
 
     val uiState: StateFlow<PlayerUiState> =
         combine(
