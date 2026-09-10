@@ -47,6 +47,9 @@ one shared control layout.
   a quick decode‑scan of the file about to play sets a per‑item gain (up *or* down,
   with a soft limiter), so wildly inconsistent masters don't jump in volume.
   Nothing is pre‑scanned or written to storage
+- **Tight segues**: that same scan finds each track's trailing digital black (and
+  any leading silence) and clips it, so the DJ comes in right after the music
+  instead of after a dead gap — with guards so a real quiet fade‑out is left alone
 - A track that won't decode is skipped instead of stalling the show
 - No API keys, works with no network once the voice is installed (the only
   network use is the one‑time voice download, which is also avoidable)
@@ -124,7 +127,7 @@ sherpa‑onnx 1.13.4 (Piper TTS, via JitPack) · `minSdk 31`, `target/compileSdk
 
 ```
 core/audio      MixerState/Controller, NoiseGenerator, BinauralGenerator, AmbientPattern,
-                GainAudioProcessor + LoudnessProbe (broadcast levelling), VoiceEq (DJ voice EQ)
+                GainAudioProcessor + TrackProbe (broadcast levelling + edge-silence trim), VoiceEq (DJ voice EQ)
 core/broadcast  BroadcastSelector, ShowClock, DjScriptBuilder (auto-DJ scripting)
 core/data       SourceModels, SettingsRepository (DataStore), RadioDirectory, Room DB
 core/design     AppSkin / SkinColors, Neon & Industrial skins, RotaryKnob, SkinComponents
@@ -149,8 +152,8 @@ plan covered Phase 0 → Phase 8 (foundation → shippable v1) plus Phase 9
 Phase 9 (Broadcast Radio) has landed, plus a round of post‑v1 Broadcast polish
 (Maximum chattiness, announcer level/speed, bring‑your‑own jingles, time checks
 timed to when they're heard, decode‑error skip, just‑in‑time loudness levelling,
-DJ‑voice EQ). Nothing below is committed — it's the shortlist for after more real
-bedside use.
+DJ‑voice EQ, track‑edge silence trimming). Nothing below is committed — it's the
+shortlist for after more real bedside use.
 
 **Audio & sources**
 - [ ] Auto‑reconnect for dropped radio streams (backoff + a "reconnecting…" state)
