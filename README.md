@@ -34,7 +34,8 @@ one shared control layout.
   import), or **your own** cloned Piper voice, imported on your device and never
   uploaded or committed
 - **Announcer level & speed** sliders — the DJ voice rides on top of the VOL knob,
-  and reads slower or faster (70–130 %) to taste
+  and reads slower or faster (70–130 %) to taste; the voice is EQ'd for clarity on
+  small / in‑car speakers (high‑pass, low‑mid cut, presence lift)
 - **Chattiness**: a link every 1 / 2 / 3 / 5 tracks — *Maximum* introduces and
   back‑announces every single track
 - **Jingles**: point it at a folder of your own station idents / stings and one
@@ -42,6 +43,10 @@ one shared control layout.
   back‑announce → jingle → next‑track intro
 - **Wind‑down**: once the sleep timer is armed the DJ eases off (and jingles
   stop), then goes silent for the last few minutes while the music fades
+- **Even levels**: every rotation track and jingle is loudness‑matched on the fly —
+  a quick decode‑scan of the file about to play sets a per‑item gain (up *or* down,
+  with a soft limiter), so wildly inconsistent masters don't jump in volume.
+  Nothing is pre‑scanned or written to storage
 - A track that won't decode is skipped instead of stalling the show
 - No API keys, works with no network once the voice is installed (the only
   network use is the one‑time voice download, which is also avoidable)
@@ -83,7 +88,8 @@ Requires the Android SDK (compileSdk 37) and a JDK 17+ (Android Studio's bundled
 ./gradlew :app:assembleDebug
 
 # Unit tests (mixer math, sleep scale, settings codecs, broadcast selector /
-# show-clock / DJ scripts / spoken time, voice-pack resolve & install)
+# show-clock / DJ scripts / spoken time, voice-pack resolve & install,
+# loudness gain / voice-EQ biquads)
 ./gradlew :app:testDebugUnitTest
 
 # Signed release APK (R8 minified).
@@ -117,7 +123,8 @@ sherpa‑onnx 1.13.4 (Piper TTS, via JitPack) · `minSdk 31`, `target/compileSdk
 ### Layout
 
 ```
-core/audio      MixerState/Controller, NoiseGenerator, BinauralGenerator, AmbientPattern
+core/audio      MixerState/Controller, NoiseGenerator, BinauralGenerator, AmbientPattern,
+                GainAudioProcessor + LoudnessProbe (broadcast levelling), VoiceEq (DJ voice EQ)
 core/broadcast  BroadcastSelector, ShowClock, DjScriptBuilder (auto-DJ scripting)
 core/data       SourceModels, SettingsRepository (DataStore), RadioDirectory, Room DB
 core/design     AppSkin / SkinColors, Neon & Industrial skins, RotaryKnob, SkinComponents
@@ -125,7 +132,7 @@ core/tts        OfflineTtsEngine (sherpa-onnx), DjVoicePlayer, VoicePack + insta
 feature/player  PlayerRoute / PlayerViewModel / PlayerScreen + dialogs, BroadcastVoiceViewModel
 feature/root    RootViewModel (skin selection)
 media           MusicRepository (SAF folder walk + jingle folder), AudiobookRepository
-playback        PlaybackService (Media3, Channel A),
+playback        PlaybackService (Media3, Channel A, + loudness-levelling gain stage),
                 PlaybackConnection (+ broadcast segue: links, jingles, time checks),
                 AmbientPlaybackService (B/C)
 tools/          build-stock-voice.sh
@@ -141,8 +148,9 @@ plan covered Phase 0 → Phase 8 (foundation → shippable v1) plus Phase 9
 
 Phase 9 (Broadcast Radio) has landed, plus a round of post‑v1 Broadcast polish
 (Maximum chattiness, announcer level/speed, bring‑your‑own jingles, time checks
-timed to when they're heard, decode‑error skip). Nothing below is committed —
-it's the shortlist for after more real bedside use.
+timed to when they're heard, decode‑error skip, just‑in‑time loudness levelling,
+DJ‑voice EQ). Nothing below is committed — it's the shortlist for after more real
+bedside use.
 
 **Audio & sources**
 - [ ] Auto‑reconnect for dropped radio streams (backoff + a "reconnecting…" state)
