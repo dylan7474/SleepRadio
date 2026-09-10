@@ -34,7 +34,7 @@ import kotlinx.coroutines.withContext
 import androidx.media3.common.PlaybackParameters
 import org.dylanjones.sleepradio.core.audio.AudioChannel
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
-import org.dylanjones.sleepradio.core.audio.LoudnessProbe
+import org.dylanjones.sleepradio.core.audio.TrackProbe
 import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.broadcast.BroadcastConfig
 import org.dylanjones.sleepradio.core.broadcast.BroadcastSelector
@@ -112,8 +112,9 @@ class PlaybackConnection @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
 
-    /** Phase 12: just-in-time per-item loudness scan for the broadcast rotation. */
-    private val loudnessProbe = LoudnessProbe()
+    /** Phase 12/14: just-in-time scan (loudness gain + edge-silence trim) of the
+     *  broadcast rotation, run a track ahead. */
+    private val trackProbe = TrackProbe()
 
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -256,7 +257,7 @@ class PlaybackConnection @Inject constructor(
         controller?.volume = gain.coerceIn(0f, 1f)
     }
 
-    // --- Broadcast loudness levelling (Phase 12) ---
+    // --- Broadcast loudness levelling (Phase 12) + edge-silence trim (Phase 14) ---
 
     /**
      * Set the sink's per-item gain ([MixerController.itemGain] → the
@@ -267,20 +268,38 @@ class PlaybackConnection @Inject constructor(
      * lands. Non-broadcast playback resets this to 1f via [endBroadcastInternal].
      */
     private fun applyItemGain(uri: String) {
-        loudnessProbe.cached(uri)?.let { mixer.setItemGain(it); return }
+        trackProbe.cached(uri)?.let { mixer.setItemGain(it.gain); return }
         mixer.setItemGain(1f)
         scope.launch(Dispatchers.Default) {
-            val g = loudnessProbe.gainFor(appContext, uri)
+            val g = trackProbe.scanFor(appContext, uri).gain
             withContext(mainDispatcher) {
                 if (isBroadcast && controller?.currentMediaItem?.mediaId == uri) mixer.setItemGain(g)
             }
         }
     }
 
-    /** Pre-measure [uri] so [applyItemGain] is instant when it plays. */
+    /** Pre-scan [uri] so [applyItemGain] / the clip config are ready when it plays. */
     private fun warmItemGain(uri: String?) {
         val u = uri ?: return
-        scope.launch(Dispatchers.Default) { loudnessProbe.warm(appContext, u) }
+        scope.launch(Dispatchers.Default) { trackProbe.warm(appContext, u) }
+    }
+
+    /**
+     * Phase 14: clip the broadcast track [uri] to its real musical start/end
+     * from the pre-scan (trailing digital black, occasional leading silence), so
+     * the DJ link lands right after the music. Null when nothing worth trimming
+     * was found, the scan hasn't run yet (first track of a show), or [uri] is a
+     * jingle. `STATE_ENDED` then fires at the clipped end → the existing segue.
+     */
+    private fun broadcastClip(uri: String): MediaItem.ClippingConfiguration? {
+        val scan = trackProbe.cached(uri) ?: return null
+        if (scan.startMs <= 0L && scan.endMs <= 0L) return null
+        return MediaItem.ClippingConfiguration.Builder()
+            .apply {
+                if (scan.startMs > 0L) setStartPositionMs(scan.startMs)
+                if (scan.endMs > 0L) setEndPositionMs(scan.endMs)
+            }
+            .build()
     }
 
     // --- Sleep timer (Channel A only; B/C keep playing) ---
@@ -581,22 +600,26 @@ class PlaybackConnection @Inject constructor(
         val c = controller ?: return
         applyItemGain(t.uri)
         c.setPlaybackParameters(PlaybackParameters(1f))
-        c.setMediaItem(
-            MediaItem.Builder()
-                .setUri(t.uri)
-                .setMediaId(t.uri)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(t.title)
-                        .setArtist(t.artist)
-                        .setAlbumTitle(t.album)
-                        .setStation("SleepRadio")
-                        .setIsBrowsable(false)
-                        .setIsPlayable(true)
-                        .build(),
-                )
-                .build(),
-        )
+        val builder = MediaItem.Builder()
+            .setUri(t.uri)
+            .setMediaId(t.uri)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(t.title)
+                    .setArtist(t.artist)
+                    .setAlbumTitle(t.album)
+                    .setStation("SleepRadio")
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .build(),
+            )
+        broadcastClip(t.uri)?.let { clip ->
+            builder.setClippingConfiguration(clip)
+            trackProbe.cached(t.uri)?.let {
+                Log.d(TAG, "broadcast: clip '${t.title}' to [${it.startMs}..${it.endMs}]ms")
+            }
+        }
+        c.setMediaItem(builder.build())
         c.prepare()
         c.play()
     }
