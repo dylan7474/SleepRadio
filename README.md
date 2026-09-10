@@ -7,9 +7,10 @@ presenter — and layers **two ambient channels** underneath it: procedural
 coloured noise and binaural beats. A sleep timer fades and stops the main source
 on schedule; the ambient channels keep playing.
 
-Built for a Pixel 9, in Kotlin + Jetpack Compose. Two selectable visual skins
-(**Neon** — cyberpunk cyan/magenta; **Industrial** — brushed steel, blue/amber),
-one shared control layout.
+Built for a Pixel 9, in Kotlin + Jetpack Compose. Three selectable skins —
+**Neon** (cyberpunk cyan/magenta) and **Industrial** (brushed steel, blue/amber)
+share one control layout; **Studio** (warm hi‑fi console) puts the controls in a
+single row and adds a pair of analogue L/R VU meters.
 
 ---
 
@@ -75,9 +76,13 @@ one shared control layout.
 
 **Elsewhere**
 - Live audio‑reactive visualiser strip (`Visualizer` on the output mix; decorative
-  fallback if `RECORD_AUDIO` is declined)
+  fallback if `RECORD_AUDIO` is declined) — replaced by the VU meters on the Studio skin
+- **Studio skin**: single control row + two analogue L/R VU meters driven by the
+  music and the DJ voice (not the ambient channels), with an output‑latency
+  "sync" setting per output route and an optional mic auto‑calibration that
+  beeps until it converges
 - Navigation drawer: Now playing · Ambient mix · Sleep timer · Radio stations ·
-  Broadcast voice · skin · About
+  Broadcast voice · skin · VU meter sync · About
 - Portrait‑locked, edge‑to‑edge, predictive back, TalkBack labels on the controls
 
 ---
@@ -127,15 +132,19 @@ sherpa‑onnx 1.13.4 (Piper TTS, via JitPack) · `minSdk 31`, `target/compileSdk
 
 ```
 core/audio      MixerState/Controller, NoiseGenerator, BinauralGenerator, AmbientPattern,
-                GainAudioProcessor + TrackProbe (broadcast levelling + edge-silence trim), VoiceEq (DJ voice EQ)
+                GainAudioProcessor (broadcast levelling + VU peak metering) + TrackProbe
+                (JIT loudness gain + edge-silence trim), VoiceEq (DJ voice EQ),
+                VuCalibrator (VU-meter mic latency calibration)
 core/broadcast  BroadcastSelector, ShowClock, DjScriptBuilder (auto-DJ scripting)
 core/data       SourceModels, SettingsRepository (DataStore), RadioDirectory, Room DB
-core/design     AppSkin / SkinColors, Neon & Industrial skins, RotaryKnob, SkinComponents
+core/design     AppSkin / SkinColors / PlayerLayout, Neon · Industrial · Studio skins,
+                RotaryKnob, SkinComponents
 core/tts        OfflineTtsEngine (sherpa-onnx), DjVoicePlayer, VoicePack + install/resolve
-feature/player  PlayerRoute / PlayerViewModel / PlayerScreen + dialogs, BroadcastVoiceViewModel
+feature/player  PlayerRoute / PlayerViewModel / PlayerScreen + dialogs, VuMeters,
+                VuSyncDialog, BroadcastVoiceViewModel
 feature/root    RootViewModel (skin selection)
 media           MusicRepository (SAF folder walk + jingle folder), AudiobookRepository
-playback        PlaybackService (Media3, Channel A, + loudness-levelling gain stage),
+playback        PlaybackService (Media3, Channel A, + gain stage + VU level sampler),
                 PlaybackConnection (+ broadcast segue: links, jingles, time checks),
                 AmbientPlaybackService (B/C)
 tools/          build-stock-voice.sh
@@ -154,8 +163,10 @@ Maximum chattiness, announcer level/speed, bring‑your‑own jingles, spoken ti
 checks projected from the decoded track length, decode‑error skip, just‑in‑time
 per‑track loudness levelling, a fixed DJ‑voice EQ, and track‑edge silence
 trimming — with a couple of first‑launch fixes (the Broadcast preset now
-responds to the first tap after a cold start). Nothing below is committed —
-it's the shortlist for after more real bedside use.
+responds to the first tap after a cold start). Also the **Studio skin** —
+single control row and analogue L/R VU meters, output‑latency synced per route
+with a mic auto‑calibration. Nothing below is committed — it's the shortlist
+for after more real bedside use.
 
 **Audio & sources**
 - [ ] Auto‑reconnect for dropped radio streams (backoff + a "reconnecting…" state)
@@ -183,6 +194,8 @@ it's the shortlist for after more real bedside use.
 - [ ] "Ramp down" ambient too: an optional slow taper on B/C over N hours
 
 **UX & platform**
+- [ ] Studio skin polish: engraved VU scale numbers, a tidier needle rest pose,
+      and a separate (smaller) sync delay for the DJ‑voice path
 - [ ] Home‑screen widget and/or a quick‑settings tile (start last mix, toggle sleep timer)
 - [ ] The Industrial "PATTERN board" as a fuller mixer screen (PATTERN 1–3 + a morph knob)
 - [ ] Lock‑screen / notification controls polish; media‑button (headset) handling
