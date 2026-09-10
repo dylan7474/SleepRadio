@@ -362,7 +362,11 @@ class PlayerViewModel @Inject constructor(
             }
 
             SourceType.MUSIC_FOLDER -> viewModelScope.launch {
-                val tree = local.value.musicTreeUri ?: return@launch
+                // settings.*.first() suspends for the DataStore read; local.value
+                // can still be null right after a cold launch (the flow that
+                // mirrors it into LocalState hasn't emitted yet), which is what
+                // made a fresh-launch preset tap silently no-op.
+                val tree = settings.musicTreeUri.first() ?: return@launch
                 val files = musicRepository.folderTracks(tree, slot.refId)
                 if (files.isEmpty()) return@launch
                 playback.playFolderAlbum(files, slot.label)
@@ -375,7 +379,7 @@ class PlayerViewModel @Inject constructor(
             }
 
             SourceType.AUDIOBOOK -> viewModelScope.launch {
-                val tree = local.value.audiobooksTreeUri ?: return@launch
+                val tree = settings.audiobooksTreeUri.first() ?: return@launch
                 val chapters = audiobookRepository.chapters(tree, slot.refId)
                 if (chapters.isEmpty()) return@launch
                 val progress = progressDao.get(slot.refId)?.toDomain()
@@ -393,7 +397,11 @@ class PlayerViewModel @Inject constructor(
                 local.update { it.copy(broadcastStarting = true) }
                 viewModelScope.launch {
                     try {
-                        val tree = local.value.musicTreeUri ?: return@launch
+                        // Await the real setting — local.value.musicTreeUri is
+                        // still null in the first ~second after a cold launch,
+                        // which made every Broadcast preset tap silently no-op
+                        // until the mirror flow caught up.
+                        val tree = settings.musicTreeUri.first() ?: return@launch
                         val voiceId = settings.broadcastVoice.first()
                         val pack = if (voiceId == BROADCAST_VOICE_OFF) {
                             null
