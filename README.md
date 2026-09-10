@@ -149,16 +149,25 @@ plan covered Phase 0 → Phase 8 (foundation → shippable v1) plus Phase 9
 
 ## Roadmap (post‑v1)
 
-Phase 9 (Broadcast Radio) has landed, plus a round of post‑v1 Broadcast polish
-(Maximum chattiness, announcer level/speed, bring‑your‑own jingles, time checks
-timed to when they're heard, decode‑error skip, just‑in‑time loudness levelling,
-DJ‑voice EQ, track‑edge silence trimming). Nothing below is committed — it's the
-shortlist for after more real bedside use.
+Phase 9 (Broadcast Radio) has landed, plus a run of post‑v1 Broadcast work:
+Maximum chattiness, announcer level/speed, bring‑your‑own jingles, spoken time
+checks projected from the decoded track length, decode‑error skip, just‑in‑time
+per‑track loudness levelling, a fixed DJ‑voice EQ, and track‑edge silence
+trimming — with a couple of first‑launch fixes (the Broadcast preset now
+responds to the first tap after a cold start). Nothing below is committed —
+it's the shortlist for after more real bedside use.
 
 **Audio & sources**
 - [ ] Auto‑reconnect for dropped radio streams (backoff + a "reconnecting…" state)
-- [ ] Broadcast: "talk over the intro" (duck the music under the link instead of a
-      clean gap); pull track/artist from embedded tags, not the folder name
+- [ ] Broadcast: pull track/artist from embedded tags, not the album‑folder name
+      (also the prerequisite for spoken track facts)
+- [ ] Broadcast: talk over the intro — duck the bed under the DJ link instead of
+      a hard cut (edge‑silence trimming already tightens the gap)
+- [ ] Make the DJ‑voice EQ adjustable — a "voice tone" (dark ↔ bright) or
+      Bass/Presence control in the Broadcast voice dialog
+- [ ] Extend loudness levelling + silence trimming to ordinary folder playback,
+      not just the Broadcast rotation; real‑time loudness for internet radio
+      (nothing to pre‑scan there)
 - [ ] Weather & news readouts for the Broadcast DJ (keyless sources, opt‑in,
       inert offline)
 - [ ] Per‑station now‑playing providers — e.g. Radio Paradise's JSON API for cover art and
