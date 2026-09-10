@@ -156,6 +156,7 @@ fun PlayerRoute(
     var directoryAssignSlot by remember { mutableStateOf<Int?>(null) }
     var radioStationsOpen by remember { mutableStateOf(false) }
     var broadcastVoiceOpen by remember { mutableStateOf(false) }
+    var vuSyncOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
 
     val actions = PlayerActions(
@@ -185,6 +186,7 @@ fun PlayerRoute(
                 onRadioStations = { closeDrawer(); radioStationsOpen = true },
                 onBroadcastVoice = { closeDrawer(); broadcastVoiceOpen = true },
                 onSkin = { rootViewModel.chooseSkin(it); closeDrawer() },
+                onVuSync = { closeDrawer(); vuSyncOpen = true },
                 onAbout = { closeDrawer(); aboutOpen = true },
                 onTtsTest = onTtsTest?.let { test -> { closeDrawer(); test() } },
             )
@@ -205,6 +207,26 @@ fun PlayerRoute(
                         sleepDialogOpen = false
                     },
                     onDismiss = { sleepDialogOpen = false },
+                )
+            }
+
+            if (vuSyncOpen) {
+                val auto by playerViewModel.vuSyncAuto.collectAsStateWithLifecycle()
+                val phoneMs by playerViewModel.vuDelayPhoneMs.collectAsStateWithLifecycle()
+                val btMs by playerViewModel.vuDelayBluetoothMs.collectAsStateWithLifecycle()
+                val customMs by playerViewModel.vuDelayCustomMs.collectAsStateWithLifecycle()
+                val activeMs by playerViewModel.activeVuDelayMs.collectAsStateWithLifecycle()
+                VuSyncDialog(
+                    auto = auto,
+                    phoneMs = phoneMs,
+                    bluetoothMs = btMs,
+                    customMs = customMs,
+                    activeMs = activeMs,
+                    onAuto = playerViewModel::setVuSyncAuto,
+                    onPhoneMs = playerViewModel::setVuDelayPhoneMs,
+                    onBluetoothMs = playerViewModel::setVuDelayBluetoothMs,
+                    onCustomMs = playerViewModel::setVuDelayCustomMs,
+                    onDismiss = { vuSyncOpen = false },
                 )
             }
 
@@ -327,6 +349,7 @@ private fun AppDrawer(
     onRadioStations: () -> Unit,
     onBroadcastVoice: () -> Unit,
     onSkin: (SkinId) -> Unit,
+    onVuSync: () -> Unit,
     onAbout: () -> Unit,
     onTtsTest: (() -> Unit)? = null,
 ) {
@@ -385,6 +408,13 @@ private fun AppDrawer(
                 selected = currentSkin == SkinId.STUDIO,
                 onClick = { onSkin(SkinId.STUDIO) },
             )
+            if (currentSkin == SkinId.STUDIO) {
+                NavigationDrawerItem(
+                    label = { Text("VU meter sync") },
+                    selected = false,
+                    onClick = onVuSync,
+                )
+            }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             NavigationDrawerItem(
                 label = { Text("About") },

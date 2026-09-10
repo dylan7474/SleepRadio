@@ -77,6 +77,15 @@ class MixerController @Inject constructor() {
         return v
     }
 
+    /** The output-latency compensation (ms) the VU sampler is currently applying
+     *  (Phase 16) — for the "VU meter sync" dialog's live readout. */
+    private val _activeVuDelayMs = MutableStateFlow(0)
+    val activeVuDelayMs: StateFlow<Int> = _activeVuDelayMs.asStateFlow()
+
+    fun setActiveVuDelayMs(ms: Int) {
+        _activeVuDelayMs.value = ms
+    }
+
     /** VOL knob, 0..1 — master volume of the combined mix. */
     fun setVolume(value: Float) {
         _state.update { it.copy(masterGain = value.coerceIn(0f, 1f)) }

@@ -106,6 +106,22 @@ class PlayerViewModel @Inject constructor(
      *  [uiState] so its ~25 Hz updates don't recompose the whole player. */
     val vu: StateFlow<VuLevels> = mixer.vu
 
+    // --- VU meter sync (Phase 16) — collected only by the VU-sync dialog ---
+    val vuSyncAuto = settings.vuSyncAuto
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+    val vuDelayPhoneMs = settings.vuDelayPhoneMs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 120)
+    val vuDelayBluetoothMs = settings.vuDelayBluetoothMs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 260)
+    val vuDelayCustomMs = settings.vuDelayCustomMs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 150)
+    val activeVuDelayMs: StateFlow<Int> = mixer.activeVuDelayMs
+
+    fun setVuSyncAuto(auto: Boolean) = viewModelScope.launch { settings.setVuSyncAuto(auto) }
+    fun setVuDelayPhoneMs(ms: Int) = viewModelScope.launch { settings.setVuDelayPhoneMs(ms) }
+    fun setVuDelayBluetoothMs(ms: Int) = viewModelScope.launch { settings.setVuDelayBluetoothMs(ms) }
+    fun setVuDelayCustomMs(ms: Int) = viewModelScope.launch { settings.setVuDelayCustomMs(ms) }
+
     val uiState: StateFlow<PlayerUiState> =
         combine(
             local,

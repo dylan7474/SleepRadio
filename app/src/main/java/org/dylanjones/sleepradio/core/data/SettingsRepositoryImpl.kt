@@ -142,6 +142,34 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_JINGLE_EVERY] = tracks.coerceIn(1, 10) }
     }
 
+    override val vuSyncAuto: Flow<Boolean> =
+        dataStore.data.map { it[KEY_VU_SYNC_AUTO] ?: true }
+
+    override suspend fun setVuSyncAuto(auto: Boolean) {
+        dataStore.edit { it[KEY_VU_SYNC_AUTO] = auto }
+    }
+
+    override val vuDelayPhoneMs: Flow<Int> =
+        dataStore.data.map { (it[KEY_VU_DELAY_PHONE] ?: 120).coerceIn(0, VU_DELAY_MAX_MS) }
+
+    override suspend fun setVuDelayPhoneMs(ms: Int) {
+        dataStore.edit { it[KEY_VU_DELAY_PHONE] = ms.coerceIn(0, VU_DELAY_MAX_MS) }
+    }
+
+    override val vuDelayBluetoothMs: Flow<Int> =
+        dataStore.data.map { (it[KEY_VU_DELAY_BT] ?: 260).coerceIn(0, VU_DELAY_MAX_MS) }
+
+    override suspend fun setVuDelayBluetoothMs(ms: Int) {
+        dataStore.edit { it[KEY_VU_DELAY_BT] = ms.coerceIn(0, VU_DELAY_MAX_MS) }
+    }
+
+    override val vuDelayCustomMs: Flow<Int> =
+        dataStore.data.map { (it[KEY_VU_DELAY_CUSTOM] ?: 150).coerceIn(0, VU_DELAY_MAX_MS) }
+
+    override suspend fun setVuDelayCustomMs(ms: Int) {
+        dataStore.edit { it[KEY_VU_DELAY_CUSTOM] = ms.coerceIn(0, VU_DELAY_MAX_MS) }
+    }
+
     private companion object {
         val KEY_SKIN = stringPreferencesKey("skin_id")
         val KEY_AUDIOBOOKS_TREE = stringPreferencesKey("audiobooks_tree_uri")
@@ -156,6 +184,10 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_JINGLES_TREE = stringPreferencesKey("jingles_tree_uri")
         val KEY_JINGLE_ENABLED = booleanPreferencesKey("broadcast_jingle_enabled")
         val KEY_JINGLE_EVERY = intPreferencesKey("broadcast_jingle_every")
+        val KEY_VU_SYNC_AUTO = booleanPreferencesKey("vu_sync_auto")
+        val KEY_VU_DELAY_PHONE = intPreferencesKey("vu_delay_phone_ms")
+        val KEY_VU_DELAY_BT = intPreferencesKey("vu_delay_bt_ms")
+        val KEY_VU_DELAY_CUSTOM = intPreferencesKey("vu_delay_custom_ms")
 
         fun patternKey(index: Int) = stringPreferencesKey("ambient_pattern_$index")
     }

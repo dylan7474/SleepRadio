@@ -93,7 +93,32 @@ interface SettingsRepository {
     val broadcastJingleEvery: Flow<Int>
 
     suspend fun setBroadcastJingleEvery(tracks: Int)
+
+    // --- Studio-skin VU meter output-latency compensation (Phase 16) ---
+
+    /** True = pick the delay by the live output route; false = use [vuDelayCustomMs]. Default true. */
+    val vuSyncAuto: Flow<Boolean>
+
+    suspend fun setVuSyncAuto(auto: Boolean)
+
+    /** VU meter delay (ms) for the phone speaker / wired output. Default 120. */
+    val vuDelayPhoneMs: Flow<Int>
+
+    suspend fun setVuDelayPhoneMs(ms: Int)
+
+    /** VU meter delay (ms) for a Bluetooth output. Default 260. */
+    val vuDelayBluetoothMs: Flow<Int>
+
+    suspend fun setVuDelayBluetoothMs(ms: Int)
+
+    /** VU meter delay (ms) used when [vuSyncAuto] is false. Default 150. */
+    val vuDelayCustomMs: Flow<Int>
+
+    suspend fun setVuDelayCustomMs(ms: Int)
 }
+
+/** Upper clamp for every VU-sync delay (ms). */
+const val VU_DELAY_MAX_MS = 500
 
 const val BROADCAST_VOICE_OFF = "off"
 const val BROADCAST_VOICE_STOCK = "stock"
