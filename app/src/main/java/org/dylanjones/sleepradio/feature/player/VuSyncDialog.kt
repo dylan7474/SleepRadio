@@ -11,10 +11,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -105,18 +105,15 @@ private fun CalibrationSection(
                 fontSize = 12.sp,
             )
             Spacer(Modifier.height(8.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                AssistChip(
                     onClick = { onCalibrate(false) },
-                    modifier = Modifier.weight(1f),
-                ) { Text("Phone", maxLines = 1) }
-                OutlinedButton(
+                    label = { Text("Phone") },
+                )
+                AssistChip(
                     onClick = { onCalibrate(true) },
-                    modifier = Modifier.weight(1f),
-                ) { Text("Bluetooth", maxLines = 1) }
+                    label = { Text("Bluetooth") },
+                )
             }
         }
 
