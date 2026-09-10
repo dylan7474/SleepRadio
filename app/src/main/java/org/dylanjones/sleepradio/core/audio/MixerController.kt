@@ -23,6 +23,22 @@ class MixerController @Inject constructor() {
     private val _ambient = MutableStateFlow(AmbientState())
     val ambient: StateFlow<AmbientState> = _ambient.asStateFlow()
 
+    /**
+     * Per-item loudness-levelling gain for Channel A (Phase 12). 1f = untouched;
+     * < 1 tames a hot master, > 1 lifts a quiet one. Set by
+     * [org.dylanjones.sleepradio.playback.PlaybackConnection] from a just-in-time
+     * decode scan of the track/jingle about to play; consumed by the
+     * `GainAudioProcessor` in [org.dylanjones.sleepradio.playback.PlaybackService]'s
+     * audio sink (routing it through `Player.volume` instead would clamp any
+     * boost to 1.0). Only Broadcast mode ever drives it away from 1f.
+     */
+    private val _itemGain = MutableStateFlow(1f)
+    val itemGain: StateFlow<Float> = _itemGain.asStateFlow()
+
+    fun setItemGain(value: Float) {
+        _itemGain.value = value.coerceIn(MIN_ITEM_GAIN, MAX_ITEM_GAIN)
+    }
+
     /** VOL knob, 0..1 — master volume of the combined mix. */
     fun setVolume(value: Float) {
         _state.update { it.copy(masterGain = value.coerceIn(0f, 1f)) }
@@ -75,5 +91,11 @@ class MixerController @Inject constructor() {
                 binaural = p.binaural,
             )
         }
+    }
+
+    companion object {
+        /** Bounds for [itemGain] — shared with [LoudnessProbe]'s clamp. */
+        const val MIN_ITEM_GAIN = 0.2f
+        const val MAX_ITEM_GAIN = 4f
     }
 }

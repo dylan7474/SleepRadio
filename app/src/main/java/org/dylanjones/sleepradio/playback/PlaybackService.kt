@@ -1,30 +1,60 @@
 package org.dylanjones.sleepradio.playback
 
+import android.content.Context
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import org.dylanjones.sleepradio.core.audio.GainAudioProcessor
+import org.dylanjones.sleepradio.core.audio.MixerController
 
 /**
  * Channel A (main audio) playback host. Runs as a [MediaSessionService] so
  * playback survives the app being backgrounded and shows a media notification /
  * lockscreen controls (Media3 provides the default notification).
  *
- * Phase 1 scope: a single ExoPlayer for local music. Channels B/C (noise,
- * binaural) and the [org.dylanjones.sleepradio.core.audio.MixerState] wiring
- * arrive in Phase 5.
+ * The ExoPlayer's audio sink carries one extra stage — a [GainAudioProcessor]
+ * for Broadcast loudness levelling (Phase 12), fed a per-item gain via
+ * [MixerController.itemGain]. It reports itself inactive for non-16-bit PCM and
+ * is a straight passthrough at unity gain, so ordinary playback is unaffected.
+ * [MixerController] is pulled from Hilt via an [EntryPoint], as in
+ * [AmbientPlaybackService] (keeps clear of Media3's own service lifecycle).
  */
+@UnstableApi
 class PlaybackService : MediaSessionService() {
 
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface Deps {
+        fun mixer(): MixerController
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var mediaSession: MediaSession? = null
 
     override fun onCreate() {
         super.onCreate()
+        val mixer = EntryPointAccessors.fromApplication(applicationContext, Deps::class.java).mixer()
+
         // For http(s) streams, ask for Shoutcast/Icecast (ICY) in-stream
         // metadata so radio stations report the current "Artist - Track" —
         // Media3 merges IcyInfo.title into Player.mediaMetadata. Wrap it in a
@@ -36,7 +66,14 @@ class PlaybackService : MediaSessionService() {
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(mapOf("Icy-MetaData" to "1"))
         val dataSourceFactory = DefaultDataSource.Factory(this, httpFactory)
+
+        val gainProcessor = GainAudioProcessor()
+        mixer.itemGain
+            .onEach { gainProcessor.setGain(it) }
+            .launchIn(scope)
+
         val player = ExoPlayer.Builder(this)
+            .setRenderersFactory(NormalisingRenderersFactory(this, gainProcessor))
             .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(dataSourceFactory))
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -61,6 +98,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        scope.cancel()
         mediaSession?.run {
             player.release()
             release()
@@ -68,4 +106,26 @@ class PlaybackService : MediaSessionService() {
         mediaSession = null
         super.onDestroy()
     }
+}
+
+/**
+ * [DefaultRenderersFactory] that splices [gain] into the audio sink's processor
+ * chain — the supported way to add a wideband gain stage that can also *boost*
+ * (Player.volume is capped at 1.0, so it can only attenuate).
+ */
+@UnstableApi
+private class NormalisingRenderersFactory(
+    context: Context,
+    private val gain: GainAudioProcessor,
+) : DefaultRenderersFactory(context) {
+
+    override fun buildAudioSink(
+        context: Context,
+        enableFloatOutput: Boolean,
+        enableAudioTrackPlaybackParams: Boolean,
+    ): AudioSink = DefaultAudioSink.Builder(context)
+        .setEnableFloatOutput(enableFloatOutput)
+        .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+        .setAudioProcessors(arrayOf(gain))
+        .build()
 }

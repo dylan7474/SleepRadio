@@ -34,6 +34,7 @@ import kotlinx.coroutines.withContext
 import androidx.media3.common.PlaybackParameters
 import org.dylanjones.sleepradio.core.audio.AudioChannel
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
+import org.dylanjones.sleepradio.core.audio.LoudnessProbe
 import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.broadcast.BroadcastConfig
 import org.dylanjones.sleepradio.core.broadcast.BroadcastSelector
@@ -110,6 +111,9 @@ class PlaybackConnection @Inject constructor(
     private val mixer: MixerController,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
+
+    /** Phase 12: just-in-time per-item loudness scan for the broadcast rotation. */
+    private val loudnessProbe = LoudnessProbe()
 
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -250,6 +254,33 @@ class PlaybackConnection @Inject constructor(
     private fun applyMainGain() {
         val gain = mixer.state.value.effectiveGain(AudioChannel.MAIN) * sleepFade * duckGain
         controller?.volume = gain.coerceIn(0f, 1f)
+    }
+
+    // --- Broadcast loudness levelling (Phase 12) ---
+
+    /**
+     * Set the sink's per-item gain ([MixerController.itemGain] → the
+     * [org.dylanjones.sleepradio.core.audio.GainAudioProcessor]) for the
+     * Channel-A item [uri] that's starting now. A cached measurement applies at
+     * once; otherwise reset to unity (don't carry the previous item's gain) and
+     * measure in the background, applying only if [uri] is still current when it
+     * lands. Non-broadcast playback resets this to 1f via [endBroadcastInternal].
+     */
+    private fun applyItemGain(uri: String) {
+        loudnessProbe.cached(uri)?.let { mixer.setItemGain(it); return }
+        mixer.setItemGain(1f)
+        scope.launch(Dispatchers.Default) {
+            val g = loudnessProbe.gainFor(appContext, uri)
+            withContext(mainDispatcher) {
+                if (isBroadcast && controller?.currentMediaItem?.mediaId == uri) mixer.setItemGain(g)
+            }
+        }
+    }
+
+    /** Pre-measure [uri] so [applyItemGain] is instant when it plays. */
+    private fun warmItemGain(uri: String?) {
+        val u = uri ?: return
+        scope.launch(Dispatchers.Default) { loudnessProbe.warm(appContext, u) }
     }
 
     // --- Sleep timer (Channel A only; B/C keep playing) ---
@@ -484,6 +515,11 @@ class PlaybackConnection @Inject constructor(
         nextBroadcast = selector?.next()
         val first = currentBroadcast ?: run { endBroadcastInternal(); return }
 
+        // Loudness-scan what opens the show while the voice/model loads (Phase 12).
+        warmItemGain(first.uri)
+        warmItemGain(startupJingleUri)
+        warmItemGain(nextBroadcast?.uri)
+
         if (voice != null) {
             if (ttsEngine == null) ttsEngine = OfflineTtsEngine()
             if (djPlayer == null) djPlayer = DjVoicePlayer(ttsEngine!!)
@@ -543,6 +579,7 @@ class PlaybackConnection @Inject constructor(
 
     private fun playSingleBroadcast(t: BroadcastTrack) {
         val c = controller ?: return
+        applyItemGain(t.uri)
         c.setPlaybackParameters(PlaybackParameters(1f))
         c.setMediaItem(
             MediaItem.Builder()
@@ -585,6 +622,8 @@ class PlaybackConnection @Inject constructor(
         val jingleDue = jingleDueThisGap(phase)
         Log.d(TAG, "broadcast: now '${currentBroadcast?.title}' by ${currentBroadcast?.artist}; " +
             "after this track: link=$kind jingle=$jingleDue (windDown=$phase)")
+        // Scan the next track's loudness now, while this one plays (Phase 12).
+        warmItemGain(nextBroadcast?.uri)
 
         val builder = scriptBuilder
         val player = djPlayer
@@ -750,6 +789,7 @@ class PlaybackConnection @Inject constructor(
 
     private fun playJingleItem(uri: String) {
         val c = controller ?: run { playingJingle = false; runNextSegueStep(); return }
+        applyItemGain(uri)
         c.setPlaybackParameters(PlaybackParameters(1f))
         c.setMediaItem(
             MediaItem.Builder()
@@ -786,6 +826,7 @@ class PlaybackConnection @Inject constructor(
         if (!isBroadcast && selector == null) return
         val wasBroadcasting = isBroadcast
         isBroadcast = false
+        mixer.setItemGain(1f) // Phase 12: only the broadcast rotation is levelled
         djSpeaking = false
         advancing = false
         broadcastGen++
