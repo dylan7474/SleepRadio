@@ -55,6 +55,21 @@ single row and adds a pair of analogue L/R VU meters.
 - No API keys, works with no network once the voice is installed (the only
   network use is the one‑time voice download, which is also avoidable)
 
+> **Naming your files for Broadcast Radio.** Until the tags‑not‑filename item
+> below lands, the auto‑DJ reads track/artist straight off the **filename**
+> (a full per‑file tag read over a real library is the slow path this was
+> specifically written to avoid). It strips a leading track number only when
+> it's followed by punctuation: `^\s*\d{1,3}\s*[-._)]+\s*` — so
+> `NN - Title.ext` (e.g. `04 - Idiot Wind.mp3`) displays as **Idiot Wind**,
+> while a plain space (`04 Idiot Wind.mp3`) is left untouched and a title that
+> genuinely starts with a number (`50 Ways to Leave Your Lover`) is never
+> mistaken for one. That punctuation requirement is deliberate, not a bug —
+> loosening it to match a bare space would start stripping real title text.
+> Point a library‑tagging tool (beets + AcoustID/MusicBrainz fingerprinting
+> works well) at `NN - Title.ext` as its target filename format and this all
+> just works; embedded tags (artist/album/title) can be anything correct,
+> since only the filename feeds the DJ.
+
 **Channel B — coloured noise**
 - White · pink · brown · blue · deep space · ambient (pink + slow LFO)
 - Procedural, on its own `AudioTrack` + writer thread; BAL knob crossfades A ↔ B
@@ -171,7 +186,8 @@ for after more real bedside use.
 **Audio & sources**
 - [ ] Auto‑reconnect for dropped radio streams (backoff + a "reconnecting…" state)
 - [ ] Broadcast: pull track/artist from embedded tags, not the album‑folder name
-      (also the prerequisite for spoken track facts)
+      (also the prerequisite for spoken track facts). Until then, name files
+      `NN - Title.ext` — see the note under Broadcast Radio above for why.
 - [ ] Broadcast: talk over the intro — duck the bed under the DJ link instead of
       a hard cut (edge‑silence trimming already tightens the gap)
 - [ ] Make the DJ‑voice EQ adjustable — a "voice tone" (dark ↔ bright) or
