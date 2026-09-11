@@ -118,35 +118,37 @@ fun PlayerScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val skipTransport = pb.isAudiobook || pb.isPodcast
                 CircleGlyphButton(
                     "⏮",
-                    contentDescription = if (pb.isAudiobook) "Back one minute" else "Previous",
+                    contentDescription = if (skipTransport) "Back one minute" else "Previous",
                     onClick = actions.onPrevious,
-                    enabled = pb.isAudiobook || pb.hasPrevious,
+                    enabled = skipTransport || pb.hasPrevious,
                 )
                 RotaryKnob("VOL", state.volume, actions.onVolumeChange, size = 52.dp)
                 PlayPauseButton(isPlaying = pb.isPlaying, onClick = actions.onPlayPause, size = 68.dp)
                 RotaryKnob("BAL", state.balance, actions.onBalanceChange, size = 52.dp)
                 CircleGlyphButton(
                     "⏭",
-                    contentDescription = if (pb.isAudiobook) "Forward one minute" else "Next",
+                    contentDescription = if (skipTransport) "Forward one minute" else "Next",
                     onClick = actions.onNext,
-                    enabled = pb.isAudiobook || pb.hasNext,
+                    enabled = skipTransport || pb.hasNext,
                 )
             }
             Spacer(Modifier.height(4.dp))
         } else {
             Spacer(Modifier.height(16.dp))
-            // For an audiobook, prev/next become −1 min / +1 min and stay enabled;
-            // chapter position is shown in the now-playing block up top.
+            // For an audiobook or podcast episode, prev/next become −1 min / +1 min
+            // and stay enabled; chapter/episode position is shown in the
+            // now-playing block up top.
             TransportCluster(
                 isPlaying = pb.isPlaying,
-                hasPrevious = pb.isAudiobook || pb.hasPrevious,
-                hasNext = pb.isAudiobook || pb.hasNext,
+                hasPrevious = pb.isAudiobook || pb.isPodcast || pb.hasPrevious,
+                hasNext = pb.isAudiobook || pb.isPodcast || pb.hasNext,
                 onPrevious = actions.onPrevious,
                 onPlayPause = actions.onPlayPause,
                 onNext = actions.onNext,
-                isAudiobook = pb.isAudiobook,
+                isAudiobook = pb.isAudiobook || pb.isPodcast,
             )
             Spacer(Modifier.height(10.dp))
             Row(
@@ -228,6 +230,7 @@ private fun SourceType.badge(): String = when (this) {
     SourceType.AUDIOBOOK -> "BOOK"
     SourceType.RADIO -> "RADIO"
     SourceType.BROADCAST -> "LIVE"
+    SourceType.PODCAST -> "POD"
 }
 
 internal fun NoiseColor.label(): String = when (this) {

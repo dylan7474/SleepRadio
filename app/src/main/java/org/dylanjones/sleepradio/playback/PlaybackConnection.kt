@@ -62,6 +62,13 @@ data class PlaybackState(
     val isBuffering: Boolean = false,
     val isRadio: Boolean = false,
     val isAudiobook: Boolean = false,
+    /** A podcast episode is on Channel A (Phase 17) — on-demand + seekable,
+     *  like an audiobook, but a single item (no chapters). */
+    val isPodcast: Boolean = false,
+    /** Subscribed feed id of the current podcast episode, for progress-saving. */
+    val podcastFeedId: String? = null,
+    /** Guid of the current podcast episode, for progress-saving. */
+    val podcastEpisodeGuid: String? = null,
     /** Auto-DJ "SleepRadio broadcast" source is running on Channel A. */
     val isBroadcast: Boolean = false,
     /** A DJ voice link is playing right now (broadcast only). */
@@ -133,6 +140,10 @@ class PlaybackConnection @Inject constructor(
     private var isRadio: Boolean = false
     private var isAudiobook: Boolean = false
     private var bookId: String? = null
+    private var isPodcast: Boolean = false
+    private var podcastFeedId: String? = null
+    private var podcastEpisodeGuid: String? = null
+    private var podcastFeedTitle: String? = null
 
     // --- Broadcast (auto-DJ) state ---
     private var isBroadcast: Boolean = false
@@ -350,6 +361,7 @@ class PlaybackConnection @Inject constructor(
         isRadio = false
         isAudiobook = false
         bookId = null
+        endPodcastInternal()
         c.setPlaybackParameters(PlaybackParameters(1f))
         c.setMediaItems(tracks.map { it.toMediaItem() }, startIndex, /* startPositionMs = */ 0L)
         c.prepare()
@@ -364,6 +376,7 @@ class PlaybackConnection @Inject constructor(
         isRadio = false
         isAudiobook = false
         bookId = null
+        endPodcastInternal()
         c.setPlaybackParameters(PlaybackParameters(1f))
         val items = files.map { f ->
             MediaItem.Builder()
@@ -399,6 +412,7 @@ class PlaybackConnection @Inject constructor(
         isRadio = false
         isAudiobook = true
         bookId = book
+        endPodcastInternal()
         val items = chapters.map { ch ->
             MediaItem.Builder()
                 .setUri(ch.uri)
@@ -420,7 +434,7 @@ class PlaybackConnection @Inject constructor(
     }
 
     /** Seek by [deltaMs] (negative = backward), clamped at 0. Used by the
-     *  transport prev/next buttons while an audiobook plays (±1 min). */
+     *  transport prev/next buttons while an audiobook or podcast plays (±1 min). */
     fun skipBy(deltaMs: Long) {
         val c = controller ?: return
         val target = (c.currentPosition + deltaMs).coerceAtLeast(0L)
@@ -434,6 +448,7 @@ class PlaybackConnection @Inject constructor(
         isRadio = true
         isAudiobook = false
         bookId = null
+        endPodcastInternal()
         radioStationName = name
         radioStationDesc = description.ifBlank { null }
         c.setPlaybackParameters(PlaybackParameters(1f))
@@ -457,6 +472,59 @@ class PlaybackConnection @Inject constructor(
         c.setMediaItem(item)
         c.prepare()
         c.play()
+    }
+
+    /**
+     * Stream a podcast episode on Channel A (Phase 17): on-demand + seekable,
+     * like an audiobook, but a single item. [feedId]/[episodeGuid] are carried
+     * in [PlaybackState] purely so the ViewModel can save resume progress;
+     * playback itself needs only [audioUrl]. Resumes at [startPositionMs] if
+     * given (the caller resolves that from
+     * [org.dylanjones.sleepradio.core.data.db.PodcastProgressEntity]).
+     */
+    fun playPodcastEpisode(
+        feedId: String,
+        feedTitle: String,
+        episodeGuid: String,
+        title: String,
+        audioUrl: String,
+        artworkUrl: String?,
+        startPositionMs: Long = 0L,
+    ) {
+        val c = controller ?: return
+        endBroadcastInternal()
+        isRadio = false
+        isAudiobook = false
+        bookId = null
+        isPodcast = true
+        podcastFeedId = feedId
+        podcastEpisodeGuid = episodeGuid
+        podcastFeedTitle = feedTitle
+        c.setPlaybackParameters(PlaybackParameters(1f))
+        val item = MediaItem.Builder()
+            .setUri(audioUrl)
+            .setMediaId(episodeGuid)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setArtist(feedTitle)
+                    .setArtworkUri(artworkUrl?.let(Uri::parse))
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .build(),
+            )
+            .build()
+        c.setMediaItem(item, startPositionMs.coerceAtLeast(0L))
+        c.prepare()
+        c.play()
+    }
+
+    /** Clear podcast state. Safe to call when nothing was playing. */
+    private fun endPodcastInternal() {
+        isPodcast = false
+        podcastFeedId = null
+        podcastEpisodeGuid = null
+        podcastFeedTitle = null
     }
 
     fun playPause() {
@@ -512,6 +580,7 @@ class PlaybackConnection @Inject constructor(
         isRadio = false
         isAudiobook = false
         bookId = null
+        endPodcastInternal()
         isBroadcast = true
         broadcastGen++
         selector = BroadcastSelector(tracks)
@@ -939,6 +1008,9 @@ class PlaybackConnection @Inject constructor(
             isBuffering = c.playbackState == Player.STATE_BUFFERING,
             isRadio = isRadio,
             isAudiobook = isAudiobook,
+            isPodcast = isPodcast,
+            podcastFeedId = podcastFeedId,
+            podcastEpisodeGuid = podcastEpisodeGuid,
             isBroadcast = isBroadcast,
             djSpeaking = djSpeaking,
             bookId = bookId,
@@ -949,7 +1021,7 @@ class PlaybackConnection @Inject constructor(
             title = md.title?.toString(),
             artist = md.artist?.toString(),
             artworkUri = md.artworkUri,
-            mediaUri = if (isRadio) {
+            mediaUri = if (isRadio || isPodcast) {
                 null
             } else {
                 c.currentMediaItem?.localConfiguration?.uri

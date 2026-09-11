@@ -32,22 +32,34 @@ import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
+import org.dylanjones.sleepradio.core.data.PodcastEpisode
+import org.dylanjones.sleepradio.core.data.PodcastFeed
+import org.dylanjones.sleepradio.core.data.PodcastProgress
+import org.dylanjones.sleepradio.core.data.PodcastSubscriptionRepository
+import org.dylanjones.sleepradio.core.data.PodcastDirectory
 import org.dylanjones.sleepradio.core.data.RadioDirectory
 import org.dylanjones.sleepradio.core.data.RadioStation
 import org.dylanjones.sleepradio.core.data.SettingsRepository
 import org.dylanjones.sleepradio.core.data.SlotRepository
 import org.dylanjones.sleepradio.core.data.SourceSlot
 import org.dylanjones.sleepradio.core.data.SourceType
+import org.dylanjones.sleepradio.core.data.pickPodcastEpisode
 import org.dylanjones.sleepradio.core.data.db.AudiobookProgressDao
 import org.dylanjones.sleepradio.core.data.db.AudiobookProgressEntity
+import org.dylanjones.sleepradio.core.data.db.PodcastProgressDao
+import org.dylanjones.sleepradio.core.data.db.PodcastProgressEntity
 import org.dylanjones.sleepradio.core.data.db.toDomain
 import org.dylanjones.sleepradio.core.tts.VoicePackResolver
 import org.dylanjones.sleepradio.media.AudiobookRepository
 import org.dylanjones.sleepradio.media.MusicRepository
+import org.dylanjones.sleepradio.media.PodcastRepository
 import org.dylanjones.sleepradio.playback.PlaybackConnection
 import org.dylanjones.sleepradio.playback.PlaybackState
 import org.dylanjones.sleepradio.playback.SleepTimerState
 import javax.inject.Inject
+
+/** A podcast episode within this much of its end counts as finished (Phase 17). */
+private const val PODCAST_COMPLETE_TAIL_MS = 15_000L
 
 data class PlayerUiState(
     /** Music-folder albums from the user-chosen SAF tree (the only music source). */
@@ -62,6 +74,20 @@ data class PlayerUiState(
     val directorySearching: Boolean = false,
     val audiobooks: List<Audiobook> = emptyList(),
     val audiobooksFolderChosen: Boolean = false,
+    /** Subscribed podcast shows (Phase 17). */
+    val podcastFeeds: List<PodcastFeed> = emptyList(),
+    /** Results of the last podcast-directory search. */
+    val podcastSearchResults: List<PodcastFeed> = emptyList(),
+    val podcastSearching: Boolean = false,
+    /** Feed whose episode list is open in the Podcasts dialog, or null. Holding
+     *  the feed itself (not just an id) means opening a not-yet-subscribed
+     *  search result works before the subscribed-feeds Room flow catches up. */
+    val podcastOpenFeed: PodcastFeed? = null,
+    val podcastEpisodes: List<PodcastEpisode> = emptyList(),
+    val podcastEpisodesLoading: Boolean = false,
+    val podcastEpisodesError: Boolean = false,
+    /** Resume/played state for [podcastEpisodes], keyed by episode guid. */
+    val podcastProgress: Map<String, PodcastProgress> = emptyMap(),
     val playback: PlaybackState = PlaybackState(),
     val nowPlayingRef: String? = null,
     val presets: List<SourceSlot?> = List(PRESET_COUNT) { null },
@@ -95,11 +121,14 @@ class PlayerViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val musicRepository: MusicRepository,
     private val audiobookRepository: AudiobookRepository,
+    private val podcastRepository: PodcastRepository,
+    private val podcasts: PodcastSubscriptionRepository,
     private val playback: PlaybackConnection,
     private val mixer: MixerController,
     private val slots: SlotRepository,
     private val settings: SettingsRepository,
     private val progressDao: AudiobookProgressDao,
+    private val podcastProgressDao: PodcastProgressDao,
 ) : ViewModel() {
 
     private val local = MutableStateFlow(LocalState())
@@ -170,6 +199,14 @@ class PlayerViewModel @Inject constructor(
                 directorySearching = l.directorySearching,
                 audiobooks = l.audiobooks,
                 audiobooksFolderChosen = l.audiobooksTreeUri != null,
+                podcastFeeds = l.podcastFeeds,
+                podcastSearchResults = l.podcastSearchResults,
+                podcastSearching = l.podcastSearching,
+                podcastOpenFeed = l.podcastOpenFeed,
+                podcastEpisodes = l.podcastEpisodes,
+                podcastEpisodesLoading = l.podcastEpisodesLoading,
+                podcastEpisodesError = l.podcastEpisodesError,
+                podcastProgress = l.podcastProgress,
                 playback = pb,
                 nowPlayingRef = l.nowPlayingRef,
                 presets = presetSlots,
@@ -210,6 +247,9 @@ class PlayerViewModel @Inject constructor(
             local.update { it.copy(musicTreeUri = uri, folderAlbums = albums) }
         }.launchIn(viewModelScope)
 
+        podcasts.feeds.onEach { list -> local.update { it.copy(podcastFeeds = list) } }
+            .launchIn(viewModelScope)
+
         // Restore the last ambient mix, then persist every change. Seeding and
         // the persist collector share one coroutine so seed always wins the race
         // (a persist write must never land before restore).
@@ -235,24 +275,39 @@ class PlayerViewModel @Inject constructor(
             .onEach { st -> local.update { it.copy(sleepTimer = st) } }
             .launchIn(viewModelScope)
 
-        // Persist audiobook progress every 5 s while playing, and once more on
-        // the play→pause edge (so the sleep timer / a manual pause don't leave
-        // the resume point up to 5 s stale).
+        // Persist audiobook / podcast progress every 5 s while playing, and once
+        // more on the play→pause edge (so the sleep timer / a manual pause don't
+        // leave the resume point up to 5 s stale). Channel A is only ever one of
+        // these at a time, so sharing wasPlaying/lastProgressSaveMs is safe.
         playback.state.onEach { pb ->
-            if (pb.isAudiobook && pb.bookId != null) {
-                val now = System.currentTimeMillis()
-                val pausedEdge = wasPlaying && !pb.isPlaying
-                if ((pb.isPlaying && now - lastProgressSaveMs > 5_000) || pausedEdge) {
-                    lastProgressSaveMs = now
-                    progressDao.upsert(
-                        AudiobookProgressEntity(
-                            bookId = pb.bookId!!,
-                            chapterIndex = pb.chapterIndex,
-                            positionMs = pb.positionMs,
-                            updatedAt = now,
-                        ),
-                    )
-                }
+            val now = System.currentTimeMillis()
+            val pausedEdge = wasPlaying && !pb.isPlaying
+            val due = (pb.isPlaying && now - lastProgressSaveMs > 5_000) || pausedEdge
+            if (due && pb.isAudiobook && pb.bookId != null) {
+                lastProgressSaveMs = now
+                progressDao.upsert(
+                    AudiobookProgressEntity(
+                        bookId = pb.bookId!!,
+                        chapterIndex = pb.chapterIndex,
+                        positionMs = pb.positionMs,
+                        updatedAt = now,
+                    ),
+                )
+            } else if (due && pb.isPodcast && pb.podcastEpisodeGuid != null && pb.podcastFeedId != null) {
+                lastProgressSaveMs = now
+                // Within the last few seconds counts as finished, so a preset's
+                // "resume the latest unplayed episode" skips past it next time.
+                val nearEnd = pb.durationMs > 0L && pb.positionMs >= pb.durationMs - PODCAST_COMPLETE_TAIL_MS
+                podcastProgressDao.upsert(
+                    PodcastProgressEntity(
+                        episodeGuid = pb.podcastEpisodeGuid!!,
+                        feedId = pb.podcastFeedId!!,
+                        positionMs = pb.positionMs,
+                        durationMs = pb.durationMs,
+                        completed = nearEnd,
+                        updatedAt = now,
+                    ),
+                )
             }
             wasPlaying = pb.isPlaying
         }.launchIn(viewModelScope)
@@ -356,6 +411,119 @@ class PlayerViewModel @Inject constructor(
     fun playStationNow(station: RadioStation) {
         playback.playRadio(station.streamUrl, station.name, station.description)
         local.update { it.copy(nowPlayingRef = station.streamUrl) }
+    }
+
+    // --- Podcasts (Phase 17) ---
+
+    fun searchPodcasts(query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) {
+            local.update { it.copy(podcastSearchResults = emptyList(), podcastSearching = false) }
+            return
+        }
+        local.update { it.copy(podcastSearching = true) }
+        viewModelScope.launch {
+            val results = PodcastDirectory.search(q)
+            local.update { it.copy(podcastSearchResults = results, podcastSearching = false) }
+        }
+    }
+
+    fun clearPodcastSearch() {
+        local.update { it.copy(podcastSearchResults = emptyList(), podcastSearching = false) }
+    }
+
+    fun subscribePodcast(feed: PodcastFeed) {
+        viewModelScope.launch { podcasts.subscribe(feed) }
+    }
+
+    fun unsubscribePodcast(id: String) {
+        viewModelScope.launch { podcasts.unsubscribe(id) }
+        if (uiState.value.podcastOpenFeed?.id == id) closePodcastFeed()
+    }
+
+    /** "Add a feed by URL…": fetch it once to resolve a title/artwork, then subscribe. */
+    fun addPodcastByUrl(url: String) {
+        val u = url.trim()
+        if (u.isBlank()) return
+        viewModelScope.launch {
+            val parsed = podcastRepository.load(u) ?: return@launch
+            podcasts.subscribe(parsed.feed)
+        }
+    }
+
+    /** Open [feed]'s episode list in the Podcasts dialog. [feed] need not be
+     *  subscribed yet (a directory search result opens straight to its
+     *  episodes; picking one there both subscribes and plays it). */
+    fun openPodcastFeed(feed: PodcastFeed) {
+        local.update {
+            it.copy(
+                podcastOpenFeed = feed,
+                podcastEpisodes = emptyList(),
+                podcastEpisodesLoading = true,
+                podcastEpisodesError = false,
+            )
+        }
+        viewModelScope.launch {
+            val parsed = podcastRepository.load(feed.feedUrl)
+            if (parsed == null) {
+                local.update { it.copy(podcastEpisodesLoading = false, podcastEpisodesError = true) }
+                return@launch
+            }
+            val progress = podcastProgressDao.forFeed(feed.id).associate { it.episodeGuid to it.toDomain() }
+            local.update {
+                it.copy(
+                    podcastEpisodes = parsed.episodes,
+                    podcastEpisodesLoading = false,
+                    podcastProgress = progress,
+                )
+            }
+        }
+    }
+
+    /** Back out of the open episode list to the subscribed-shows list. */
+    fun closePodcastFeed() {
+        local.update {
+            it.copy(
+                podcastOpenFeed = null,
+                podcastEpisodes = emptyList(),
+                podcastProgress = emptyMap(),
+                podcastEpisodesLoading = false,
+                podcastEpisodesError = false,
+            )
+        }
+    }
+
+    /** Play one episode on Channel A immediately, without occupying a preset slot. */
+    fun playPodcastEpisodeNow(feed: PodcastFeed, episode: PodcastEpisode) {
+        viewModelScope.launch {
+            val resume = podcastProgressDao.get(episode.guid)?.takeIf { !it.completed }?.positionMs ?: 0L
+            playback.playPodcastEpisode(
+                feedId = feed.id,
+                feedTitle = feed.title,
+                episodeGuid = episode.guid,
+                title = episode.title,
+                audioUrl = episode.audioUrl,
+                artworkUrl = feed.artworkUrl,
+                startPositionMs = resume,
+            )
+            local.update { it.copy(nowPlayingRef = episode.guid) }
+        }
+    }
+
+    /** Assign a subscribed show to preset [index]: tapping it resumes the
+     *  latest/in-progress episode via [pickPodcastEpisode]. */
+    fun assignPodcastToSlot(index: Int, feed: PodcastFeed) {
+        val slot = SourceSlot(
+            index = index,
+            type = SourceType.PODCAST,
+            refId = feed.id,
+            label = feed.title,
+            sublabel = "Podcast",
+            artworkUri = feed.artworkUrl,
+        )
+        viewModelScope.launch { slots.assign(slot) }
+        local.value = local.value.copy(pickerForSlot = null)
+        playSlot(slot)
     }
 
     fun assignFolderAlbumToSlot(index: Int, album: FolderAlbum) {
@@ -492,18 +660,47 @@ class PlayerViewModel @Inject constructor(
                     }
                 }
             }
+
+            SourceType.PODCAST -> viewModelScope.launch {
+                // Await the Room flow's own emission rather than trust
+                // local.value.podcastFeeds — the same cold-launch race that
+                // once made the Broadcast preset silently no-op (937d68f).
+                val feed = podcasts.feeds.first().firstOrNull { it.id == slot.refId } ?: return@launch
+                val parsed = podcastRepository.load(feed.feedUrl) ?: return@launch
+                val progress = podcastProgressDao.forFeed(feed.id)
+                    .associate { it.episodeGuid to it.toDomain() }
+                val (episode, resumeMs) = pickPodcastEpisode(parsed.episodes, progress) ?: return@launch
+                playback.playPodcastEpisode(
+                    feedId = feed.id,
+                    feedTitle = feed.title,
+                    episodeGuid = episode.guid,
+                    title = episode.title,
+                    audioUrl = episode.audioUrl,
+                    artworkUrl = feed.artworkUrl,
+                    startPositionMs = resumeMs,
+                )
+                local.value = local.value.copy(nowPlayingRef = slot.refId)
+            }
         }
     }
 
     fun playPause() = playback.playPause()
 
-    /** Audiobook: jump +1 min. Otherwise: next track in the queue. */
+    /** Audiobook / podcast episode: jump +1 min. Otherwise: next track in the queue. */
     fun next() =
-        if (uiState.value.playback.isAudiobook) playback.skipBy(60_000L) else playback.next()
+        if (uiState.value.playback.isAudiobook || uiState.value.playback.isPodcast) {
+            playback.skipBy(60_000L)
+        } else {
+            playback.next()
+        }
 
-    /** Audiobook: jump −1 min. Otherwise: previous track in the queue. */
+    /** Audiobook / podcast episode: jump −1 min. Otherwise: previous track in the queue. */
     fun previous() =
-        if (uiState.value.playback.isAudiobook) playback.skipBy(-60_000L) else playback.previous()
+        if (uiState.value.playback.isAudiobook || uiState.value.playback.isPodcast) {
+            playback.skipBy(-60_000L)
+        } else {
+            playback.previous()
+        }
 
     fun seekTo(positionMs: Long) = playback.seekTo(positionMs)
 
@@ -548,6 +745,14 @@ class PlayerViewModel @Inject constructor(
         val folderAlbums: List<FolderAlbum> = emptyList(),
         val audiobooksTreeUri: String? = null,
         val audiobooks: List<Audiobook> = emptyList(),
+        val podcastFeeds: List<PodcastFeed> = emptyList(),
+        val podcastSearchResults: List<PodcastFeed> = emptyList(),
+        val podcastSearching: Boolean = false,
+        val podcastOpenFeed: PodcastFeed? = null,
+        val podcastEpisodes: List<PodcastEpisode> = emptyList(),
+        val podcastEpisodesLoading: Boolean = false,
+        val podcastEpisodesError: Boolean = false,
+        val podcastProgress: Map<String, PodcastProgress> = emptyMap(),
         val nowPlayingRef: String? = null,
         val pickerForSlot: Int? = null,
         val sleepDurationMin: Int = 30,

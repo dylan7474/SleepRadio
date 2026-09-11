@@ -4,7 +4,7 @@ package org.dylanjones.sleepradio.core.data
 const val PRESET_COUNT = 4
 
 /** What a preset slot points at. See RETROSYNC_PLAN.md section 2. */
-enum class SourceType { ALBUM, MUSIC_FOLDER, AUDIOBOOK, RADIO, BROADCAST }
+enum class SourceType { ALBUM, MUSIC_FOLDER, AUDIOBOOK, RADIO, BROADCAST, PODCAST }
 
 /** An "album" discovered by walking a SAF-granted music folder (any folder that
  *  directly contains audio files). [id] is that folder's document URI string. */
@@ -22,6 +22,8 @@ data class FolderAlbum(
  *  - AUDIOBOOK    -> document-tree book path (Phase 4 chunk C)
  *  - RADIO        -> stream URL
  *  - BROADCAST    -> the literal "broadcast" (auto-DJ over the music folder)
+ *  - PODCAST      -> a subscribed feed's [PodcastFeed.id] (Phase 17); tapping
+ *                    resolves the episode to play via [pickPodcastEpisode]
  */
 data class SourceSlot(
     val index: Int,
@@ -103,4 +105,64 @@ data class RadioStation(
             ),
         )
     }
+}
+
+// --- Podcasts (Phase 17) ---------------------------------------------------
+
+/** A subscribed (or search-result) podcast show. [id] is derived from
+ *  [feedUrl] via [podcastFeedId] so the same feed always maps to the same id,
+ *  whether it was found via the directory or added by URL. */
+data class PodcastFeed(
+    val id: String,
+    val feedUrl: String,
+    val title: String,
+    val artworkUrl: String? = null,
+)
+
+/** One episode parsed live from a feed's RSS — not persisted (Decision #20). */
+data class PodcastEpisode(
+    val guid: String,
+    val title: String,
+    val audioUrl: String,
+    val pubDateMs: Long? = null,
+    val durationMs: Long? = null,
+    val description: String = "",
+)
+
+/** Where playback of one episode should resume, and whether it's been heard. */
+data class PodcastProgress(
+    val episodeGuid: String,
+    val positionMs: Long,
+    val durationMs: Long,
+    val completed: Boolean,
+    val updatedAt: Long,
+)
+
+/** Stable id for a podcast feed, derived from its URL (case/trailing-slash
+ *  insensitive so the same show found two different ways still matches). */
+fun podcastFeedId(feedUrl: String): String {
+    val normalised = feedUrl.trim().trimEnd('/').lowercase()
+    return "pod_" + normalised.hashCode().toUInt().toString(16)
+}
+
+/**
+ * Which episode a PODCAST preset should play on tap, and how far into it to
+ * seek: the most-recently-touched in-progress (not completed) episode if
+ * there is one, else the newest episode that isn't marked completed, else —
+ * everything's been heard — just the newest episode from the top. [episodes]
+ * must already be newest-first (as [org.dylanjones.sleepradio.media
+ * .PodcastRepository] returns them). Null only when [episodes] is empty.
+ */
+fun pickPodcastEpisode(
+    episodes: List<PodcastEpisode>,
+    progress: Map<String, PodcastProgress>,
+): Pair<PodcastEpisode, Long>? {
+    if (episodes.isEmpty()) return null
+    val resuming = progress.values
+        .filter { !it.completed && it.positionMs > 0L }
+        .maxByOrNull { it.updatedAt }
+        ?.let { p -> episodes.firstOrNull { it.guid == p.episodeGuid } }
+    if (resuming != null) return resuming to progress.getValue(resuming.guid).positionMs
+    val next = episodes.firstOrNull { progress[it.guid]?.completed != true } ?: episodes.first()
+    return next to (progress[next.guid]?.positionMs ?: 0L)
 }

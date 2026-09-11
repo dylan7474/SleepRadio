@@ -17,6 +17,8 @@ import kotlinx.coroutines.SupervisorJob
 import org.dylanjones.sleepradio.core.data.SettingsRepository
 import org.dylanjones.sleepradio.core.data.SettingsRepositoryImpl
 import org.dylanjones.sleepradio.core.data.db.AudiobookProgressDao
+import org.dylanjones.sleepradio.core.data.db.PodcastFeedDao
+import org.dylanjones.sleepradio.core.data.db.PodcastProgressDao
 import org.dylanjones.sleepradio.core.data.db.SleepRadioDatabase
 import org.dylanjones.sleepradio.core.data.db.SourceSlotDao
 import javax.inject.Singleton
@@ -53,5 +55,12 @@ abstract class DataModule {
         @Provides
         fun provideAudiobookProgressDao(db: SleepRadioDatabase): AudiobookProgressDao =
             db.audiobookProgressDao()
+
+        @Provides
+        fun providePodcastFeedDao(db: SleepRadioDatabase): PodcastFeedDao = db.podcastFeedDao()
+
+        @Provides
+        fun providePodcastProgressDao(db: SleepRadioDatabase): PodcastProgressDao =
+            db.podcastProgressDao()
     }
 }

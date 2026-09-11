@@ -2,6 +2,7 @@ package org.dylanjones.sleepradio.feature.player
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -47,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -64,6 +67,9 @@ import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.FolderAlbum
+import org.dylanjones.sleepradio.core.data.PodcastEpisode
+import org.dylanjones.sleepradio.core.data.PodcastFeed
+import org.dylanjones.sleepradio.core.data.PodcastProgress
 import org.dylanjones.sleepradio.core.data.RadioStation
 import org.dylanjones.sleepradio.core.broadcast.Chattiness
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
@@ -177,6 +183,9 @@ fun PlayerRoute(
     /** Slot to assign a directory pick to, or null = "play now" from the drawer. */
     var directoryAssignSlot by remember { mutableStateOf<Int?>(null) }
     var radioStationsOpen by remember { mutableStateOf(false) }
+    var podcastsOpen by remember { mutableStateOf(false) }
+    var podcastDirectoryOpen by remember { mutableStateOf(false) }
+    var podcastAddUrlOpen by remember { mutableStateOf(false) }
     var broadcastVoiceOpen by remember { mutableStateOf(false) }
     var vuSyncOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
@@ -206,6 +215,7 @@ fun PlayerRoute(
                 onAmbient = { closeDrawer(); ambientDialogOpen = true },
                 onSleep = { closeDrawer(); sleepDialogOpen = true },
                 onRadioStations = { closeDrawer(); radioStationsOpen = true },
+                onPodcasts = { closeDrawer(); podcastsOpen = true },
                 onBroadcastVoice = { closeDrawer(); broadcastVoiceOpen = true },
                 onSkin = { rootViewModel.chooseSkin(it); closeDrawer() },
                 onVuSync = { closeDrawer(); vuSyncOpen = true },
@@ -284,6 +294,56 @@ fun PlayerRoute(
                 )
             }
 
+            if (podcastsOpen) {
+                val openFeed = state.podcastOpenFeed
+                if (openFeed != null) {
+                    PodcastEpisodesDialog(
+                        feed = openFeed,
+                        episodes = state.podcastEpisodes,
+                        loading = state.podcastEpisodesLoading,
+                        error = state.podcastEpisodesError,
+                        progress = state.podcastProgress,
+                        onPlay = { playerViewModel.playPodcastEpisodeNow(openFeed, it); podcastsOpen = false },
+                        onBack = playerViewModel::closePodcastFeed,
+                        onDismiss = { playerViewModel.closePodcastFeed(); podcastsOpen = false },
+                    )
+                } else {
+                    PodcastsDialog(
+                        feeds = state.podcastFeeds,
+                        onOpenFeed = playerViewModel::openPodcastFeed,
+                        onUnsubscribe = playerViewModel::unsubscribePodcast,
+                        onAddByUrl = { podcastAddUrlOpen = true },
+                        onBrowseDirectory = { podcastDirectoryOpen = true },
+                        onDismiss = { podcastsOpen = false },
+                    )
+                }
+            }
+
+            if (podcastAddUrlOpen) {
+                AddPodcastDialog(
+                    onAdd = { url -> playerViewModel.addPodcastByUrl(url) },
+                    onDismiss = { podcastAddUrlOpen = false },
+                )
+            }
+
+            if (podcastDirectoryOpen) {
+                PodcastDirectoryDialog(
+                    results = state.podcastSearchResults,
+                    searching = state.podcastSearching,
+                    onSearch = playerViewModel::searchPodcasts,
+                    onPick = { feed ->
+                        playerViewModel.subscribePodcast(feed)
+                        playerViewModel.openPodcastFeed(feed)
+                        podcastDirectoryOpen = false
+                        playerViewModel.clearPodcastSearch()
+                    },
+                    onDismiss = {
+                        podcastDirectoryOpen = false
+                        playerViewModel.clearPodcastSearch()
+                    },
+                )
+            }
+
             if (broadcastVoiceOpen) {
                 val voiceState by broadcastVoiceViewModel.uiState.collectAsStateWithLifecycle()
                 BroadcastVoiceDialog(
@@ -321,6 +381,8 @@ fun PlayerRoute(
                     musicFolderChosen = state.musicFolderChosen,
                     audiobooks = state.audiobooks,
                     audiobooksFolderChosen = state.audiobooksFolderChosen,
+                    podcastFeeds = state.podcastFeeds,
+                    onPickPodcast = { playerViewModel.assignPodcastToSlot(slotIndex, it) },
                     onPickStation = { playerViewModel.assignStationToSlot(slotIndex, it) },
                     onRemoveStation = playerViewModel::removeStation,
                     onAddManual = { addStationOpen = true },
@@ -373,6 +435,7 @@ private fun AppDrawer(
     onAmbient: () -> Unit,
     onSleep: () -> Unit,
     onRadioStations: () -> Unit,
+    onPodcasts: () -> Unit,
     onBroadcastVoice: () -> Unit,
     onSkin: (SkinId) -> Unit,
     onVuSync: () -> Unit,
@@ -411,6 +474,11 @@ private fun AppDrawer(
                 label = { Text("Radio stations") },
                 selected = false,
                 onClick = onRadioStations,
+            )
+            NavigationDrawerItem(
+                label = { Text("Podcasts") },
+                selected = false,
+                onClick = onPodcasts,
             )
             NavigationDrawerItem(
                 label = { Text("Broadcast voice") },
@@ -788,6 +856,8 @@ private fun SourcePickerDialog(
     musicFolderChosen: Boolean,
     audiobooks: List<Audiobook>,
     audiobooksFolderChosen: Boolean,
+    podcastFeeds: List<PodcastFeed>,
+    onPickPodcast: (PodcastFeed) -> Unit,
     onPickStation: (RadioStation) -> Unit,
     onRemoveStation: (String) -> Unit,
     onAddManual: () -> Unit,
@@ -818,6 +888,24 @@ private fun SourcePickerDialog(
                         onClick = { if (musicFolderChosen) onPickBroadcast() },
                     )
                     HorizontalDivider()
+                }
+
+                item { SectionHeader("PODCASTS") }
+                if (podcastFeeds.isEmpty()) {
+                    item {
+                        Text(
+                            "Subscribe to a show from the Podcasts drawer entry first.",
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                        )
+                    }
+                } else {
+                    items(podcastFeeds, key = { "pod_${it.id}" }) { feed ->
+                        PickerRow(feed.title, "Podcast — resumes the latest episode") {
+                            onPickPodcast(feed)
+                        }
+                        HorizontalDivider()
+                    }
                 }
 
                 item { SectionHeader("INTERNET RADIO") }
@@ -1189,6 +1277,274 @@ private fun DirectoryDialog(
                     else -> LazyColumn(Modifier.heightIn(max = 320.dp)) {
                         items(results, key = { it.id }) { station ->
                             PickerRow(station.name, station.description) { onPick(station) }
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            }
+        },
+    )
+}
+
+// --- Podcasts (Phase 17) ---------------------------------------------------
+
+@Composable
+private fun PodcastsDialog(
+    feeds: List<PodcastFeed>,
+    onOpenFeed: (PodcastFeed) -> Unit,
+    onUnsubscribe: (String) -> Unit,
+    onAddByUrl: () -> Unit,
+    onBrowseDirectory: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text("Podcasts") },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                item {
+                    PickerRow("＋  Add a feed by URL…", "Paste a show's RSS feed URL", onAddByUrl)
+                    HorizontalDivider()
+                }
+                item {
+                    PickerRow(
+                        "⌕  Search a podcast directory…",
+                        "Search Apple's podcast directory",
+                        onBrowseDirectory,
+                    )
+                    HorizontalDivider()
+                }
+                item { SectionHeader("SUBSCRIBED") }
+                if (feeds.isEmpty()) {
+                    item {
+                        Text(
+                            "No shows yet — search the directory or add a feed URL above.",
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                        )
+                    }
+                }
+                items(feeds, key = { it.id }) { feed ->
+                    PodcastFeedRow(feed = feed, onClick = { onOpenFeed(feed) }, onRemove = { onUnsubscribe(feed.id) })
+                    HorizontalDivider()
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun PodcastFeedRow(feed: PodcastFeed, onClick: () -> Unit, onRemove: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        PodcastThumbnail(feed.artworkUrl)
+        Spacer(Modifier.padding(6.dp))
+        Column(
+            Modifier
+                .weight(1f)
+                .clickable(onClick = onClick)
+                .padding(vertical = 12.dp),
+        ) {
+            Text(feed.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Podcast", fontSize = 12.sp, maxLines = 1)
+        }
+        TextButton(onClick = onRemove) { Text("Remove") }
+    }
+}
+
+@Composable
+private fun PodcastThumbnail(artworkUrl: String?, size: androidx.compose.ui.unit.Dp = 40.dp) {
+    val art = rememberRemoteImage(artworkUrl)
+    Box(
+        Modifier
+            .size(size)
+            .clip(RoundedCornerShape(8.dp))
+            .background(androidx.compose.ui.graphics.Color(0xFF2A2E38)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (art != null) {
+            Image(
+                bitmap = art,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text("🎙", fontSize = (size.value / 2.5f).sp)
+        }
+    }
+}
+
+@Composable
+private fun PodcastEpisodesDialog(
+    feed: PodcastFeed,
+    episodes: List<PodcastEpisode>,
+    loading: Boolean,
+    error: Boolean,
+    progress: Map<String, PodcastProgress>,
+    onPlay: (PodcastEpisode) -> Unit,
+    onBack: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = {
+            Row {
+                TextButton(onClick = onBack) { Text("Back") }
+                TextButton(onClick = onDismiss) { Text("Close") }
+            }
+        },
+        title = { Text(feed.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = {
+            when {
+                loading -> Row(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.Center,
+                ) { CircularProgressIndicator() }
+
+                error -> Text(
+                    "Couldn't load this show's episodes — check the connection and try again.",
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 12.dp),
+                )
+
+                episodes.isEmpty() -> Text(
+                    "No episodes found in this feed.",
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(vertical = 12.dp),
+                )
+
+                else -> LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                    items(episodes, key = { it.guid }) { episode ->
+                        PodcastEpisodeRow(episode, progress[episode.guid]) { onPlay(episode) }
+                        HorizontalDivider()
+                    }
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun PodcastEpisodeRow(episode: PodcastEpisode, progress: PodcastProgress?, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+    ) {
+        Text(episode.title, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        val meta = listOfNotNull(
+            episode.durationMs?.let { formatTime(it) },
+            when {
+                progress?.completed == true -> "Played"
+                progress != null && progress.positionMs > 0L ->
+                    "Resume at ${formatTime(progress.positionMs)}"
+                else -> null
+            },
+        ).joinToString(" · ")
+        if (meta.isNotEmpty()) {
+            Text(meta, fontSize = 12.sp, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun AddPodcastDialog(onAdd: (url: String) -> Unit, onDismiss: () -> Unit) {
+    var url by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = {
+            TextButton(
+                enabled = url.isNotBlank(),
+                onClick = { onAdd(url); onDismiss() },
+            ) { Text("Add") }
+        },
+        title = { Text("Add a podcast feed") },
+        text = {
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it },
+                label = { Text("RSS feed URL") },
+                placeholder = { Text("https://…") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (url.isNotBlank()) { onAdd(url); onDismiss() } }),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+    )
+}
+
+@Composable
+private fun PodcastDirectoryDialog(
+    results: List<PodcastFeed>,
+    searching: Boolean,
+    onSearch: (String) -> Unit,
+    onPick: (PodcastFeed) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text("Podcast directory") },
+        text = {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        label = { Text("Search shows") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { onSearch(query) }) { Text("Go") }
+                }
+                Spacer(Modifier.padding(4.dp))
+                when {
+                    searching -> Row(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) { CircularProgressIndicator() }
+
+                    results.isEmpty() -> Text(
+                        "Type a show name and tap Go.",
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(vertical = 12.dp),
+                    )
+
+                    else -> LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                        items(results, key = { it.id }) { feed ->
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                PodcastThumbnail(feed.artworkUrl, size = 32.dp)
+                                Spacer(Modifier.padding(6.dp))
+                                Column(
+                                    Modifier
+                                        .weight(1f)
+                                        .clickable(onClick = { onPick(feed) })
+                                        .padding(vertical = 12.dp),
+                                ) {
+                                    Text(
+                                        feed.title,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        feed.feedUrl,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                             HorizontalDivider()
                         }
                     }

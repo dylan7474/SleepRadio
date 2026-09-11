@@ -117,6 +117,7 @@ fun NowPlayingBlock(
                     starting -> "Station" to "SleepRadio"
                     state.isRadio -> "Station" to (state.stationName ?: state.title ?: "—")
                     state.isAudiobook -> "Book" to (state.artist ?: "—")
+                    state.isPodcast -> "Podcast" to (state.artist ?: "—")
                     else -> "Artist" to (state.artist ?: "—")
                 }
                 val (botLabel, botValue) = when {
@@ -125,6 +126,7 @@ fun NowPlayingBlock(
                     // description, else a plain "Live".
                     state.isRadio -> "Now playing" to (state.nowPlaying ?: state.artist ?: "Live")
                     state.isAudiobook -> "Chapter" to (state.title ?: "—")
+                    state.isPodcast -> "Episode" to (state.title ?: "—")
                     else -> "Track" to (state.title ?: "—")
                 }
                 Label(topLabel)
