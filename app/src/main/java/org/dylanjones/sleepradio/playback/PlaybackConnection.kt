@@ -296,11 +296,13 @@ class PlaybackConnection @Inject constructor(
     }
 
     /**
-     * Phase 14: clip the broadcast track [uri] to its real musical start/end
-     * from the pre-scan (trailing digital black, occasional leading silence), so
-     * the DJ link lands right after the music. Null when nothing worth trimming
-     * was found, the scan hasn't run yet (first track of a show), or [uri] is a
-     * jingle. `STATE_ENDED` then fires at the clipped end → the existing segue.
+     * Phase 14: clip the broadcast item [uri] (track or jingle) to its real
+     * musical start/end from the pre-scan (trailing digital black, occasional
+     * leading silence), so the DJ link lands right after the music. Null when
+     * nothing worth trimming was found, or the scan hasn't run yet (a track's
+     * first play of the show; every jingle is pre-scanned up front, so this
+     * only affects tracks). `STATE_ENDED` then fires at the clipped end → the
+     * existing segue.
      */
     private fun broadcastClip(uri: String): MediaItem.ClippingConfiguration? {
         val scan = trackProbe.cached(uri) ?: return null
@@ -598,14 +600,26 @@ class PlaybackConnection @Inject constructor(
         startupJingleUri = jingles.filter { it.durationMs in 1 until STARTUP_JINGLE_MAX_MS }
             .map { it.uri }.shuffled().firstOrNull()
         voicePack = voice
+        // A jingle folder is a handful of short files — scan the whole set up
+        // front so every play (not just the first) gets Phase 12 levelling and
+        // Phase 14 edge-trim from the cache. The startup jingle plays within
+        // seconds (right after the welcome line): measured on-device, firing
+        // its warm() alongside ~25 others (even "first") still let them all
+        // hit MediaCodec at once and starved it of a decoder — it played
+        // untrimmed. Await its scan alone before the rest even start decoding.
+        val startupUri = startupJingleUri
+        scope.launch(Dispatchers.Default) {
+            if (startupUri != null) trackProbe.warm(appContext, startupUri)
+            jingleUris.filter { it != startupUri }.forEach { warmItemGain(it) }
+        }
 
         currentBroadcast = selector?.next()
         nextBroadcast = selector?.next()
         val first = currentBroadcast ?: run { endBroadcastInternal(); return }
 
         // Loudness-scan what opens the show while the voice/model loads (Phase 12).
+        // (startupJingleUri was already warmed, first in line, just above.)
         warmItemGain(first.uri)
-        warmItemGain(startupJingleUri)
         warmItemGain(nextBroadcast?.uri)
 
         if (voice != null) {
@@ -907,20 +921,24 @@ class PlaybackConnection @Inject constructor(
         val c = controller ?: run { playingJingle = false; runNextSegueStep(); return }
         applyItemGain(uri)
         c.setPlaybackParameters(PlaybackParameters(1f))
-        c.setMediaItem(
-            MediaItem.Builder()
-                .setUri(uri)
-                .setMediaId(uri)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle("Station ident")
-                        .setStation("SleepRadio")
-                        .setIsBrowsable(false)
-                        .setIsPlayable(true)
-                        .build(),
-                )
-                .build(),
-        )
+        val builder = MediaItem.Builder()
+            .setUri(uri)
+            .setMediaId(uri)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle("Station ident")
+                    .setStation("SleepRadio")
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .build(),
+            )
+        broadcastClip(uri)?.let { clip ->
+            builder.setClippingConfiguration(clip)
+            trackProbe.cached(uri)?.let {
+                Log.d(TAG, "broadcast: clip jingle to [${it.startMs}..${it.endMs}]ms")
+            }
+        }
+        c.setMediaItem(builder.build())
         c.prepare()
         c.play()
     }
