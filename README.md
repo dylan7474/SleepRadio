@@ -48,9 +48,10 @@ single row and adds a pair of analogue L/R VU meters.
   a quick decode‑scan of the file about to play sets a per‑item gain (up *or* down,
   with a soft limiter), so wildly inconsistent masters don't jump in volume.
   Nothing is pre‑scanned or written to storage
-- **Tight segues**: that same scan finds each track's trailing digital black (and
-  any leading silence) and clips it, so the DJ comes in right after the music
-  instead of after a dead gap — with guards so a real quiet fade‑out is left alone
+- **Tight segues**: that same scan finds each track's *and jingle's* trailing
+  digital black (and any leading silence) and clips it, so the DJ comes in
+  right after the music instead of after a dead gap — with guards so a real
+  quiet fade‑out is left alone
 - A track that won't decode is skipped instead of stalling the show
 - No API keys, works with no network once the voice is installed (the only
   network use is the one‑time voice download, which is also avoidable)
@@ -180,8 +181,14 @@ per‑track loudness levelling, a fixed DJ‑voice EQ, and track‑edge silence
 trimming — with a couple of first‑launch fixes (the Broadcast preset now
 responds to the first tap after a cold start). Also the **Studio skin** —
 single control row and analogue L/R VU meters, output‑latency synced per route
-with a mic auto‑calibration. Nothing below is committed — it's the shortlist
-for after more real bedside use.
+with a mic auto‑calibration. Most recently, edge‑silence trimming was
+extended to jingles: the whole jingle folder is pre‑scanned at broadcast
+start (a handful of short files, cheap to do up front) so every jingle plays
+clipped, same as a rotation track — with the startup jingle's own scan
+awaited on its own ahead of the rest, since it plays within a few seconds of
+the welcome line and otherwise loses the race for a decoder against the
+whole folder scanning at once. Nothing below is committed — it's the
+shortlist for after more real bedside use.
 
 **Audio & sources**
 - [ ] Auto‑reconnect for dropped radio streams (backoff + a "reconnecting…" state)
