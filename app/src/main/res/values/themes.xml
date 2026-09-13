@@ -2,15 +2,13 @@
 <resources>
 
     <!-- Dark, no action bar. Compose paints the real UI; this only governs the
-         cold-start window background and the platform splash (API 31+). -->
+         cold-start window background. Below API 31, windowBackground alone is
+         what's shown at cold start — the platform splash-screen attributes
+         (API 31+) live in values-v31/themes.xml. -->
     <style name="Theme.SleepRadio" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/splash_bg</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
-
-        <!-- Platform splash screen (Android 12+) -->
-        <item name="android:windowSplashScreenBackground">@color/splash_bg</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
     </style>
 </resources>

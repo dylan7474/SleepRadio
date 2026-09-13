@@ -7,7 +7,8 @@ presenter — and layers **two ambient channels** underneath it: procedural
 coloured noise and binaural beats. A sleep timer fades and stops the main source
 on schedule; the ambient channels keep playing.
 
-Built for a Pixel 9, in Kotlin + Jetpack Compose. Three selectable skins —
+Built for a Pixel 9, in Kotlin + Jetpack Compose — also verified running on a
+Galaxy S8+ (Android 9). Three selectable skins —
 **Neon** (cyberpunk cyan/magenta) and **Industrial** (brushed steel, blue/amber)
 share one control layout; **Studio** (warm hi‑fi console) puts the controls in a
 single row and adds a pair of analogue L/R VU meters.
@@ -142,7 +143,7 @@ downloads (Piper `en_GB-southern_english_female-low` + English‑only
 
 Kotlin 2.2.10 · AGP 9.3.2 · KSP 2.2.10‑2.0.2 · Compose BOM 2026.02.01 ·
 Media3 1.9.4 · Hilt 2.60.1 · Room 2.8.4 · DataStore 1.2.1 · coroutines 1.11.0 ·
-sherpa‑onnx 1.13.4 (Piper TTS, via JitPack) · `minSdk 31`, `target/compileSdk 37`.
+sherpa‑onnx 1.13.4 (Piper TTS, via JitPack) · `minSdk 28`, `target/compileSdk 37`.
 
 ### Layout
 
