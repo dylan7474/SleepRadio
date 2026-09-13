@@ -21,18 +21,18 @@ android {
 
     defaultConfig {
         applicationId = "org.dylanjones.sleepradio"
-        minSdk = 31
+        minSdk = 28
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
             // sherpa-onnx (Phase 9 TTS) ships native libs for 4 ABIs, ~5 MB
-            // each. The only deploy target is an arm64 Pixel 9, so ship just
-            // that and keep the APK from ballooning. Add "x86_64" if emulator
-            // testing is ever needed.
+            // each. Every deploy target so far (Pixel 9, Galaxy S8+) is arm64,
+            // so ship just that and keep the APK from ballooning. Add "x86_64"
+            // if emulator testing is ever needed.
             abiFilters += "arm64-v8a"
         }
     }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
+import android.os.Build
 import android.net.Uri
 import android.util.Size
 import androidx.compose.runtime.Composable
@@ -62,7 +63,16 @@ private fun loadArt(context: Context, artworkUri: Uri?, mediaUri: Uri?): Bitmap?
             return loadRemoteArt(artworkUri.toString())
         }
         runCatching {
-            return context.contentResolver.loadThumbnail(artworkUri, Size(320, 320), null)
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                context.contentResolver.loadThumbnail(artworkUri, Size(320, 320), null)
+            } else {
+                // loadThumbnail needs API 29+. Pre-Q fallback: decode the full
+                // MediaStore album-art stream at a coarse sample size — same
+                // trade-off as the embedded-art path below.
+                context.contentResolver.openInputStream(artworkUri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply { inSampleSize = 4 })
+                }
+            }
         }
     }
     if (mediaUri != null) {

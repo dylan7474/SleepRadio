@@ -240,9 +240,14 @@ class MusicRepository @Inject constructor(
         }
         uris.sorted().map { uri ->
             val ms = runCatching {
-                MediaMetadataRetriever().use { mmr ->
+                // MediaMetadataRetriever only implements Closeable (for `.use`)
+                // from API 29 — release() by hand instead, works on every level.
+                val mmr = MediaMetadataRetriever()
+                try {
                     mmr.setDataSource(context, Uri.parse(uri))
                     mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                } finally {
+                    mmr.release()
                 }
             }.getOrDefault(0L)
             JingleClip(uri, ms)
