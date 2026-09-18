@@ -3,11 +3,15 @@ package org.dylanjones.sleepradio.core.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.dylanjones.sleepradio.core.audio.AmbientPattern
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
@@ -168,6 +172,31 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setVuDelayCustomMs(ms: Int) {
         dataStore.edit { it[KEY_VU_DELAY_CUSTOM] = ms.coerceIn(0, VU_DELAY_MAX_MS) }
+    }
+
+    override suspend fun exportAll(): Map<String, Any> {
+        val prefs = dataStore.data.first()
+        return prefs.asMap().entries.associate { (key, value) -> key.name to value }
+    }
+
+    override suspend fun importAll(values: Map<String, Any>) {
+        dataStore.edit { prefs ->
+            prefs.clear()
+            for ((name, value) in values) {
+                when (value) {
+                    is String -> prefs[stringPreferencesKey(name)] = value
+                    is Boolean -> prefs[booleanPreferencesKey(name)] = value
+                    is Int -> prefs[intPreferencesKey(name)] = value
+                    is Long -> prefs[longPreferencesKey(name)] = value
+                    is Float -> prefs[floatPreferencesKey(name)] = value
+                    is Double -> prefs[doublePreferencesKey(name)] = value
+                    is Set<*> -> {
+                        @Suppress("UNCHECKED_CAST")
+                        prefs[stringSetPreferencesKey(name)] = value as Set<String>
+                    }
+                }
+            }
+        }
     }
 
     private companion object {

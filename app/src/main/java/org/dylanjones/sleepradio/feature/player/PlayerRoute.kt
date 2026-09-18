@@ -88,6 +88,7 @@ fun PlayerRoute(
     rootViewModel: RootViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel(),
     broadcastVoiceViewModel: BroadcastVoiceViewModel = hiltViewModel(),
+    backupViewModel: BackupViewModel = hiltViewModel(),
 ) {
     val skinId by rootViewModel.skinId.collectAsStateWithLifecycle()
     val skinChosen by rootViewModel.skinChosen.collectAsStateWithLifecycle()
@@ -147,6 +148,14 @@ fun PlayerRoute(
         if (uri != null) broadcastVoiceViewModel.importVoice(uri, asPersonal = true)
     }
 
+    val exportBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri -> if (uri != null) backupViewModel.export(uri) }
+
+    val importBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) backupViewModel.restore(uri) }
+
     // VU-sync mic calibration (Phase 16B) needs RECORD_AUDIO.
     var pendingCalBluetooth by remember { mutableStateOf<Boolean?>(null) }
     val micPermissionLauncher = rememberLauncherForActivityResult(
@@ -189,6 +198,7 @@ fun PlayerRoute(
     var broadcastVoiceOpen by remember { mutableStateOf(false) }
     var vuSyncOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
+    var backupOpen by remember { mutableStateOf(false) }
 
     val actions = PlayerActions(
         onMenu = { scope.launch { drawerState.open() } },
@@ -220,6 +230,7 @@ fun PlayerRoute(
                 onSkin = { rootViewModel.chooseSkin(it); closeDrawer() },
                 onVuSync = { closeDrawer(); vuSyncOpen = true },
                 onAbout = { closeDrawer(); aboutOpen = true },
+                onBackup = { closeDrawer(); backupOpen = true },
                 onTtsTest = onTtsTest?.let { test -> { closeDrawer(); test() } },
             )
         },
@@ -373,6 +384,23 @@ fun PlayerRoute(
                 AboutDialog(onDismiss = { aboutOpen = false })
             }
 
+            if (backupOpen) {
+                val backupResult by backupViewModel.result.collectAsStateWithLifecycle()
+                BackupDialog(
+                    result = backupResult,
+                    onExport = {
+                        exportBackupLauncher.launch("sleepradio-backup-${System.currentTimeMillis()}.zip")
+                    },
+                    onRestore = {
+                        importBackupLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
+                    },
+                    onDismiss = {
+                        backupViewModel.dismissResult()
+                        backupOpen = false
+                    },
+                )
+            }
+
             state.pickerForSlot?.let { slotIndex ->
                 SourcePickerDialog(
                     stations = state.stations,
@@ -440,6 +468,7 @@ private fun AppDrawer(
     onSkin: (SkinId) -> Unit,
     onVuSync: () -> Unit,
     onAbout: () -> Unit,
+    onBackup: () -> Unit,
     onTtsTest: (() -> Unit)? = null,
 ) {
     ModalDrawerSheet {
@@ -511,6 +540,11 @@ private fun AppDrawer(
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             NavigationDrawerItem(
+                label = { Text("Backup & restore") },
+                selected = false,
+                onClick = onBackup,
+            )
+            NavigationDrawerItem(
                 label = { Text("About") },
                 selected = false,
                 onClick = onAbout,
@@ -524,6 +558,63 @@ private fun AppDrawer(
             }
         }
     }
+}
+
+@Composable
+private fun BackupDialog(
+    result: BackupViewModel.Result,
+    onExport: () -> Unit,
+    onRestore: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text("Backup & restore") },
+        text = {
+            Column {
+                Text(
+                    "Saves your settings, source slots, audiobook/podcast progress " +
+                        "and any installed voice packs into one file you choose where " +
+                        "to keep. Folder permissions (Music/Audiobooks/Jingles) can't " +
+                        "be backed up — Android revokes those on reinstall — so " +
+                        "you'll need to re-pick them once after a restore.",
+                    fontSize = 12.sp,
+                )
+                Spacer(Modifier.padding(6.dp))
+                when (result) {
+                    BackupViewModel.Result.Working ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.padding(end = 10.dp))
+                            Text("Working…", fontSize = 13.sp)
+                        }
+                    BackupViewModel.Result.ExportDone -> Text("Backup saved ✓", fontSize = 13.sp)
+                    is BackupViewModel.Result.RestoreDone -> Column {
+                        Text("Restored ✓", fontSize = 13.sp)
+                        if (result.voicesRestored.isNotEmpty()) {
+                            Text(
+                                "Voices restored: ${result.voicesRestored.joinToString()}",
+                                fontSize = 12.sp,
+                            )
+                        }
+                        if (result.foldersToRepick.isNotEmpty()) {
+                            Text(
+                                "Re-pick these folders: ${result.foldersToRepick.joinToString()}",
+                                fontSize = 12.sp,
+                            )
+                        }
+                    }
+                    is BackupViewModel.Result.Failed ->
+                        Text("Failed: ${result.reason}", fontSize = 13.sp)
+                    BackupViewModel.Result.Idle -> Unit
+                }
+                Spacer(Modifier.padding(6.dp))
+                TextButton(onClick = onExport) { Text("Create backup…") }
+                TextButton(onClick = onRestore) { Text("Restore backup…") }
+            }
+        },
+    )
 }
 
 @Composable

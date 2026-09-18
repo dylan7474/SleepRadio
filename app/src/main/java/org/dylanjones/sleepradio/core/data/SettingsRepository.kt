@@ -115,6 +115,21 @@ interface SettingsRepository {
     val vuDelayCustomMs: Flow<Int>
 
     suspend fun setVuDelayCustomMs(ms: Int)
+
+    /**
+     * Every current preference, keyed by its DataStore key name. Values are
+     * whatever primitive type DataStore itself stores (String, Boolean, Int,
+     * Long, Float or Set<String>). For [org.dylanjones.sleepradio.core.backup.BackupManager]
+     * only — not meant for anything else to read.
+     */
+    suspend fun exportAll(): Map<String, Any>
+
+    /**
+     * Replace every preference with [values] (as produced by [exportAll]).
+     * Clears anything not present in [values]. For
+     * [org.dylanjones.sleepradio.core.backup.BackupManager] only.
+     */
+    suspend fun importAll(values: Map<String, Any>)
 }
 
 /** Upper clamp for every VU-sync delay (ms). */

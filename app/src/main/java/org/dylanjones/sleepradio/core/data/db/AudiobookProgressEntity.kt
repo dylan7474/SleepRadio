@@ -21,6 +21,10 @@ interface AudiobookProgressDao {
     @Query("SELECT * FROM audiobook_progress WHERE bookId = :bookId")
     suspend fun get(bookId: String): AudiobookProgressEntity?
 
+    /** Every row. For [org.dylanjones.sleepradio.core.backup.BackupManager] only. */
+    @Query("SELECT * FROM audiobook_progress")
+    suspend fun getAll(): List<AudiobookProgressEntity>
+
     @Upsert
     suspend fun upsert(row: AudiobookProgressEntity)
 }

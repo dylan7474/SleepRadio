@@ -30,6 +30,10 @@ interface PodcastProgressDao {
     @Query("SELECT * FROM podcast_progress WHERE feedId = :feedId")
     suspend fun forFeed(feedId: String): List<PodcastProgressEntity>
 
+    /** Every row. For [org.dylanjones.sleepradio.core.backup.BackupManager] only. */
+    @Query("SELECT * FROM podcast_progress")
+    suspend fun getAll(): List<PodcastProgressEntity>
+
     @Upsert
     suspend fun upsert(row: PodcastProgressEntity)
 }
