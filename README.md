@@ -48,7 +48,10 @@ single row and adds a pair of analogue L/R VU meters.
 - **Even levels**: every rotation track and jingle is loudness‑matched on the fly —
   a quick decode‑scan of the file about to play sets a per‑item gain (up *or* down,
   with a soft limiter), so wildly inconsistent masters don't jump in volume.
-  Nothing is pre‑scanned or written to storage
+  A 3‑track lookahead keeps picks pre‑scanned ahead of the one playing, so a few
+  skips in a row each land on an already‑levelled track instead of falling back
+  to unity gain while a fresh scan catches up. Nothing is pre‑scanned or written
+  to storage
 - **Tight segues**: that same scan finds each track's *and jingle's* trailing
   digital black (and any leading silence) and clips it, so the DJ comes in
   right after the music instead of after a dead gap — with guards so a real
@@ -99,7 +102,13 @@ single row and adds a pair of analogue L/R VU meters.
   "sync" setting per output route and an optional mic auto‑calibration that
   beeps until it converges
 - Navigation drawer: Now playing · Ambient mix · Sleep timer · Radio stations ·
-  Broadcast voice · skin · VU meter sync · About
+  Broadcast voice · skin · VU meter sync · Backup & restore · About
+- **Backup & restore**: zips DataStore settings, source slots, audiobook/podcast
+  progress, and any installed voice packs into one file you choose where to
+  keep, and restores them back live. SAF folder grants (Music/Audiobooks/
+  Jingles) can't be backed up — Android revokes those on reinstall regardless —
+  so a restore tells you which folders to re‑pick instead of silently pointing
+  at a URI it can no longer read
 - Portrait‑locked, edge‑to‑edge, predictive back, TalkBack labels on the controls
 
 ---
