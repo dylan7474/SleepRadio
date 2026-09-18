@@ -276,6 +276,12 @@ internal fun decodeSettings(obj: JSONObject): Map<String, Any> {
         when (val v = obj.get(k)) {
             is JSONArray -> out[k] = (0 until v.length()).mapTo(LinkedHashSet()) { v.getString(it) }
             is Boolean, is Int, is Long, is Double, is String -> out[k] = v
+            // A decimal literal parses as Double on Android's bundled org.json
+            // (what actually runs on-device) but as BigDecimal on the newer
+            // org.json:json artifact (only ever on the JVM unit-test
+            // classpath) -- normalise both to Double so importAll() only
+            // ever has to handle one decimal type.
+            is java.math.BigDecimal -> out[k] = v.toDouble()
             else -> Unit
         }
     }

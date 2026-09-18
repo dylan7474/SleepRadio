@@ -3,7 +3,6 @@ package org.dylanjones.sleepradio.core.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -189,7 +188,18 @@ class SettingsRepositoryImpl @Inject constructor(
                     is Int -> prefs[intPreferencesKey(name)] = value
                     is Long -> prefs[longPreferencesKey(name)] = value
                     is Float -> prefs[floatPreferencesKey(name)] = value
-                    is Double -> prefs[doublePreferencesKey(name)] = value
+                    // JSON has no Float type, so every decimal value that
+                    // round-tripped through a backup zip decodes as Double
+                    // (org.json always parses a non-integer number literal as
+                    // Double) -- this app has zero real doublePreferencesKey
+                    // settings, so any Double here is really a Float that
+                    // went through JSON. Writing it back under a
+                    // doublePreferencesKey (a genuinely different typed key,
+                    // same name) corrupted the entry: the real Float read
+                    // elsewhere later throws ClassCastException at the
+                    // DataStore layer -- crash-looped every launch once a
+                    // restore had run. Coerce back to Float instead.
+                    is Double -> prefs[floatPreferencesKey(name)] = value.toFloat()
                     is Set<*> -> {
                         @Suppress("UNCHECKED_CAST")
                         prefs[stringSetPreferencesKey(name)] = value as Set<String>
