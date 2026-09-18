@@ -172,6 +172,7 @@ private fun PresetRow(state: PlayerUiState, actions: PlayerActions, modifier: Mo
                 index = i,
                 slot = slot,
                 active = slot != null && slot.refId == state.nowPlayingRef,
+                broadcastReady = state.broadcastReady,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 onClick = { actions.onPresetClick(i) },
                 onLongClick = { actions.onPresetLongClick(i) },
@@ -255,15 +256,18 @@ private fun PresetTile(
     index: Int,
     slot: SourceSlot?,
     active: Boolean,
+    broadcastReady: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
     val onTile = LocalAppSkin.current.colors.onTile
+    val showReadyDot = slot?.type == SourceType.BROADCAST && broadcastReady && !active
     val label = if (slot == null) {
         "Preset ${index + 1}, empty. Double tap to assign a source."
     } else {
-        "Preset ${index + 1}, ${slot.label}${if (active) ", playing" else ""}. " +
+        "Preset ${index + 1}, ${slot.label}${if (active) ", playing" else ""}" +
+            "${if (showReadyDot) ", ready to start instantly" else ""}. " +
             "Double tap to play, long press to clear."
     }
     SkinTile(
@@ -290,12 +294,21 @@ private fun PresetTile(
                 softWrap = false,
             )
         } else {
-            Text(
-                slot.type.badge(),
-                color = onTile.copy(alpha = 0.6f),
-                fontSize = 8.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    slot.type.badge(),
+                    color = onTile.copy(alpha = 0.6f),
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (showReadyDot) {
+                    Text(
+                        " ●",
+                        color = LocalAppSkin.current.colors.accent,
+                        fontSize = 8.sp,
+                    )
+                }
+            }
             Text(
                 slot.label,
                 color = onTile,

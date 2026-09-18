@@ -740,6 +740,21 @@ class PlaybackConnection @Inject constructor(
         scope.launch(Dispatchers.Default) { engine.ensureLoaded(pack) }
     }
 
+    /**
+     * Load [voice] and pre-scan [jingles]' loudness well ahead of an eventual
+     * [startBroadcast] call — the same prep it already does, just triggered as
+     * soon as a Broadcast slot is known to be configured (see
+     * [org.dylanjones.sleepradio.feature.player.PlayerViewModel]'s init),
+     * instead of only starting when the preset is actually tapped. Both
+     * [prewarmVoice] and [warmItemGain] are cache-checked / idempotent, so
+     * calling this and then [startBroadcast] shortly after (or not at all, if
+     * the user never taps it) never does the work twice.
+     */
+    fun prewarmBroadcast(voice: VoicePack?, jingles: List<JingleClip>) {
+        prewarmVoice(voice)
+        jingles.forEach { warmItemGain(it.uri) }
+    }
+
     private fun playSingleBroadcast(t: BroadcastTrack) {
         val c = controller ?: return
         applyItemGain(t.uri)

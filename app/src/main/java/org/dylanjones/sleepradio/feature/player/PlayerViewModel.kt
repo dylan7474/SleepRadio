@@ -114,6 +114,15 @@ data class PlayerUiState(
     val patterns: List<AmbientPattern?> = List(AMBIENT_PATTERN_SLOTS) { null },
     /** True between tapping the Broadcast preset and Channel A first playing. */
     val broadcastStarting: Boolean = false,
+    /**
+     * True once the TTS voice, the track pool, and jingle loudness scans are
+     * all pre-warmed and the Broadcast preset would start immediately if
+     * tapped. False while any of that prep is still running in the
+     * background, or if Broadcast isn't configured (no assigned slot, no
+     * music folder, or the folder came back empty — e.g. a lost SAF grant
+     * after a restore).
+     */
+    val broadcastReady: Boolean = false,
 )
 
 @HiltViewModel
@@ -222,6 +231,7 @@ class PlayerViewModel @Inject constructor(
                 binauralLevel = mx.binauralLevel,
                 patterns = l.ambientPatterns,
                 broadcastStarting = l.broadcastStarting && !pb.isBroadcast,
+                broadcastReady = l.broadcastReady,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlayerUiState())
 
@@ -249,6 +259,46 @@ class PlayerViewModel @Inject constructor(
 
         podcasts.feeds.onEach { list -> local.update { it.copy(podcastFeeds = list) } }
             .launchIn(viewModelScope)
+
+        // Prewarm Broadcast (TTS voice load, track pool, jingle loudness scans)
+        // as soon as it's configured, well before the user ever taps the
+        // preset — the TTS model load alone is ~5s, and paying that cold right
+        // when the welcome line needs to come back fast is what made Broadcast
+        // start feel slow. Re-runs (and un-readies) whenever the relevant
+        // settings actually change; a no-op re-tap of the same config is cheap
+        // since prewarmVoice/broadcastPool/warmItemGain are all cache-checked.
+        combine(
+            slots.slots,
+            settings.musicTreeUri,
+            settings.broadcastVoice,
+            settings.jinglesTreeUri,
+            settings.broadcastJingleEnabled,
+        ) { presetSlots, tree, voiceId, jingleTree, jingleOn ->
+            BroadcastPrewarmKey(
+                configured = presetSlots.any { it?.type == SourceType.BROADCAST } && tree != null,
+                tree = tree,
+                voiceId = voiceId,
+                jingleTree = jingleTree,
+                jingleOn = jingleOn,
+            )
+        }.distinctUntilChanged().onEach { key ->
+            local.update { it.copy(broadcastReady = false) }
+            if (!key.configured || key.tree == null) return@onEach
+            val pack = if (key.voiceId == BROADCAST_VOICE_OFF) {
+                null
+            } else {
+                VoicePackResolver(appContext).byId(key.voiceId)
+            }
+            val jingles = if (key.jingleOn && key.jingleTree != null) {
+                runCatching { musicRepository.jingleFiles(key.jingleTree) }.getOrDefault(emptyList())
+            } else {
+                emptyList()
+            }
+            playback.prewarmBroadcast(pack, jingles)
+            val pool = musicRepository.broadcastPool(key.tree)
+            if (pool.isEmpty()) return@onEach // e.g. a lost SAF grant after a restore
+            local.update { it.copy(broadcastReady = true) }
+        }.launchIn(viewModelScope)
 
         // Restore the last ambient mix, then persist every change. Seeding and
         // the persist collector share one coroutine so seed always wins the race
@@ -762,5 +812,17 @@ class PlayerViewModel @Inject constructor(
         val directoryResults: List<RadioStation> = emptyList(),
         val directorySearching: Boolean = false,
         val broadcastStarting: Boolean = false,
+        val broadcastReady: Boolean = false,
+    )
+
+    /** Distinguishes "nothing Broadcast-relevant changed" from a raw settings
+     *  emission, so the prewarm sequence in init{} doesn't re-run on every
+     *  unrelated flow tick. */
+    private data class BroadcastPrewarmKey(
+        val configured: Boolean,
+        val tree: String?,
+        val voiceId: String,
+        val jingleTree: String?,
+        val jingleOn: Boolean,
     )
 }
