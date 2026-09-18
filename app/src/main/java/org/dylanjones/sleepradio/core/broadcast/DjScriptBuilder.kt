@@ -130,8 +130,8 @@ class DjScriptBuilder(private val rng: Random = Random.Default) {
 
     /** "Song by Artist", or just the title when the artist is unknown/blank/==title. */
     private fun trackPhrase(t: BroadcastTrack): String {
-        val title = t.title.trim().ifEmpty { "that one" }
-        val artist = t.artist.trim()
+        val title = normalizeForSpeech(t.title.trim()).ifEmpty { "that one" }
+        val artist = normalizeForSpeech(t.artist.trim())
         val hideArtist = artist.isEmpty() ||
             artist.equals("unknown", ignoreCase = true) ||
             artist.equals(title, ignoreCase = true)

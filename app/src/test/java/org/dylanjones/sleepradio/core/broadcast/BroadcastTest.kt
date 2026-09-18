@@ -243,6 +243,14 @@ class DjScriptBuilderTest {
     }
 
     @Test
+    fun `track titles with numbers are spoken as words, not digit by digit`() {
+        val dated = BroadcastTrack("d", "Live in 1984", "The Band", "Album")
+        val s = DjScriptBuilder(Random(0)).build(LinkKind.LINK, dated, null)
+        assertTrue(s, s.contains("Live in nineteen eighty-four"))
+        assertTrue(s, s.none { it.isDigit() })
+    }
+
+    @Test
     fun `ident is a station line`() {
         val s = DjScriptBuilder(Random(0)).build(LinkKind.IDENT, t1, t2)
         assertTrue(s, s.contains("Sleep Radio"))
@@ -295,5 +303,86 @@ class SpokenTimeTest {
             val s = spokenTime(LocalTime.of(h, m))
             assertTrue("$h:$m -> $s", s.none { it.isDigit() })
         }
+    }
+}
+
+class SpeechTextNormalizerTest {
+
+    @Test
+    fun `four-digit year expands, not digit by digit`() {
+        assertEquals("nineteen eighty-four", normalizeForSpeech("1984"))
+        assertEquals("nineteen hundred", normalizeForSpeech("1900"))
+        assertEquals("nineteen oh one", normalizeForSpeech("1901"))
+        assertEquals("eighteen twelve", normalizeForSpeech("1812"))
+        assertEquals("two thousand", normalizeForSpeech("2000"))
+        assertEquals("two thousand and five", normalizeForSpeech("2005"))
+        assertEquals("twenty ten", normalizeForSpeech("2010"))
+        assertEquals("twenty twenty-four", normalizeForSpeech("2024"))
+    }
+
+    @Test
+    fun `a year in context keeps the surrounding words`() {
+        assertEquals(
+            "Live in nineteen eighty-four",
+            normalizeForSpeech("Live in 1984"),
+        )
+    }
+
+    @Test
+    fun `plain numbers read as cardinals, not years`() {
+        assertEquals("Highway sixty-one", normalizeForSpeech("Highway 61"))
+        assertEquals("Apartment twenty-three", normalizeForSpeech("Apartment 23"))
+        assertEquals("zero", normalizeForSpeech("0"))
+        assertEquals("nine", normalizeForSpeech("9"))
+        assertEquals("one hundred", normalizeForSpeech("100"))
+        assertEquals("one hundred and one", normalizeForSpeech("101"))
+    }
+
+    @Test
+    fun `a bare 4-digit number is read as a year, the common case in a title`() {
+        // Ambiguous without more context ("1201 tracks" vs "the year 1201") —
+        // biased towards a year, since that's the reported problem this exists
+        // to fix; still never digit-by-digit either way.
+        assertEquals("twelve oh one", normalizeForSpeech("1201"))
+    }
+
+    @Test
+    fun `a leading-zero four-digit token is a plain number, not a year`() {
+        assertEquals("one hundred and twenty-three", normalizeForSpeech("0123"))
+    }
+
+    @Test
+    fun `ordinal suffixes expand`() {
+        assertEquals("first", normalizeForSpeech("1st"))
+        assertEquals("second", normalizeForSpeech("2nd"))
+        assertEquals("third", normalizeForSpeech("3rd"))
+        assertEquals("Track twenty-first", normalizeForSpeech("Track 21st"))
+        assertEquals("one hundredth", normalizeForSpeech("100th"))
+    }
+
+    @Test
+    fun `never leaves a digit behind for anything it recognises`() {
+        val samples = listOf("1984", "2024", "Highway 61", "Apartment 23", "Track 21st", "100th")
+        for (s in samples) {
+            val out = normalizeForSpeech(s)
+            assertTrue("$s -> $out", out.none { it.isDigit() })
+        }
+    }
+
+    @Test
+    fun `blank and non-numeric text is untouched`() {
+        assertEquals("", normalizeForSpeech(""))
+        assertEquals("The Beatles", normalizeForSpeech("The Beatles"))
+    }
+
+    @Test
+    fun `cardinalWords covers zero through the hundred-thousands`() {
+        assertEquals("zero", cardinalWords(0))
+        assertEquals("twenty", cardinalWords(20))
+        assertEquals("ninety-nine", cardinalWords(99))
+        assertEquals("two hundred", cardinalWords(200))
+        assertEquals("nine hundred and ninety-nine", cardinalWords(999))
+        assertEquals("one thousand", cardinalWords(1000))
+        assertEquals("twelve thousand three hundred and forty-five", cardinalWords(12345))
     }
 }
