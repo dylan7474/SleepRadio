@@ -57,6 +57,15 @@ single row and adds a pair of analogue L/R VU meters.
   right after the music instead of after a dead gap — with guards so a real
   quiet fade‑out is left alone
 - A track that won't decode is skipped instead of stalling the show
+- **Clear speech**: numbers and dates in a track/artist string are spoken as
+  words, not digit‑by‑digit — "1984" reads as "nineteen eighty‑four", not
+  "one nine eight four". A small rule‑based normalizer (no model, no network),
+  the same idea the spoken clock already used, just applied to track text too
+- **Ready before you tap**: the TTS voice, the jingle loudness scans, and the
+  track pool are all pre‑warmed in the background as soon as Broadcast is
+  configured — not only once the preset is tapped — so starting the show
+  doesn't pay for that prep cold. A small dot on the LIVE preset shows once
+  it would start instantly
 - No API keys, works with no network once the voice is installed (the only
   network use is the one‑time voice download, which is also avoidable)
 
@@ -197,8 +206,25 @@ start (a handful of short files, cheap to do up front) so every jingle plays
 clipped, same as a rotation track — with the startup jingle's own scan
 awaited on its own ahead of the rest, since it plays within a few seconds of
 the welcome line and otherwise loses the race for a decoder against the
-whole folder scanning at once. Nothing below is committed — it's the
-shortlist for after more real bedside use.
+whole folder scanning at once. Since then: **Android 9+ / Galaxy S8+
+compatibility** (`minSdk` 31 → 28, verified end‑to‑end on a physical S8+, not
+just a Pixel 9); **Backup & restore** for settings, source slots,
+audiobook/podcast progress and voice packs (SAF folder grants can't be backed
+up — Android revokes those on reinstall regardless — so a restore just tells
+you which folders to re‑pick); a **speech normalizer** so numbers and dates
+in track text are spoken as words instead of digit‑by‑digit; and a pass on
+**Broadcast start‑up latency** — a widened loudness look‑ahead (survives a
+few skips in a row without falling back to unlevelled audio) had made cold
+starts slower, traced to unthrottled decode concurrency starving the TTS
+voice load of CPU on weaker hardware, fixed with a decode‑concurrency cap
+plus pre‑warming the voice/jingles/track‑pool in the background as soon as
+Broadcast is configured — not only once the preset is tapped — with a small
+"ready" dot on the LIVE preset once that prep is done. Also fixed: every
+restored Float setting (announcer volume/speed) corrupted DataStore on
+restore — JSON has no Float type, so the value silently got stored under the
+wrong typed preference key, crash‑looping the app the next time Broadcast
+read it. Nothing below is committed — it's the shortlist for after more real
+bedside use.
 
 **Audio & sources**
 - [ ] Auto‑reconnect for dropped radio streams (backoff + a "reconnecting…" state)
@@ -219,6 +245,25 @@ shortlist for after more real bedside use.
 - [ ] "Stop at end of chapter / track" option for audiobooks (deferred from the sleep timer)
 - [ ] Playback speed for audiobooks again, if it turns out to be missed
 - [ ] Fade‑*in* on start, and a short crossfade when switching sources
+
+**On‑device AI (exploratory)**
+- [ ] AICore/Gemini Nano as an *optional* enhancement layer on top of the
+      rule‑based speech normalizer, for mispronunciations a fixed rule table
+      can't reasonably cover — never a requirement: only a narrow set of
+      devices support it (recent Pixels, some Samsung flagships via Play
+      Services), so the S8+ and most other hardware always uses the
+      rule‑based path. Shared "is a model available / run a prompt / fall
+      back cleanly" plumbing, built once, reused by whichever of these lands
+      first
+- [ ] DJ "personality" beyond reading track names — reusing that same
+      on-device-model plumbing to generate richer, less templated commentary
+      (an opinion on a track, a callback to earlier in the show) instead of
+      only filling a fixed phrase pool. Bigger and more speculative than the
+      normalizer enhancement above: needs pre‑generation ahead of the segue
+      gap (same pattern as today's TTS pre‑synthesis) so it can't stall the
+      show, tone constraints so a 2 a.m. DJ doesn't ramble, and the template
+      system stays as the permanent fallback everywhere the model isn't
+      available. Likely wants its own on/off toggle, like Chattiness
 
 **Ambient**
 - [ ] A real settings screen: custom binaural carrier/beat, an independent noise level,
