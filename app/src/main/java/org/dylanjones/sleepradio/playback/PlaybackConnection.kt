@@ -328,9 +328,21 @@ class PlaybackConnection @Inject constructor(
         return pick
     }
 
-    /** Top the lookahead queue back up to [BROADCAST_LOOKAHEAD] picks. */
-    private fun refillBroadcastQueue() {
-        while (broadcastQueue.size < BROADCAST_LOOKAHEAD) {
+    /**
+     * Top the lookahead queue back up to [target] picks (default
+     * [BROADCAST_LOOKAHEAD]). Each pick fires its own decode scan
+     * ([warmItemGain]), which competes with every other in-flight scan for a
+     * shared MediaCodec decoder — fine mid-show, where there's a whole
+     * track's length to spare, but at [startBroadcast] every one of those
+     * scans is also competing with the jingle-folder prescan and the TTS
+     * voice load for the *same* CPU, right when the welcome line needs to
+     * come back fast. Callers on that critical path pass a shallow [target]
+     * (see [startBroadcast]); [onBroadcastTrackStarted] passes none, so the
+     * queue quietly deepens to full lookahead over the first track or two of
+     * a show, once there's no time pressure.
+     */
+    private fun refillBroadcastQueue(target: Int = BROADCAST_LOOKAHEAD) {
+        while (broadcastQueue.size < target) {
             if (enqueueBroadcastPick() == null) break
         }
     }
@@ -655,11 +667,16 @@ class PlaybackConnection @Inject constructor(
 
         currentBroadcast = selector?.next()
         val first = currentBroadcast ?: run { endBroadcastInternal(); return }
-        refillBroadcastQueue()
+        // Shallow on purpose: startup is already contending for a decoder with
+        // the jingle prescan above and the TTS voice load below, so only warm
+        // one track ahead here. onBroadcastTrackStarted() deepens the queue to
+        // the full BROADCAST_LOOKAHEAD once the first track is playing and
+        // nothing else needs the CPU.
+        refillBroadcastQueue(target = 1)
 
         // Loudness-scan what opens the show while the voice/model loads (Phase 12).
         // (startupJingleUri was already warmed, first in line, just above;
-        // refillBroadcastQueue() above already kicked off the rest of the lookahead.)
+        // refillBroadcastQueue() above already kicked off the one track ahead.)
         warmItemGain(first.uri)
 
         if (voice != null) {

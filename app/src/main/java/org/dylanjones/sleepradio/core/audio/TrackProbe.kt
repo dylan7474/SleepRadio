@@ -8,6 +8,8 @@ import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.nio.ByteOrder
 import kotlin.math.sqrt
@@ -60,12 +62,27 @@ class TrackProbe(
             size > MAX_CACHE
     }
 
+    /**
+     * Caps real concurrent decode work. [analyse] is CPU/MediaCodec-bound, not
+     * I/O-bound, so running it on [io] (normally `Dispatchers.IO`, a large
+     * pool sized for blocking I/O) would otherwise let every in-flight scan —
+     * a jingle-folder prescan can fire ~25 at once — hit the decoder
+     * "simultaneously" on a phone with a handful of real cores. Measured
+     * on-device (Galaxy S8+): that contention was starving the TTS voice load
+     * and welcome-line synthesis of CPU, adding 10+ seconds to Broadcast
+     * start. Two lets one scan's I/O wait overlap another's CPU work without
+     * oversubscribing the CPU entirely.
+     */
+    private val decodeLimit = Semaphore(2)
+
     /** Scan (and cache) [uri] on first ask; instant thereafter. */
     suspend fun scanFor(context: Context, uri: String): TrackScan = withContext(io) {
         synchronized(cache) { cache[uri] }?.let { return@withContext it }
-        val scan = runCatching { analyse(context, Uri.parse(uri)) }
-            .onFailure { Log.w(TAG, "track probe failed ($uri): ${it.message}") }
-            .getOrDefault(TrackScan.NONE)
+        val scan = decodeLimit.withPermit {
+            runCatching { analyse(context, Uri.parse(uri)) }
+                .onFailure { Log.w(TAG, "track probe failed ($uri): ${it.message}") }
+                .getOrDefault(TrackScan.NONE)
+        }
         synchronized(cache) { cache[uri] = scan }
         Log.d(
             TAG,
