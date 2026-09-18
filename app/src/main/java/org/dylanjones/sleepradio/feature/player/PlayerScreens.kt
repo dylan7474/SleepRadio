@@ -201,12 +201,22 @@ private fun AmbientTiles(
             },
             modifier = Modifier.weight(1f).fillMaxHeight(),
         ) {
-            TileTitle("SLEEP")
-            if (!compact) Text("🌙", fontSize = 20.sp)
-            TileSub(
-                if (state.sleepActive) formatTime(state.sleepRemainingMs)
-                else "${state.sleepDurationMin} MIN",
-            )
+            if (state.sleepActive) {
+                // Large, glasses-off-readable countdown — no "SLEEP" label
+                // while it's actually running, just the minutes left.
+                val minutesLeft = ((state.sleepRemainingMs + 59_999L) / 60_000L).coerceAtLeast(0L)
+                Text(
+                    text = "$minutesLeft",
+                    color = LocalAppSkin.current.colors.onTile,
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                TileSub("MIN LEFT")
+            } else {
+                TileTitle("SLEEP")
+                if (!compact) Text("🌙", fontSize = 20.sp)
+                TileSub("${state.sleepDurationMin} MIN")
+            }
         }
         val binauralOn = state.binaural != BinauralPreset.OFF
         SkinTile(
