@@ -14,6 +14,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import java.util.concurrent.ConcurrentHashMap
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -157,7 +158,16 @@ class PlaybackConnection @Inject constructor(
     private var ttsEngine: OfflineTtsEngine? = null
     private var djPlayer: DjVoicePlayer? = null
     private var currentBroadcast: BroadcastTrack? = null
-    private var nextBroadcast: BroadcastTrack? = null
+    /**
+     * Picks queued beyond [currentBroadcast], in play order (head = next up).
+     * Kept [BROADCAST_LOOKAHEAD] deep and pre-scanned via [warmItemGain] so a
+     * few skips in a row each land on an already-levelled pick instead of
+     * falling back to unity gain while a fresh scan catches up.
+     */
+    private val broadcastQueue: ArrayDeque<BroadcastTrack> = ArrayDeque()
+    private val nextBroadcast: BroadcastTrack? get() = broadcastQueue.firstOrNull()
+    /** In-flight [TrackProbe] warm scans by URI, so a superseded one can be cancelled. */
+    private val warmJobs: MutableMap<String, Job> = ConcurrentHashMap()
     /** The in-flight "load voice + speak welcome" coroutine, so a restart cancels it. */
     private var broadcastJob: Job? = null
     /**
@@ -289,10 +299,40 @@ class PlaybackConnection @Inject constructor(
         }
     }
 
-    /** Pre-scan [uri] so [applyItemGain] / the clip config are ready when it plays. */
+    /**
+     * Pre-scan [uri] so [applyItemGain] / the clip config are ready when it plays.
+     * Skips a URI that's already cached or already has a scan in flight, and
+     * tracks the job so [cancelWarmJobs] can drop it if it's superseded first.
+     */
     private fun warmItemGain(uri: String?) {
         val u = uri ?: return
-        scope.launch(Dispatchers.Default) { trackProbe.warm(appContext, u) }
+        if (trackProbe.cached(u) != null) return
+        if (warmJobs[u]?.isActive == true) return
+        warmJobs[u] = scope.launch(Dispatchers.Default) {
+            trackProbe.warm(appContext, u)
+            warmJobs.remove(u)
+        }
+    }
+
+    /** Cancel any not-yet-started/in-flight warm scans (Broadcast ending, or a reset). */
+    private fun cancelWarmJobs() {
+        warmJobs.values.forEach { it.cancel() }
+        warmJobs.clear()
+    }
+
+    /** Pull one more pick from [selector], queue it, and start warming its loudness scan. */
+    private fun enqueueBroadcastPick(): BroadcastTrack? {
+        val pick = selector?.next() ?: return null
+        broadcastQueue.addLast(pick)
+        warmItemGain(pick.uri)
+        return pick
+    }
+
+    /** Top the lookahead queue back up to [BROADCAST_LOOKAHEAD] picks. */
+    private fun refillBroadcastQueue() {
+        while (broadcastQueue.size < BROADCAST_LOOKAHEAD) {
+            if (enqueueBroadcastPick() == null) break
+        }
     }
 
     /**
@@ -614,13 +654,13 @@ class PlaybackConnection @Inject constructor(
         }
 
         currentBroadcast = selector?.next()
-        nextBroadcast = selector?.next()
         val first = currentBroadcast ?: run { endBroadcastInternal(); return }
+        refillBroadcastQueue()
 
         // Loudness-scan what opens the show while the voice/model loads (Phase 12).
-        // (startupJingleUri was already warmed, first in line, just above.)
+        // (startupJingleUri was already warmed, first in line, just above;
+        // refillBroadcastQueue() above already kicked off the rest of the lookahead.)
         warmItemGain(first.uri)
-        warmItemGain(nextBroadcast?.uri)
 
         if (voice != null) {
             if (ttsEngine == null) ttsEngine = OfflineTtsEngine()
@@ -732,8 +772,8 @@ class PlaybackConnection @Inject constructor(
         val jingleDue = jingleDueThisGap(phase)
         Log.d(TAG, "broadcast: now '${currentBroadcast?.title}' by ${currentBroadcast?.artist}; " +
             "after this track: link=$kind jingle=$jingleDue (windDown=$phase)")
-        // Scan the next track's loudness now, while this one plays (Phase 12).
-        warmItemGain(nextBroadcast?.uri)
+        // Keep the lookahead queue topped up (and pre-scanned) while this one plays (Phase 12).
+        refillBroadcastQueue()
 
         val builder = scriptBuilder
         val player = djPlayer
@@ -943,13 +983,12 @@ class PlaybackConnection @Inject constructor(
         c.play()
     }
 
-    /** Move to the pre-picked next track and pick a new one behind it. */
+    /** Move to the head of the pre-picked lookahead queue (refilled by [onBroadcastTrackStarted]). */
     private fun advanceBroadcast() {
         if (!isBroadcast) { advancing = false; return }
-        val upcoming = nextBroadcast ?: selector?.next()
+        val upcoming = if (broadcastQueue.isNotEmpty()) broadcastQueue.removeFirst() else selector?.next()
         if (upcoming == null) { endBroadcastInternal(); return }
         currentBroadcast = upcoming
-        nextBroadcast = selector?.next()
         playSingleBroadcast(upcoming)
         onBroadcastTrackStarted()
         advancing = false
@@ -983,7 +1022,8 @@ class PlaybackConnection @Inject constructor(
         selector = null
         showClock = null
         currentBroadcast = null
-        nextBroadcast = null
+        broadcastQueue.clear()
+        cancelWarmJobs()
         voicePack = null
         duckGain = 1f
         djPlayer?.stop()
@@ -1083,6 +1123,8 @@ class PlaybackConnection @Inject constructor(
         const val MAX_BROADCAST_ERROR_STREAK = 6
         /** Broadcast: only a jingle shorter than this opens the show. */
         const val STARTUP_JINGLE_MAX_MS = 45_000L
+        /** Broadcast: how many picks ahead of the current track to keep queued + pre-scanned. */
+        const val BROADCAST_LOOKAHEAD = 3
     }
 }
 
