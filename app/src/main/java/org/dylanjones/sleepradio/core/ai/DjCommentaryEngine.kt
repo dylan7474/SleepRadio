@@ -5,12 +5,10 @@ import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.GenerativeModel
-import com.google.mlkit.genai.prompt.ModelConfig
-import com.google.mlkit.genai.prompt.ModelPreference
 import com.google.mlkit.genai.prompt.SystemInstruction
 import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
-import com.google.mlkit.genai.prompt.generationConfig
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -26,26 +24,36 @@ import kotlinx.coroutines.flow.Flow
  * `null`/[FeatureStatus.UNAVAILABLE], never as a thrown exception — the
  * caller's job is always "use this if it's there, fall back to the template
  * if not", not to handle AICore-specific errors.
+ *
+ * `Generation.getClient()` with no [com.google.mlkit.genai.prompt.GenerationConfig]
+ * — deliberately matching the exact call shape proven working in the sibling
+ * `DylanSpeaks` project's `AiReplyManager` on this same hardware, rather than
+ * introducing an untested [com.google.mlkit.genai.prompt.ModelConfig]/
+ * [com.google.mlkit.genai.prompt.ModelPreference] customisation. A latency
+ * tune can be reintroduced later, proven working first.
  */
 class DjCommentaryEngine {
 
-    /** FAST over FULL: this runs on the playback-gap critical path (see
-     *  [org.dylanjones.sleepradio.playback.PlaybackConnection]'s pre-synth
-     *  budget), where a quicker, slightly less elaborate reply beats a richer
-     *  one that risks missing the segue and falling back anyway. */
-    private val model: GenerativeModel by lazy {
-        Generation.getClient(
-            generationConfig {
-                modelConfig = ModelConfig.builder().apply { preference = ModelPreference.FAST }.build()
-            },
-        )
-    }
+    private val model: GenerativeModel by lazy { Generation.getClient() }
 
-    /** One of [FeatureStatus]'s `UNAVAILABLE`/`DOWNLOADABLE`/`DOWNLOADING`/`AVAILABLE`. */
-    suspend fun status(): Int =
-        runCatching { model.checkStatus() }
-            .onFailure { Log.w(TAG, "checkStatus failed", it) }
-            .getOrDefault(FeatureStatus.UNAVAILABLE)
+    /**
+     * One of [FeatureStatus]'s `UNAVAILABLE`/`DOWNLOADABLE`/`DOWNLOADING`/`AVAILABLE`.
+     * `UNAVAILABLE` on the very first call can just mean AICore hasn't finished
+     * fetching its config yet for this app — `DylanSpeaks` hit the same thing
+     * and retries a few times before concluding the device really can't do it;
+     * mirrored here rather than trusting a single cold-start check.
+     */
+    suspend fun status(): Int {
+        repeat(STATUS_RETRIES + 1) { attempt ->
+            val result = runCatching { model.checkStatus() }
+                .onFailure { Log.w(TAG, "checkStatus failed (attempt $attempt)", it) }
+                .getOrDefault(FeatureStatus.UNAVAILABLE)
+            Log.d(TAG, "checkStatus (attempt $attempt) = ${statusName(result)}")
+            if (result != FeatureStatus.UNAVAILABLE || attempt == STATUS_RETRIES) return result
+            delay(STATUS_RETRY_DELAY_MS)
+        }
+        return FeatureStatus.UNAVAILABLE
+    }
 
     /** Triggers (or observes, if already running) the AICore feature download. */
     fun download(): Flow<DownloadStatus> = model.download()
@@ -74,7 +82,17 @@ class DjCommentaryEngine {
         runCatching { model.close() }
     }
 
+    private fun statusName(s: Int): String = when (s) {
+        FeatureStatus.AVAILABLE -> "AVAILABLE"
+        FeatureStatus.DOWNLOADABLE -> "DOWNLOADABLE"
+        FeatureStatus.DOWNLOADING -> "DOWNLOADING"
+        FeatureStatus.UNAVAILABLE -> "UNAVAILABLE"
+        else -> "unknown($s)"
+    }
+
     private companion object {
         const val TAG = "DjCommentaryEngine"
+        const val STATUS_RETRIES = 3
+        const val STATUS_RETRY_DELAY_MS = 3_000L
     }
 }
