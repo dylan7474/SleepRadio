@@ -255,14 +255,15 @@ bedside use.
       on‑device yet, and a hard timeout that falls back to the already‑queued
       template line if the model is slow, unavailable, or gives an unusable
       reply. Never touches the spoken clock, idents, or a jingle‑split gap —
-      only a plain link. **Built and run on a Pixel 9, 2026‑09‑19** —
-      Broadcast plays normally through the template‑only fallback (confirmed
-      via logcat across several track transitions, no crashes), and the
-      toggle correctly stays off with "Not available on this device" shown.
-      The actual AI‑generated line couldn't be exercised yet: this Pixel 9
-      currently reports Gemini Nano as unavailable despite AICore/Play
-      Services both being installed and current — a device‑side rollout/
-      provisioning gate, not a bug here. See Phase 18 in the plan doc.
+      only a plain link. **Device‑verified end to end on a Pixel 9,
+      2026‑09‑19** — two real AI‑generated DJ lines played live through the
+      TTS voice during a Broadcast session, e.g. "A shift in pace, perhaps,
+      from that vibrant energy to something a bit more observant." An
+      earlier pass this same session saw Gemini Nano report unavailable;
+      turned out to be a real bug (a custom model‑preference config that
+      wasn't actually provisioned) rather than a device limitation, found by
+      comparing against the sibling DylanSpeaks project's proven‑working
+      call and fixed. See Phase 18 in the plan doc.
 - [ ] AICore/Gemini Nano as an *optional* enhancement layer on top of the
       rule‑based speech normalizer, for mispronunciations a fixed rule table
       can't reasonably cover — never a requirement: only a narrow set of
