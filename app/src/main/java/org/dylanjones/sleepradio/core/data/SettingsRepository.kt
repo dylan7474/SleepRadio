@@ -94,6 +94,15 @@ interface SettingsRepository {
 
     suspend fun setBroadcastJingleEvery(tracks: Int)
 
+    /**
+     * Phase 18: let the on-device AI (Gemini Nano via AICore) generate the
+     * occasional DJ link, on top of the deterministic templates. Off by
+     * default — beta API, only available on a narrow set of devices.
+     */
+    val broadcastAiCommentary: Flow<Boolean>
+
+    suspend fun setBroadcastAiCommentary(enabled: Boolean)
+
     // --- Studio-skin VU meter output-latency compensation (Phase 16) ---
 
     /** True = pick the delay by the live output route; false = use [vuDelayCustomMs]. Default true. */

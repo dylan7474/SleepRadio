@@ -32,7 +32,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.media3.common.PlaybackParameters
+import org.dylanjones.sleepradio.core.ai.DjCommentaryEngine
 import org.dylanjones.sleepradio.core.audio.AudioChannel
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.TrackProbe
@@ -40,11 +42,14 @@ import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.broadcast.BroadcastConfig
 import org.dylanjones.sleepradio.core.broadcast.BroadcastSelector
 import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
+import org.dylanjones.sleepradio.core.broadcast.DJ_SYSTEM_INSTRUCTION
 import org.dylanjones.sleepradio.core.broadcast.DjScriptBuilder
 import org.dylanjones.sleepradio.core.broadcast.JingleClip
 import org.dylanjones.sleepradio.core.broadcast.LinkKind
 import org.dylanjones.sleepradio.core.broadcast.ShowClock
 import org.dylanjones.sleepradio.core.broadcast.WindDownPhase
+import org.dylanjones.sleepradio.core.broadcast.buildDjCommentaryPrompt
+import org.dylanjones.sleepradio.core.broadcast.sanitizeAiLine
 import org.dylanjones.sleepradio.core.data.Chapter
 import org.dylanjones.sleepradio.core.tts.DjVoicePlayer
 import org.dylanjones.sleepradio.core.tts.OfflineTtsEngine
@@ -188,6 +193,13 @@ class PlaybackConnection @Inject constructor(
     private var announcerVolume: Float = 1f
     /** DJ speech rate (1.0 = natural, higher is faster). */
     private var announcerSpeed: Float = 1f
+    /** Phase 18: on-device AI DJ commentary, news up only when a broadcast
+     *  starts with it enabled — see [startBroadcast] / [endBroadcastInternal]. */
+    private var aiEngine: DjCommentaryEngine? = null
+    private var aiCommentaryEnabled: Boolean = false
+    /** Last few "Title by Artist" strings said, for the AI's callback prompt.
+     *  Session-only — never persisted, cleared in [endBroadcastInternal]. */
+    private val recentTrackHistory: ArrayDeque<String> = ArrayDeque()
     /** Jingle folder contents (document URIs) + cadence; [jingleEvery] 0 = jingles off. */
     private var jingleUris: List<String> = emptyList()
     private var jingleEvery: Int = 0
@@ -643,6 +655,9 @@ class PlaybackConnection @Inject constructor(
         announceEveryTrack = config.announceEveryTrack
         announcerVolume = config.announcerVolume.coerceIn(0f, 1f)
         announcerSpeed = config.announcerSpeed.coerceIn(0.5f, 2f)
+        aiCommentaryEnabled = config.aiCommentaryEnabled
+        recentTrackHistory.clear()
+        if (config.aiCommentaryEnabled && aiEngine == null) aiEngine = DjCommentaryEngine()
         jingleUris = jingles.map { it.uri }
         jingleEvery = if (jingles.isEmpty()) 0 else config.jingleEvery.coerceIn(0, 10)
         tracksSinceJingle = 0
@@ -815,6 +830,16 @@ class PlaybackConnection @Inject constructor(
         val terse = phase == WindDownPhase.EASING
         val everyTrack = announceEveryTrack
 
+        // Phase 18: remember this track for the AI commentary's callback prompt.
+        prev?.let { t ->
+            val label = "${t.title} by ${t.artist}"
+            if (recentTrackHistory.lastOrNull() != label) {
+                recentTrackHistory.addLast(label)
+                while (recentTrackHistory.size > AI_HISTORY_SIZE) recentTrackHistory.removeFirst()
+            }
+        }
+        val historySnapshot = recentTrackHistory.toList()
+
         fun planFor(spokenAt: LocalTime): List<SegueStep> = buildList {
             val talkyKind = kind == LinkKind.LINK || kind == LinkKind.TIME_CHECK
             when {
@@ -864,6 +889,32 @@ class PlaybackConnection @Inject constructor(
                     // Only swap in the projected text if the segue hasn't started.
                     if (isBroadcast && gen == broadcastGen && !segueRunning) {
                         seguePlan = ArrayDeque(projected)
+                    }
+                }
+            }
+
+            // Phase 18: for a plain LINK gap (never the clock, an ident, a
+            // jingle-split gap, or a wind-down), try an AI-generated line on
+            // top of the template one already installed above. A timeout,
+            // failure, or unusable response just leaves that template line in
+            // place — this is purely additive, never a second source of truth.
+            if (kind == LinkKind.LINK && !terse && !jingleDue && hasVoice && aiCommentaryEnabled) {
+                val engine = aiEngine
+                val aiLine = engine?.let {
+                    withTimeoutOrNull(AI_COMMENTARY_TIMEOUT_MS) {
+                        it.generateLink(
+                            DJ_SYSTEM_INSTRUCTION,
+                            buildDjCommentaryPrompt(prev, next, LocalTime.now(), historySnapshot),
+                        )
+                    }?.let(::sanitizeAiLine)
+                }
+                if (aiLine != null) {
+                    player?.preload(aiLine, announcerSpeed)
+                    withContext(mainDispatcher) {
+                        if (isBroadcast && gen == broadcastGen && !segueRunning) {
+                            seguePlan = ArrayDeque(listOf(SegueStep.Say(aiLine)))
+                            Log.d(TAG, "broadcast: AI commentary swapped in: \"$aiLine\"")
+                        }
                     }
                 }
             }
@@ -1058,6 +1109,8 @@ class PlaybackConnection @Inject constructor(
         cancelWarmJobs()
         voicePack = null
         duckGain = 1f
+        aiCommentaryEnabled = false
+        recentTrackHistory.clear()
         djPlayer?.stop()
         djPlayer?.clearCache()
         // Halt any leftover Channel-A playback so a restart's welcome doesn't
@@ -1157,6 +1210,11 @@ class PlaybackConnection @Inject constructor(
         const val STARTUP_JINGLE_MAX_MS = 45_000L
         /** Broadcast: how many picks ahead of the current track to keep queued + pre-scanned. */
         const val BROADCAST_LOOKAHEAD = 3
+        /** Phase 18: give an AI commentary line this long to land before giving up
+         *  and keeping the already-installed template line. */
+        const val AI_COMMENTARY_TIMEOUT_MS = 6_000L
+        /** Phase 18: how many recent tracks the AI callback prompt sees. */
+        const val AI_HISTORY_SIZE = 4
     }
 }
 

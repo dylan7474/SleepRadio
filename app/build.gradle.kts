@@ -130,6 +130,11 @@ dependencies {
     // (GPL-3.0-or-later) — the project is GPL-3.0-or-later for this reason.
     implementation(libs.sherpa.onnx)
 
+    // SleepRadio: ML Kit GenAI Prompt API — on-device Gemini Nano via AICore
+    // (Phase 18, DJ commentary). Beta, no key, no network beyond the
+    // one-time AICore feature download (Decision #15 still holds).
+    implementation(libs.mlkit.genai.prompt)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.org.json)

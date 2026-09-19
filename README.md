@@ -247,23 +247,31 @@ bedside use.
 - [ ] Fade‑*in* on start, and a short crossfade when switching sources
 
 **On‑device AI (exploratory)**
+- [x] DJ "personality" beyond reading track names — on‑device Gemini Nano
+      (ML Kit GenAI Prompt API, via AICore) generates the occasional richer
+      LINK‑gap commentary on top of (never instead of) the template pool,
+      with its own off‑by‑default toggle in the Broadcast voice dialog
+      ("AI commentary (experimental)"), a download step when the model isn't
+      on‑device yet, and a hard timeout that falls back to the already‑queued
+      template line if the model is slow, unavailable, or gives an unusable
+      reply. Never touches the spoken clock, idents, or a jingle‑split gap —
+      only a plain link. **Built and run on a Pixel 9, 2026‑09‑19** —
+      Broadcast plays normally through the template‑only fallback (confirmed
+      via logcat across several track transitions, no crashes), and the
+      toggle correctly stays off with "Not available on this device" shown.
+      The actual AI‑generated line couldn't be exercised yet: this Pixel 9
+      currently reports Gemini Nano as unavailable despite AICore/Play
+      Services both being installed and current — a device‑side rollout/
+      provisioning gate, not a bug here. See Phase 18 in the plan doc.
 - [ ] AICore/Gemini Nano as an *optional* enhancement layer on top of the
       rule‑based speech normalizer, for mispronunciations a fixed rule table
       can't reasonably cover — never a requirement: only a narrow set of
       devices support it (recent Pixels, some Samsung flagships via Play
       Services), so the S8+ and most other hardware always uses the
-      rule‑based path. Shared "is a model available / run a prompt / fall
-      back cleanly" plumbing, built once, reused by whichever of these lands
-      first
-- [ ] DJ "personality" beyond reading track names — reusing that same
-      on-device-model plumbing to generate richer, less templated commentary
-      (an opinion on a track, a callback to earlier in the show) instead of
-      only filling a fixed phrase pool. Bigger and more speculative than the
-      normalizer enhancement above: needs pre‑generation ahead of the segue
-      gap (same pattern as today's TTS pre‑synthesis) so it can't stall the
-      show, tone constraints so a 2 a.m. DJ doesn't ramble, and the template
-      system stays as the permanent fallback everywhere the model isn't
-      available. Likely wants its own on/off toggle, like Chattiness
+      rule‑based path. The DJ‑personality feature above already built the
+      shared "is a model available / run a prompt / fall back cleanly"
+      plumbing this would reuse (`DjCommentaryEngine`) — this item is now
+      just wiring it into the normalizer's output, not new infrastructure.
 
 **Ambient**
 - [ ] A real settings screen: custom binaural carrier/beat, an independent noise level,

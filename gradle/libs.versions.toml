@@ -30,6 +30,11 @@ sherpaOnnx = "1.13.4"
 # a compile-time stub (throws/returns defaults at runtime), so anything
 # exercising org.json (BackupCodecTest) needs this on the test classpath.
 orgJson = "20231013"
+# ML Kit GenAI Prompt API (on-device Gemini Nano via AICore) — Phase 18 DJ
+# commentary. Beta, no SLA. Pulls kotlin-stdlib 2.3.21 transitively — check
+# this resolves/compiles cleanly against this project's Kotlin 2.2.10 (see
+# the Coil note above: 2.2.10 vs kotlin-stdlib 2.4.x was NOT readable).
+genaiPrompt = "1.0.0-beta4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -67,6 +72,7 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 sherpa-onnx = { group = "com.github.k2-fsa", name = "sherpa-onnx", version.ref = "sherpaOnnx" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
+mlkit-genai-prompt = { group = "com.google.mlkit", name = "genai-prompt", version.ref = "genaiPrompt" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

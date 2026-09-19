@@ -145,6 +145,13 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_JINGLE_EVERY] = tracks.coerceIn(1, 10) }
     }
 
+    override val broadcastAiCommentary: Flow<Boolean> =
+        dataStore.data.map { it[KEY_BROADCAST_AI_COMMENTARY] ?: false }
+
+    override suspend fun setBroadcastAiCommentary(enabled: Boolean) {
+        dataStore.edit { it[KEY_BROADCAST_AI_COMMENTARY] = enabled }
+    }
+
     override val vuSyncAuto: Flow<Boolean> =
         dataStore.data.map { it[KEY_VU_SYNC_AUTO] ?: true }
 
@@ -223,6 +230,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_JINGLES_TREE = stringPreferencesKey("jingles_tree_uri")
         val KEY_JINGLE_ENABLED = booleanPreferencesKey("broadcast_jingle_enabled")
         val KEY_JINGLE_EVERY = intPreferencesKey("broadcast_jingle_every")
+        val KEY_BROADCAST_AI_COMMENTARY = booleanPreferencesKey("broadcast_ai_commentary")
         val KEY_VU_SYNC_AUTO = booleanPreferencesKey("vu_sync_auto")
         val KEY_VU_DELAY_PHONE = intPreferencesKey("vu_delay_phone_ms")
         val KEY_VU_DELAY_BT = intPreferencesKey("vu_delay_bt_ms")

@@ -59,4 +59,13 @@ data class BroadcastConfig(
     val announcerSpeed: Float = 1f,
     /** Drop a jingle in every N tracks (1..10); 0 = jingles off. */
     val jingleEvery: Int = 0,
+    /**
+     * Phase 18: let the on-device AI (Gemini Nano via AICore) generate the
+     * occasional plain [LinkKind.LINK] line, on top of the template pass.
+     * Never affects [LinkKind.TIME_CHECK]/[LinkKind.IDENT], a jingle-split
+     * gap, or a wind-down [WindDownPhase] — see `PlaybackConnection
+     * .onBroadcastTrackStarted`. Off by default: beta API, narrow device
+     * support.
+     */
+    val aiCommentaryEnabled: Boolean = false,
 )
