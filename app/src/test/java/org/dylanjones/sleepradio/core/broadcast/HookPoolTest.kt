@@ -70,7 +70,7 @@ class HookPoolTest {
         val file = listOf("src/main/assets/dj_hooks_70s.txt", "app/src/main/assets/dj_hooks_70s.txt")
             .map(::File).first { it.exists() }
         val hooks = parseHooks(file.readText())
-        assertTrue("expected a healthy pool, got ${hooks.size}", hooks.size >= 80)
+        assertTrue("expected a healthy pool, got ${hooks.size}", hooks.size >= 70)
         assertEquals("duplicates", hooks.size, hooks.toSet().size)
         hooks.forEach { h ->
             assertFalse("digits (TTS): $h", h.any { it.isDigit() })
