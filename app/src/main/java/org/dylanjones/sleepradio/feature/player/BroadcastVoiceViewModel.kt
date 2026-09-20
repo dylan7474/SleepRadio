@@ -3,8 +3,6 @@ package org.dylanjones.sleepradio.feature.player
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.mlkit.genai.common.DownloadStatus
-import com.google.mlkit.genai.common.FeatureStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
@@ -16,7 +14,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.dylanjones.sleepradio.core.ai.DjCommentaryEngine
 import org.dylanjones.sleepradio.core.broadcast.Chattiness
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_PERSONAL
@@ -49,18 +46,6 @@ class BroadcastVoiceViewModel @Inject constructor(
     /** Bumped after an install/remove so the dialog re-reads what's on disk. */
     private val rescan = MutableStateFlow(0)
 
-    // --- Phase 18: on-device AI commentary status/download ---
-    private val aiEngine = DjCommentaryEngine()
-    private val aiStatus = MutableStateFlow(FeatureStatus.UNAVAILABLE)
-    private val aiDownload = MutableStateFlow(AiDownloadState())
-
-    private data class AiDownloadState(val downloading: Boolean = false, val pct: Int = -1)
-    private data class AiSubState(val status: Int, val download: AiDownloadState, val enabled: Boolean)
-
-    init {
-        viewModelScope.launch { aiStatus.value = aiEngine.status() }
-    }
-
     data class UiState(
         val selected: String = BROADCAST_VOICE_OFF,
         val stockInstalled: Boolean = false,
@@ -72,12 +57,7 @@ class BroadcastVoiceViewModel @Inject constructor(
         val jingleEnabled: Boolean = false,
         val jingleEvery: Int = 4,
         val install: VoicePackInstaller.InstallState = VoicePackInstaller.InstallState.Idle,
-        val aiCommentaryEnabled: Boolean = false,
-        /** One of [FeatureStatus]'s UNAVAILABLE/DOWNLOADABLE/DOWNLOADING/AVAILABLE. */
-        val aiStatus: Int = FeatureStatus.UNAVAILABLE,
-        val aiDownloading: Boolean = false,
-        /** -1 = unknown/indeterminate. */
-        val aiDownloadPct: Int = -1,
+        val djHooksEnabled: Boolean = false,
     )
 
     val uiState: StateFlow<UiState> =
@@ -95,11 +75,9 @@ class BroadcastVoiceViewModel @Inject constructor(
             ) { enabled, every, tree -> Triple(enabled, every, tree != null) },
             combine(
                 combine(installer.state, rescan) { install, _ -> install },
-                combine(aiStatus, aiDownload, settings.broadcastAiCommentary) { status, download, enabled ->
-                    AiSubState(status, download, enabled)
-                },
-            ) { install, ai -> install to ai },
-        ) { selected, chat, (vol, speed), (jinEnabled, jinEvery, jinSet), (install, ai) ->
+                settings.broadcastDjHooks,
+            ) { install, hooks -> install to hooks },
+        ) { selected, chat, (vol, speed), (jinEnabled, jinEvery, jinSet), (install, hooks) ->
             UiState(
                 selected = selected,
                 stockInstalled = resolver.isInstalled(VoicePackResolver.ID_STOCK),
@@ -111,10 +89,7 @@ class BroadcastVoiceViewModel @Inject constructor(
                 jingleEnabled = jinEnabled,
                 jingleEvery = jinEvery,
                 install = install,
-                aiCommentaryEnabled = ai.enabled,
-                aiStatus = ai.status,
-                aiDownloading = ai.download.downloading,
-                aiDownloadPct = ai.download.pct,
+                djHooksEnabled = hooks,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
 
@@ -180,42 +155,7 @@ class BroadcastVoiceViewModel @Inject constructor(
 
     fun dismissInstallResult() = installer.resetState()
 
-    fun setAiCommentaryEnabled(enabled: Boolean) {
-        viewModelScope.launch { settings.setBroadcastAiCommentary(enabled) }
-    }
-
-    /** Triggers (or observes) the AICore feature download; re-checks status when it finishes. */
-    fun downloadAiModel() {
-        if (aiDownload.value.downloading) return
-        viewModelScope.launch {
-            var totalBytes = -1L
-            aiEngine.download().collect { status ->
-                when (status) {
-                    is DownloadStatus.DownloadStarted -> {
-                        totalBytes = status.bytesToDownload
-                        aiDownload.value = AiDownloadState(downloading = true, pct = 0)
-                    }
-                    is DownloadStatus.DownloadProgress -> {
-                        val pct = if (totalBytes > 0) {
-                            ((status.totalBytesDownloaded * 100) / totalBytes).toInt().coerceIn(0, 100)
-                        } else {
-                            -1
-                        }
-                        aiDownload.value = AiDownloadState(downloading = true, pct = pct)
-                    }
-                    is DownloadStatus.DownloadCompleted -> {
-                        aiDownload.value = AiDownloadState()
-                        aiStatus.value = aiEngine.status()
-                    }
-                    is DownloadStatus.DownloadFailed -> {
-                        aiDownload.value = AiDownloadState()
-                    }
-                }
-            }
-        }
-    }
-
-    override fun onCleared() {
-        aiEngine.close()
+    fun setDjHooksEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setBroadcastDjHooks(enabled) }
     }
 }

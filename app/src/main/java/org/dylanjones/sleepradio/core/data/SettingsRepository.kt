@@ -98,10 +98,19 @@ interface SettingsRepository {
      * Phase 18: let the on-device AI (Gemini Nano via AICore) generate the
      * occasional DJ link, on top of the deterministic templates. Off by
      * default — beta API, only available on a narrow set of devices.
+     *
+     * No UI sets this any more (AI DJ personality was shelved, see
+     * [org.dylanjones.sleepradio.core.broadcast.BroadcastConfig.aiCommentaryEnabled]);
+     * the key stays so backups that contain it still restore cleanly.
      */
     val broadcastAiCommentary: Flow<Boolean>
 
     suspend fun setBroadcastAiCommentary(enabled: Boolean)
+
+    /** 70s-style DJ hook lines before track intros (bundled pool). Off by default. */
+    val broadcastDjHooks: Flow<Boolean>
+
+    suspend fun setBroadcastDjHooks(enabled: Boolean)
 
     // --- Studio-skin VU meter output-latency compensation (Phase 16) ---
 

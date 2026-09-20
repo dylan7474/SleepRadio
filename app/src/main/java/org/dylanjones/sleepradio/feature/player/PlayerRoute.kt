@@ -70,7 +70,6 @@ import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.PodcastEpisode
 import org.dylanjones.sleepradio.core.data.PodcastFeed
 import org.dylanjones.sleepradio.core.data.PodcastProgress
-import com.google.mlkit.genai.common.FeatureStatus
 import org.dylanjones.sleepradio.core.data.RadioStation
 import org.dylanjones.sleepradio.core.broadcast.Chattiness
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
@@ -367,8 +366,7 @@ fun PlayerRoute(
                     onChooseJinglesFolder = { jinglesFolderLauncher.launch(null) },
                     onJingleEnabled = broadcastVoiceViewModel::setJingleEnabled,
                     onJingleEvery = broadcastVoiceViewModel::setJingleEvery,
-                    onAiCommentaryEnabled = broadcastVoiceViewModel::setAiCommentaryEnabled,
-                    onDownloadAiModel = broadcastVoiceViewModel::downloadAiModel,
+                    onDjHooksEnabled = broadcastVoiceViewModel::setDjHooksEnabled,
                     onDownloadStock = broadcastVoiceViewModel::downloadStock,
                     onImport = {
                         importVoiceLauncher.launch(
@@ -663,8 +661,7 @@ private fun BroadcastVoiceDialog(
     onChooseJinglesFolder: () -> Unit,
     onJingleEnabled: (Boolean) -> Unit,
     onJingleEvery: (Int) -> Unit,
-    onAiCommentaryEnabled: (Boolean) -> Unit,
-    onDownloadAiModel: () -> Unit,
+    onDjHooksEnabled: (Boolean) -> Unit,
     onDownloadStock: () -> Unit,
     onImport: () -> Unit,
     onRemovePersonal: () -> Unit,
@@ -804,35 +801,16 @@ private fun BroadcastVoiceDialog(
                 }
 
                 Spacer(Modifier.padding(4.dp))
-                SectionHeader("AI COMMENTARY (EXPERIMENTAL)")
+                SectionHeader("70S DJ HOOKS")
                 Text(
-                    "Lets the on-device model add the occasional richer link, on top " +
-                        "of the usual links — fully offline, no account. Beta, and only " +
-                        "on a narrow set of devices.",
+                    "Opens each track link with a cheeky 1970s-radio line before naming " +
+                        "the next song. Bundled with the app — offline, no AI. Takes " +
+                        "priority over AI commentary.",
                     fontSize = 11.sp,
                 )
-                Text(
-                    when {
-                        state.aiDownloading ->
-                            if (state.aiDownloadPct in 0..100) "Downloading… ${state.aiDownloadPct}%"
-                            else "Downloading…"
-                        state.aiStatus == FeatureStatus.AVAILABLE -> "Ready on this device"
-                        state.aiStatus == FeatureStatus.DOWNLOADABLE -> "Available to download"
-                        state.aiStatus == FeatureStatus.DOWNLOADING -> "Downloading…"
-                        else -> "Not available on this device"
-                    },
-                    fontSize = 11.sp,
-                )
-                if (state.aiStatus == FeatureStatus.DOWNLOADABLE && !state.aiDownloading) {
-                    TextButton(onClick = onDownloadAiModel) { Text("Download") }
-                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("AI commentary", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    Switch(
-                        checked = state.aiCommentaryEnabled,
-                        onCheckedChange = onAiCommentaryEnabled,
-                        enabled = state.aiStatus == FeatureStatus.AVAILABLE,
-                    )
+                    Text("70s DJ hooks", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Switch(checked = state.djHooksEnabled, onCheckedChange = onDjHooksEnabled)
                 }
 
                 Spacer(Modifier.padding(6.dp))

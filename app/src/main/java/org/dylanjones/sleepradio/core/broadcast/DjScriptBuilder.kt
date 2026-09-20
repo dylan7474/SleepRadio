@@ -53,7 +53,15 @@ class ShowClock(private val config: BroadcastConfig) {
  * Builds the DJ's spoken links from templates. Deterministic with a seeded
  * [rng]. Kept plain text (no SSML) — sherpa/Piper reads it as-is.
  */
-class DjScriptBuilder(private val rng: Random = Random.Default) {
+class DjScriptBuilder(
+    private val rng: Random = Random.Default,
+    /**
+     * Optional pool of station "hook" lines (the 70s-DJ voice). When set, a
+     * plain [LinkKind.LINK] is `<hook> <intro>` instead of `<outro> <intro>`
+     * — the hook carries the personality, the intro always names the track.
+     */
+    private val hooks: HookPool? = null,
+) {
 
     /**
      * Spoken once when a broadcast starts, before the first track. When [first]
@@ -109,7 +117,7 @@ class DjScriptBuilder(private val rng: Random = Random.Default) {
         }
         LinkKind.LINK ->
             if (terse) outroLine(previous)
-            else "${outroLine(previous)} ${introLine(next)}"
+            else "${hooks?.next() ?: outroLine(previous)} ${introLine(next)}"
     }
 
     /**

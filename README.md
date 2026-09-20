@@ -247,23 +247,22 @@ bedside use.
 - [ ] Fade‑*in* on start, and a short crossfade when switching sources
 
 **On‑device AI (exploratory)**
-- [x] DJ "personality" beyond reading track names — on‑device Gemini Nano
-      (ML Kit GenAI Prompt API, via AICore) generates the occasional richer
-      LINK‑gap commentary on top of (never instead of) the template pool,
-      with its own off‑by‑default toggle in the Broadcast voice dialog
-      ("AI commentary (experimental)"), a download step when the model isn't
-      on‑device yet, and a hard timeout that falls back to the already‑queued
-      template line if the model is slow, unavailable, or gives an unusable
-      reply. Never touches the spoken clock, idents, or a jingle‑split gap —
-      only a plain link. **Device‑verified end to end on a Pixel 9,
-      2026‑09‑19** — two real AI‑generated DJ lines played live through the
-      TTS voice during a Broadcast session, e.g. "A shift in pace, perhaps,
-      from that vibrant energy to something a bit more observant." An
-      earlier pass this same session saw Gemini Nano report unavailable;
-      turned out to be a real bug (a custom model‑preference config that
-      wasn't actually provisioned) rather than a device limitation, found by
-      comparing against the sibling DylanSpeaks project's proven‑working
-      call and fixed. See Phase 18 in the plan doc.
+- [x] DJ "personality" via on‑device Gemini Nano (ML Kit GenAI Prompt API, via
+      AICore) — built and device‑verified on a Pixel 9 (2026‑09‑19), then
+      **shelved and its switch removed (2026‑09‑20)**. A prompt lab over 29
+      real tracks showed the model can be told to name the next track but
+      can't carry a personality: lines copy their few‑shot examples, collapse
+      into one repeated opener, invent opinions about songs it doesn't know,
+      and occasionally name the wrong track. The engine
+      (`core/ai/DjCommentaryEngine`) and prompt helpers are kept as the base for
+      AI‑written news/weather bulletins; `BroadcastConfig.aiCommentaryEnabled`
+      still exists but nothing in the app sets it. See Phase 18 in the plan doc.
+- [x] **70s DJ hooks** — an off‑by‑default switch in the Broadcast voice
+      dialog. A plain track link opens with a line from a bundled, reviewed
+      pool (`assets/dj_hooks_70s.txt`, no repeats until the pool is used up)
+      followed by the normal "Next up, Title, by Artist" intro, so the track
+      is always named. Time checks, idents, wind‑down and jingle‑split gaps
+      are untouched.
 - [ ] AICore/Gemini Nano as an *optional* enhancement layer on top of the
       rule‑based speech normalizer, for mispronunciations a fixed rule table
       can't reasonably cover — never a requirement: only a narrow set of

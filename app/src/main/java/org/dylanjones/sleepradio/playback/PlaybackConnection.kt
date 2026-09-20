@@ -44,6 +44,8 @@ import org.dylanjones.sleepradio.core.broadcast.BroadcastSelector
 import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
 import org.dylanjones.sleepradio.core.broadcast.DJ_SYSTEM_INSTRUCTION
 import org.dylanjones.sleepradio.core.broadcast.DjScriptBuilder
+import org.dylanjones.sleepradio.core.broadcast.HookPool
+import org.dylanjones.sleepradio.core.broadcast.parseHooks
 import org.dylanjones.sleepradio.core.broadcast.JingleClip
 import org.dylanjones.sleepradio.core.broadcast.LinkKind
 import org.dylanjones.sleepradio.core.broadcast.ShowClock
@@ -651,13 +653,15 @@ class PlaybackConnection @Inject constructor(
         broadcastGen++
         selector = BroadcastSelector(tracks)
         showClock = ShowClock(config)
-        scriptBuilder = DjScriptBuilder()
+        scriptBuilder = DjScriptBuilder(hooks = if (config.djHooksEnabled) loadHookPool() else null)
         announceEveryTrack = config.announceEveryTrack
         announcerVolume = config.announcerVolume.coerceIn(0f, 1f)
         announcerSpeed = config.announcerSpeed.coerceIn(0.5f, 2f)
-        aiCommentaryEnabled = config.aiCommentaryEnabled
+        // Hooks own the plain-link slot; the AI pass would only overwrite them.
+        val useAi = config.aiCommentaryEnabled && !config.djHooksEnabled
+        aiCommentaryEnabled = useAi
         recentTrackHistory.clear()
-        if (config.aiCommentaryEnabled && aiEngine == null) aiEngine = DjCommentaryEngine()
+        if (useAi && aiEngine == null) aiEngine = DjCommentaryEngine()
         jingleUris = jingles.map { it.uri }
         jingleEvery = if (jingles.isEmpty()) 0 else config.jingleEvery.coerceIn(0, 10)
         tracksSinceJingle = 0
@@ -920,6 +924,12 @@ class PlaybackConnection @Inject constructor(
             }
         }
     }
+
+    /** The bundled 70s-DJ hook pool; null (plain templates) if the asset can't be read. */
+    private fun loadHookPool(): HookPool? = runCatching {
+        val text = appContext.assets.open("dj_hooks_70s.txt").bufferedReader().use { it.readText() }
+        HookPool(parseHooks(text)).takeIf { it.size > 0 }
+    }.onFailure { Log.w(TAG, "hook pool unavailable", it) }.getOrNull()
 
     /** Advance the jingle counter and say whether one lands in the next gap. */
     private fun jingleDueThisGap(phase: WindDownPhase): Boolean {

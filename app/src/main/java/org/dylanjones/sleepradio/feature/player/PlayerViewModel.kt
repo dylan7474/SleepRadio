@@ -702,7 +702,7 @@ class PlayerViewModel @Inject constructor(
                                 announcerVolume = settings.broadcastAnnouncerVolume.first(),
                                 announcerSpeed = settings.broadcastAnnouncerSpeed.first(),
                                 jingleEvery = jingleEvery,
-                                aiCommentaryEnabled = settings.broadcastAiCommentary.first(),
+                                djHooksEnabled = settings.broadcastDjHooks.first(),
                             ),
                         )
                         local.value = local.value.copy(nowPlayingRef = slot.refId)

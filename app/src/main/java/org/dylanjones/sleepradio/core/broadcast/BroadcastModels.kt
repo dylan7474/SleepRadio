@@ -66,6 +66,17 @@ data class BroadcastConfig(
      * gap, or a wind-down [WindDownPhase] — see `PlaybackConnection
      * .onBroadcastTrackStarted`. Off by default: beta API, narrow device
      * support.
+     *
+     * DORMANT: no UI switch and nothing in the app sets this. The 2026-09-20
+     * prompt lab showed Gemini Nano can't carry DJ personality, so the feature
+     * is not offered; the code is kept as the base for AI-written news/weather
+     * bulletins. Use [djHooksEnabled] for DJ character instead.
      */
     val aiCommentaryEnabled: Boolean = false,
+    /**
+     * 70s-style DJ hooks: a plain [LinkKind.LINK] opens with a line from the
+     * bundled hook pool (assets/dj_hooks_70s.txt) before the track intro.
+     * Takes precedence over [aiCommentaryEnabled] for plain links. Off by default.
+     */
+    val djHooksEnabled: Boolean = false,
 )
