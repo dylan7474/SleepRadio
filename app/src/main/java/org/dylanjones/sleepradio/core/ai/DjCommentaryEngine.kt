@@ -73,13 +73,14 @@ class DjCommentaryEngine {
         prompt: String,
         temperature: Float = 0.9f,
         topK: Int? = null,
+        maxTokens: Int = 80,
     ): String? =
         runCatching {
             val request = generateContentRequest(SystemInstruction(systemInstruction), TextPart(prompt)) {
                 this.temperature = temperature
                 topK?.let { this.topK = it }
                 candidateCount = 1
-                maxOutputTokens = 80
+                maxOutputTokens = maxTokens
             }
             model.generateContent(request).candidates.firstOrNull()?.text
         }.onFailure { Log.w(TAG, "generateLink failed", it) }.getOrNull()?.takeIf { it.isNotBlank() }

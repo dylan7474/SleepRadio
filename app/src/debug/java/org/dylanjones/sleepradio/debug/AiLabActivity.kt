@@ -59,6 +59,10 @@ class AiLabActivity : Activity() {
     }
 
     private suspend fun run(show: (String) -> Unit) {
+        // Optional wait so the test can turn the screen off first (background/screen-off AICore check).
+        val delayS = intent.getIntExtra("delay_s", 0)
+        if (delayS > 0) { show("AI lab: starting in ${delayS}s…"); kotlinx.coroutines.delay(delayS * 1000L) }
+        if (intent.getStringExtra("mode") == "news") { runNews(show); return }
         val tracks = assets.open("ai_lab_tracks.json").bufferedReader().readText().let { raw ->
             val arr = JSONArray(raw)
             (0 until arr.length()).map {
@@ -148,6 +152,63 @@ You are a 1970s British radio disc jockey, chatty and cheeky, like a Radio One o
             Variant("G_70s_hushed", sys("It is the middle of the night and listeners are falling asleep, so keep the same warm cheeky voice but hushed and gentle, with no shouting."), 1.0f, 40,
                 { p, n, _, r -> prompt(p, n, seventyLines.shuffled(rng).take(5), r) }, listOf("")),
         )
+    }
+
+    /**
+     * News-rewrite experiment (2026-09-20): can Gemini Nano turn RSS headlines into calm,
+     * faithful spoken sentences? Reads `<externalFiles>/news_lab.json` (pushed by hand — it
+     * holds third-party headline text, so it's deliberately not in the repo).
+     */
+    private suspend fun runNews(show: (String) -> Unit) {
+        val pm = getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+        val wl = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "sleepradio:ailab").apply { acquire(20 * 60_000L) }
+        try {
+            val items = JSONArray(File(getExternalFilesDir(null), "news_lab.json").readText()).let { a ->
+                (0 until a.length()).map { a.getJSONObject(it) }
+            }
+            val engine = DjCommentaryEngine()
+            val status = engine.status()
+            Log.d("AiLab", "news: status=$status screenOn=${pm.isInteractive}")
+            if (status != FeatureStatus.AVAILABLE) { show("status=$status — aborting"); return }
+            val out = File(getExternalFilesDir(null), "ai_lab_news.jsonl").apply { writeText("") }
+            val sysRewrite = """
+You read the news on a calm late-night radio station. Rewrite the story as ONE short, calm spoken sentence (under 30 words). Use ONLY facts stated in the text you are given: do not add names, numbers, places, causes or opinions. Write numbers as words. No quotation marks, no headline-style fragments, no preamble. Reply with only the sentence.
+""".trim()
+            val sysBulletin = """
+You read the news on a calm late-night radio station. Turn the stories you are given into a short spoken bulletin: one sentence per story, plain and even in tone. Use ONLY facts stated in the text; do not add names, numbers, places, causes or opinions. Write numbers as words. No lists, no bullet points, no preamble. Reply with only the words to be spoken.
+""".trim()
+            data class Job(val variant: String, val feed: String, val input: String, val sys: String)
+            val jobs = mutableListOf<Job>()
+            val byFeed = items.groupBy { it.getString("feed") }
+            byFeed.forEach { (feed, list) ->
+                list.take(3).forEach { j ->
+                    jobs += Job("N1_title_only", feed, j.getString("title"), sysRewrite)
+                    jobs += Job("N2_title_plus_summary", feed, "${j.getString("title")}. ${j.getString("desc")}", sysRewrite)
+                }
+                jobs += Job("N3_bulletin_of_3", feed,
+                    list.take(3).joinToString("\n") { "- ${it.getString("title")}. ${it.getString("desc")}" }, sysBulletin)
+            }
+            var done = 0
+            for (j in jobs) {
+                var raw: String? = null
+                for (attempt in 0..3) {
+                    raw = withTimeoutOrNull(40_000) { engine.generateLink(j.sys, j.input, 0.4f, 20, 180) }
+                    if (raw != null) break
+                    Log.d("AiLab", "news: null on attempt $attempt (screenOn=${pm.isInteractive})")
+                    kotlinx.coroutines.delay(20_000)
+                }
+                kotlinx.coroutines.delay(4_000)
+                val row = JSONObject().put("variant", j.variant).put("feed", j.feed).put("in", j.input)
+                    .put("out", raw ?: JSONObject.NULL).put("screenOn", pm.isInteractive)
+                withContext(Dispatchers.IO) { out.appendText(row.toString() + "\n") }
+                done++
+                show("news lab: $done / ${jobs.size}")
+                Log.d("AiLab", "news ${j.variant}/${j.feed}: $raw")
+            }
+            Log.d("AiLab", "DONE")
+            show("news lab DONE")
+            engine.close()
+        } finally { if (wl.isHeld) wl.release() }
     }
 
     private fun variants(): List<Variant> {

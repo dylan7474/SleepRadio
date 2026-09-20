@@ -255,8 +255,12 @@ bedside use.
       into one repeated opener, invent opinions about songs it doesn't know,
       and occasionally name the wrong track. The engine
       (`core/ai/DjCommentaryEngine`) and prompt helpers are kept as the base for
-      AI‑written news/weather bulletins; `BroadcastConfig.aiCommentaryEnabled`
-      still exists but nothing in the app sets it. See Phase 18 in the plan doc.
+      experiments; `BroadcastConfig.aiCommentaryEnabled` still exists but nothing
+      in the app sets it. **Also found (2026‑09‑20): AICore refuses inference
+      whenever the screen is off — `BACKGROUND_USE_BLOCKED` (error 30), even from
+      a mediaPlayback foreground service — so Gemini Nano can't run during an
+      overnight Broadcast at all.** News/weather therefore stay rule‑based. See
+      Phase 18 in the plan doc.
 - [x] **70s DJ hooks** — an off‑by‑default switch in the Broadcast voice
       dialog. A plain track link opens with a line from a bundled, reviewed
       pool (`assets/dj_hooks_70s.txt`, no repeats until the pool is used up)

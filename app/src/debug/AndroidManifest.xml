@@ -5,5 +5,10 @@
         <activity
             android:name="org.dylanjones.sleepradio.debug.AiLabActivity"
             android:exported="true" />
+        <!-- Debug-only: does Gemini Nano work from a media foreground service with the screen off? -->
+        <service
+            android:name="org.dylanjones.sleepradio.debug.AiLabService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>
