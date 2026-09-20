@@ -180,6 +180,26 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_BROADCAST_NEWS_QUIET_HOURS] = enabled }
     }
 
+    override val mixerLevels: Flow<MixerLevels?> = dataStore.data.map { prefs ->
+        val volume = prefs[KEY_MIXER_VOLUME]
+        val balance = prefs[KEY_MIXER_BALANCE]
+        if (volume == null && balance == null) {
+            null
+        } else {
+            MixerLevels(
+                volume = (volume ?: 0.8f).takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.8f,
+                balance = (balance ?: 0.5f).takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f,
+            )
+        }
+    }
+
+    override suspend fun setMixerLevels(levels: MixerLevels) {
+        dataStore.edit {
+            it[KEY_MIXER_VOLUME] = levels.volume.coerceIn(0f, 1f)
+            it[KEY_MIXER_BALANCE] = levels.balance.coerceIn(0f, 1f)
+        }
+    }
+
     override val broadcastNewsQuietStartMin: Flow<Int> =
         dataStore.data.map { it[KEY_BROADCAST_NEWS_QUIET_START] ?: (23 * 60) }
 
@@ -231,6 +251,14 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { prefs ->
             prefs.clear()
             for ((name, value) in values) {
+                // A whole-number Float ("1.0") is written to the backup JSON as "1" and comes back
+                // as an Int/Long; stored under an int key it would throw ClassCastException the
+                // moment the real Float key is read (crash-loop on every launch). So keys we know
+                // are Floats are always restored as Floats, whatever number type arrived.
+                if (name in FLOAT_KEY_NAMES && (value is Number)) {
+                    prefs[floatPreferencesKey(name)] = value.toFloat()
+                    continue
+                }
                 when (value) {
                     is String -> prefs[stringPreferencesKey(name)] = value
                     is Boolean -> prefs[booleanPreferencesKey(name)] = value
@@ -277,6 +305,17 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_BROADCAST_DJ_HOOKS = booleanPreferencesKey("broadcast_dj_hooks")
         val KEY_BROADCAST_NEWS_ENABLED = booleanPreferencesKey("broadcast_news_enabled")
         val KEY_BROADCAST_NEWS_QUIET_HOURS = booleanPreferencesKey("broadcast_news_quiet_hours")
+        val KEY_MIXER_VOLUME = floatPreferencesKey("mixer_volume")
+        val KEY_MIXER_BALANCE = floatPreferencesKey("mixer_balance")
+
+        /** Every Float-typed key. Keep in step with the floatPreferencesKey(...) definitions above:
+         *  importAll() uses it to restore whole-number floats (see there). */
+        val FLOAT_KEY_NAMES: Set<String> = setOf(
+            KEY_BROADCAST_ANNOUNCER_VOLUME.name,
+            KEY_BROADCAST_ANNOUNCER_SPEED.name,
+            KEY_MIXER_VOLUME.name,
+            KEY_MIXER_BALANCE.name,
+        )
         val KEY_BROADCAST_NEWS_QUIET_START = intPreferencesKey("broadcast_news_quiet_start_min")
         val KEY_BROADCAST_NEWS_QUIET_END = intPreferencesKey("broadcast_news_quiet_end_min")
         val KEY_VU_SYNC_AUTO = booleanPreferencesKey("vu_sync_auto")

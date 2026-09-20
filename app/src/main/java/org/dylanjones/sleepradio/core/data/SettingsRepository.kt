@@ -135,6 +135,14 @@ interface SettingsRepository {
 
     suspend fun setBroadcastNewsQuietHours(enabled: Boolean)
 
+    /**
+     * The VOL and BAL knob positions (0..1), restored on launch so a restart doesn't reset
+     * them. Null until first saved. Stored in the settings store, so it is part of backup/restore.
+     */
+    val mixerLevels: Flow<MixerLevels?>
+
+    suspend fun setMixerLevels(levels: MixerLevels)
+
     /** Quiet hours start / end, minutes since midnight (defaults 23:00 and 06:00). */
     val broadcastNewsQuietStartMin: Flow<Int>
     val broadcastNewsQuietEndMin: Flow<Int>
@@ -189,3 +197,6 @@ const val BROADCAST_VOICE_PERSONAL = "personal"
 
 /** News reader voice: use the same voice as the DJ. */
 const val NEWS_VOICE_SAME = "same"
+
+/** The VOL knob ([volume]) and BAL knob ([balance]) positions, both 0..1. */
+data class MixerLevels(val volume: Float, val balance: Float)

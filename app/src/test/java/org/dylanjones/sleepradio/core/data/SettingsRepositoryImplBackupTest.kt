@@ -1,6 +1,9 @@
 package org.dylanjones.sleepradio.core.data
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.dylanjones.sleepradio.core.backup.decodeSettings
@@ -69,5 +72,76 @@ class SettingsRepositoryImplBackupTest {
         // inside DataStore's own Preferences.get(), not a Kotlin-level
         // exception this test could catch more directly).
         assertEquals(0.7f, repo.broadcastAnnouncerVolume.first(), 1e-4f)
+    }
+
+    @Test
+    fun `VOL and BAL are null until saved, then persist across a restart`() = runTest {
+        val file = File.createTempFile("settings_mixer_test", ".preferences_pb")
+        file.deleteOnExit()
+
+        val firstScope = CoroutineScope(Job())
+        val first = SettingsRepositoryImpl(
+            PreferenceDataStoreFactory.create(scope = firstScope, produceFile = { file }),
+        )
+        assertEquals(null, first.mixerLevels.first())
+        first.setMixerLevels(MixerLevels(volume = 0.23f, balance = 0.71f))
+        firstScope.cancel() // the "app" exits
+
+        // A restart is a brand-new repository over the same file.
+        val afterRestart = newRepo(file).mixerLevels.first()
+        assertEquals(0.23f, afterRestart!!.volume, 1e-4f)
+        assertEquals(0.71f, afterRestart.balance, 1e-4f)
+    }
+
+    @Test
+    fun `VOL and BAL are part of backup and restore`() = runTest {
+        val src = File.createTempFile("settings_mixer_src", ".preferences_pb").also { it.deleteOnExit() }
+        val dst = File.createTempFile("settings_mixer_dst", ".preferences_pb").also { it.deleteOnExit() }
+        val from = newRepo(src)
+        from.setMixerLevels(MixerLevels(volume = 0.05f, balance = 1f))
+
+        // Backup on one install, restore on another, through real JSON text.
+        val restored = roundTripThroughJsonText(from.exportAll())
+        val to = newRepo(dst)
+        to.importAll(restored)
+
+        val levels = to.mixerLevels.first()!!
+        assertEquals(0.05f, levels.volume, 1e-4f)
+        assertEquals(1f, levels.balance, 1e-4f)
+    }
+
+    @Test
+    fun `out-of-range saved levels are clamped, never crash the mixer`() = runTest {
+        val file = File.createTempFile("settings_mixer_clamp", ".preferences_pb").also { it.deleteOnExit() }
+        val repo = newRepo(file)
+        repo.setMixerLevels(MixerLevels(volume = 5f, balance = -3f))
+        val levels = repo.mixerLevels.first()!!
+        assertEquals(1f, levels.volume, 0f)
+        assertEquals(0f, levels.balance, 0f)
+    }
+
+    @Test
+    fun `whole-number floats survive backup -- 1_0 and 0_0 must not come back as Ints`() = runTest {
+        val src = File.createTempFile("settings_whole_src", ".preferences_pb").also { it.deleteOnExit() }
+        val dst = File.createTempFile("settings_whole_dst", ".preferences_pb").also { it.deleteOnExit() }
+        val from = newRepo(src)
+        // These are exactly the values that JSON writes without a decimal point.
+        from.setBroadcastAnnouncerSpeed(1f)
+        from.setBroadcastAnnouncerVolume(1f)
+        from.setMixerLevels(MixerLevels(volume = 1f, balance = 0f))
+
+        val json = encodeSettings(from.exportAll()).toString()
+        // Prove the premise: the whole-number floats really do lose their decimal point in the JSON.
+        assertEquals(1, JSONObject(json).get("broadcast_announcer_speed"))
+
+        val to = newRepo(dst)
+        to.importAll(decodeSettings(JSONObject(json)))
+
+        // Reading through the Float-typed flows must not throw ClassCastException.
+        assertEquals(1f, to.broadcastAnnouncerSpeed.first(), 0f)
+        assertEquals(1f, to.broadcastAnnouncerVolume.first(), 0f)
+        val levels = to.mixerLevels.first()!!
+        assertEquals(1f, levels.volume, 0f)
+        assertEquals(0f, levels.balance, 0f)
     }
 }

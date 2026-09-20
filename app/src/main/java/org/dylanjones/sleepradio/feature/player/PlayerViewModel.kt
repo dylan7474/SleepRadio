@@ -6,14 +6,17 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -32,6 +35,7 @@ import org.dylanjones.sleepradio.core.data.AMBIENT_PATTERN_SLOTS
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
 import org.dylanjones.sleepradio.core.data.FolderAlbum
+import org.dylanjones.sleepradio.core.data.MixerLevels
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
 import org.dylanjones.sleepradio.core.data.PodcastEpisode
 import org.dylanjones.sleepradio.core.data.PodcastFeed
@@ -310,6 +314,22 @@ class PlayerViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .drop(1)
                 .collect { settings.setAmbient(it) }
+        }
+        // Same for the VOL / BAL knobs: restore the saved positions exactly as left, then
+        // persist changes. Debounced so dragging a knob writes once, not on every tick.
+        viewModelScope.launch {
+            settings.mixerLevels.first()?.let {
+                mixer.setVolume(it.volume)
+                mixer.setBalance(it.balance)
+            }
+            mixer.state
+                .map { MixerLevels(it.masterGain, it.crossfade) }
+                .distinctUntilChanged()
+                .drop(1) // the value just restored (or the default on first run)
+                .collectLatest { levels ->
+                    delay(MIXER_PERSIST_DEBOUNCE_MS) // a newer knob position cancels this write
+                    settings.setMixerLevels(levels)
+                }
         }
         settings.ambientPatterns
             .onEach { list -> local.update { it.copy(ambientPatterns = list) } }
@@ -843,3 +863,6 @@ class PlayerViewModel @Inject constructor(
         val jingleOn: Boolean,
     )
 }
+
+/** How long a VOL/BAL knob must sit still before its position is written to settings. */
+private const val MIXER_PERSIST_DEBOUNCE_MS = 400L
