@@ -1,5 +1,8 @@
 # 70s-style DJ hooks, one per line. Spoken before the next-track intro.
-# '#' lines and blanks are ignored. Reviewed list: see 70s_hooks_reviewed.csv in ~/claude.
+# '#' lines and blanks are ignored. First set reviewed: see 70s_hooks_reviewed.csv in ~/claude.
+# Rules (enforced by HookPoolTest): British spelling, no digits, one short complete sentence or
+# two, no claims that could be false for the track/time/place (no chart or "new" talk, dates,
+# weather, time of day, traffic, requests, promised jingles, tempo, volume or dancing).
 Greetings, pop fans! Coming to you live and direct through the magic of medium wave! Don't you dare touch that tuning dial, we're cued up and ready with another absolute belter.
 Right then, fabulous listeners! Time to slide another shiny slice of black plastic onto the turntable. Let’s see if this next belter gets your toes tapping in the Mini-Minor!
 Hold onto your cardigans! That was a proper cracker, wasn't it? If you’ve just tuned in, welcome along to the music marathon!
@@ -20,3 +23,77 @@ Greetings to the long-distance lorry drivers tuning in on the VHF, this one's fo
 Flick the switch, boost the bass, and let's get down to business with another slice of plastic magic.
 Slip this one in your earholes and tell me it isn't the greatest thing you've heard all week!
 We're spinning the wax that makes you relax... and the beats that move your feet! Here comes another.
+
+# --- Hushed set ---
+# For a sleep station: no exclamation marks, no energy, and nothing said about the tracks
+# themselves. These only talk about the DJ, the studio and the equipment.
+Easy does it. The needle's found its groove and the crates are far from empty.
+Nothing to rush for. I'll just lower the needle and let the wax do the talking.
+A quiet word from the studio, and then it's back to the records.
+The valves are warm, the aerial's steady, and the turntable's still turning.
+My tea has gone cold, but the records are still warm.
+Settle back, pop pickers. There's no hurry in this studio.
+Just me, the microphone and a stack of black plastic. Lovely.
+Nice and easy does it. We'll let the airwaves carry us along.
+A little pause, a little patter, and back to the platter.
+Lowering the needle gently, as ever.
+Let's take a moment, and then get back to the wax.
+The dial's steady, the studio's hushed, and the records keep spinning.
+Nothing but the crackle of the wireless and the turn of the turntable. Perfect.
+Feet up, if you like. I'll mind the turntable.
+Another dip into the record box. It's a deep one.
+Take your time. There's plenty of wax left in the crates.
+Quietly does it. We'll keep the needle steady.
+From the studio, a soft hello, and then back to the music.
+Sleep Radio, keeping the turntable turning.
+The stylus is settling in, and so, I hope, are you.
+I'll keep the studio lights low and the records coming.
+Another sleeve slid gently from the shelf.
+A gentle turn of the dial, and we're on our way again.
+Steady hands on the turntable and a steady voice on the microphone.
+The airwaves are calm and so is the studio.
+Just a whisper between records, then the music takes over.
+Let's slip another record from its sleeve, nice and slowly.
+Cardigan on, slippers on, needle down. Marvellous.
+There's a cup of tea by the mixing desk and a record on the deck. All is well.
+Drifting along on the airwaves, one record at a time.
+All quiet at the studio, so let the wax do the talking.
+Let's not make a fuss. Just a needle, a groove and a bit of wax.
+Wireless glowing, records spinning, and nobody in any hurry.
+The transmitter hums along, the turntable turns, and here we go.
+A soft landing for the needle once more.
+Gently now. We'll let another record find its own way in.
+Nothing more to add from me, just another record from the crates.
+Quiet as a mouse in here, apart from the turntable.
+I'll keep the patter short and the wax plentiful.
+Here in the studio the needle is down and the world can wait.
+A little more music for the wireless, courtesy of the record box.
+Smoothing the crackle, steadying the needle, and away we go.
+Good company, a good needle and a full record box.
+Leaning back at the microphone and reaching for another sleeve.
+This is the quiet corner of the airwaves. Stay as long as you like.
+Warm valves, a steady needle, and a record box that never seems to empty.
+The turntable takes a breath, and so do I.
+No fuss here, just the wax and the wireless.
+Another record from the crates, chosen with care and lowered with care.
+Keeping it cosy in the studio, one disc at a time.
+Take a deep breath, pop pickers, and let the records roll.
+The wireless hums softly and the platter goes round.
+Let me pop another disc on the platter while you get comfortable.
+A tidy little pause before another platter.
+Quiet now. The needle's on its way down.
+The studio's ticking along and the turntable's turning.
+Records, wireless and a gentle word from me. What more could anyone want?
+The studio's calm, the crates are deep, and we're not going anywhere.
+Whisper it softly, the record box is still full.
+A steady hum from the transmitter and a steady hand on the tone arm.
+Everything's in its place: the needle, the platter and the wax.
+Stay right there. Another sleeve is already out of the box.
+Dust off the sleeve, wipe the stylus, and away we go.
+Just a friendly voice between records.
+Nothing fancy from me. I'll simply lower the needle.
+The needle drops, the studio hushes, and the music takes over.
+Fetching another sleeve from the shelf, quietly, so as not to wake the microphone.
+Sleep Radio, turntable turning, tea brewing.
+Let the studio do the worrying. You just listen.
+A little breathing space between records, and then we carry on.

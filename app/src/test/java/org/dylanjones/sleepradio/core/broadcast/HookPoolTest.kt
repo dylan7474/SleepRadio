@@ -70,13 +70,61 @@ class HookPoolTest {
         val file = listOf("src/main/assets/dj_hooks_70s.txt", "app/src/main/assets/dj_hooks_70s.txt")
             .map(::File).first { it.exists() }
         val hooks = parseHooks(file.readText())
-        assertTrue("expected a healthy pool, got ${hooks.size}", hooks.size >= 15)
+        assertTrue("expected a healthy pool, got ${hooks.size}", hooks.size >= 80)
         assertEquals("duplicates", hooks.size, hooks.toSet().size)
         hooks.forEach { h ->
             assertFalse("digits (TTS): $h", h.any { it.isDigit() })
             assertFalse("tempo talk: $h", Regex("\\b(tempo|pace)\\b", RegexOption.IGNORE_CASE).containsMatchIn(h))
             assertFalse("clock claim: $h", Regex("half-?past|o'clock", RegexOption.IGNORE_CASE).containsMatchIn(h))
             assertTrue("too long for a hook (${h.split(' ').size} words): $h", h.split(' ').size <= 40)
+        }
+    }
+    private fun bundledText(): String =
+        listOf("src/main/assets/dj_hooks_70s.txt", "app/src/main/assets/dj_hooks_70s.txt")
+            .map(::File).first { it.exists() }.readText()
+
+    /** Anything a hook must never assert: it could be false for the track, hour, place or listener. */
+    private val claim = Regex(
+        "\\b(new|latest|today|tonight|tomorrow|yesterday|morning|afternoon|evening|hour|weather|rain|sunshine|" +
+            "traffic|commute|request(ed|s)?|switchboard|jingle|chart|charts|number one|smash|hit|hits|" +
+            "volume|turn it up|louder|dance|dancing|bop|bopping|wiggle|tempo|pace|" +
+            "half-?past|o'clock)\\b",
+        RegexOption.IGNORE_CASE,
+    )
+
+    @Test
+    fun `no bundled hook makes a claim that could be false`() {
+        parseHooks(bundledText()).forEach { h ->
+            val m = claim.find(h)
+            assertTrue("claim '${m?.value}' in: $h", m == null)
+        }
+    }
+
+    @Test
+    fun `every bundled hook ends its sentence so the voice pauses before the intro`() {
+        parseHooks(bundledText()).forEach { h ->
+            assertTrue("no closing punctuation: $h", h.last() in ".!?")
+        }
+    }
+
+    @Test
+    fun `the hushed set is big, calm and short`() {
+        val text = bundledText()
+        val marker = "# --- Hushed set ---"
+        assertTrue("hushed section marker missing", marker in text)
+        val hushed = parseHooks(text.substringAfter(marker))
+        assertTrue("expected a big hushed set, got ${hushed.size}", hushed.size >= 60)
+        hushed.forEach { h ->
+            assertFalse("shouting in a hushed hook: $h", '!' in h)
+            assertTrue("hushed hook too long (${h.split(' ').size} words): $h", h.split(' ').size <= 25)
+            // Nothing evaluated about the tracks themselves.
+            assertFalse(
+                "judges a track: $h",
+                Regex("\\b(belter|stormer|cracker|banger|classic|masterpiece|amazing|fantastic|incredible|massive|smash)\\b", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(h),
+            )
+            // British spelling, as the rest of the station.
+            assertFalse("US spelling: $h", Regex("\\b(neighbor|color|favorite|gray|realize|center)\\b", RegexOption.IGNORE_CASE).containsMatchIn(h))
         }
     }
 }
