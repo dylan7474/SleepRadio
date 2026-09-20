@@ -45,13 +45,14 @@ import org.dylanjones.sleepradio.core.data.PRESET_PAGES
 import org.dylanjones.sleepradio.core.data.PRESETS_PER_PAGE
 import org.dylanjones.sleepradio.core.data.SourceSlot
 import org.dylanjones.sleepradio.core.data.SourceType
-import org.dylanjones.sleepradio.core.design.CircleGlyphButton
 import org.dylanjones.sleepradio.core.design.LocalAppSkin
-import org.dylanjones.sleepradio.core.design.PlayPauseButton
 import org.dylanjones.sleepradio.core.design.ChannelKey
+import org.dylanjones.sleepradio.core.design.KeyIcon
+import org.dylanjones.sleepradio.core.design.RoundGlyph
+import org.dylanjones.sleepradio.core.design.RoundKey
+import org.dylanjones.sleepradio.core.design.ToggleKey
 import org.dylanjones.sleepradio.core.design.RotaryKnob
 import org.dylanjones.sleepradio.core.design.SkinPanel
-import org.dylanjones.sleepradio.core.design.SkinTile
 import org.dylanjones.sleepradio.core.design.Wordmark
 
 /** UI callbacks for the player screen. */
@@ -112,11 +113,7 @@ fun PlayerScreen(
         ) {
             PresetRow(state, actions, Modifier.fillMaxWidth().weight(1f))
             Spacer(Modifier.height(8.dp))
-            AmbientTiles(
-                state, actions,
-                Modifier.fillMaxWidth().weight(0.42f),
-                compact = true,
-            )
+            AmbientTiles(state, actions, Modifier.fillMaxWidth().weight(0.42f))
             Spacer(Modifier.height(8.dp))
             val levels by vu.collectAsStateWithLifecycle()
             VuMeterPair(levels, Modifier.fillMaxWidth().weight(0.6f))
@@ -129,17 +126,28 @@ fun PlayerScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val skipTransport = pb.isAudiobook || pb.isPodcast
-            CircleGlyphButton(
-                "⏮",
+            RoundKey(
+                glyph = RoundGlyph.PREVIOUS,
+                size = 48.dp,
+                lit = false,
                 contentDescription = if (skipTransport) "Back one minute" else "Previous",
                 onClick = actions.onPrevious,
                 enabled = skipTransport || pb.hasPrevious,
             )
             RotaryKnob("VOL", state.volume, actions.onVolumeChange, size = 52.dp)
-            PlayPauseButton(isPlaying = pb.isPlaying, onClick = actions.onPlayPause, size = 68.dp)
+            // PLAY: the symbol shows the action (pause while playing) and the ring lights while playing.
+            RoundKey(
+                glyph = if (pb.isPlaying) RoundGlyph.PAUSE else RoundGlyph.PLAY,
+                size = 62.dp,
+                lit = pb.isPlaying,
+                contentDescription = if (pb.isPlaying) "Pause" else "Play",
+                onClick = actions.onPlayPause,
+            )
             RotaryKnob("BAL", state.balance, actions.onBalanceChange, size = 52.dp)
-            CircleGlyphButton(
-                "⏭",
+            RoundKey(
+                glyph = RoundGlyph.NEXT,
+                size = 48.dp,
+                lit = false,
                 contentDescription = if (skipTransport) "Forward one minute" else "Next",
                 onClick = actions.onNext,
                 enabled = skipTransport || pb.hasNext,
@@ -253,52 +261,36 @@ private fun AmbientTiles(
     state: PlayerUiState,
     actions: PlayerActions,
     modifier: Modifier,
-    compact: Boolean = false,
 ) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        SkinTile(
-            onClick = actions.onSleepTap,
-            onLongClick = actions.onSleepDurationPick,
-            active = state.sleepActive,
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        val minutesLeft = ((state.sleepRemainingMs + 59_999L) / 60_000L).coerceAtLeast(0L)
+        ToggleKey(
+            icon = KeyIcon.MOON,
+            label = "SLEEP\n${state.sleepDurationMin} MIN",
+            // While counting down: just the minutes left, as big as the window allows — no word.
+            bigLabel = if (state.sleepActive) "$minutesLeft" else null,
+            on = state.sleepActive,
             contentDescription = if (state.sleepActive) {
                 "Sleep timer running, ${formatTime(state.sleepRemainingMs)} left. Double tap to cancel."
             } else {
-                "Sleep timer, ${state.sleepDurationMin} minutes. Double tap to start, " +
-                    "long press to change."
+                "Sleep timer, ${state.sleepDurationMin} minutes. Double tap to start, long press to change."
             },
+            onClick = actions.onSleepTap,
+            onLongClick = actions.onSleepDurationPick,
             modifier = Modifier.weight(1f).fillMaxHeight(),
-        ) {
-            if (state.sleepActive) {
-                // Large, glasses-off-readable countdown — no "SLEEP" label
-                // while it's actually running, just the minutes left.
-                val minutesLeft = ((state.sleepRemainingMs + 59_999L) / 60_000L).coerceAtLeast(0L)
-                Text(
-                    text = "$minutesLeft",
-                    color = LocalAppSkin.current.colors.onTile,
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                TileSub("MIN LEFT")
-            } else {
-                TileTitle("SLEEP")
-                if (!compact) Text("🌙", fontSize = 20.sp)
-                TileSub("${state.sleepDurationMin} MIN")
-            }
-        }
+        )
         val binauralOn = state.binaural != BinauralPreset.OFF
-        SkinTile(
-            onClick = actions.onNoiseToggle,
-            onLongClick = actions.onNoiseColorPick,
-            active = state.noiseEnabled || binauralOn,
+        ToggleKey(
+            icon = KeyIcon.WAVE,
+            label = "NOISE\n" + ambientSummary(state.noiseEnabled, state.noiseColor, binauralOn),
+            on = state.noiseEnabled || binauralOn,
             contentDescription = "Noise and binaural: " +
                 ambientSummary(state.noiseEnabled, state.noiseColor, binauralOn) +
                 ". Double tap to toggle noise, long press for the ambient mix.",
+            onClick = actions.onNoiseToggle,
+            onLongClick = actions.onNoiseColorPick,
             modifier = Modifier.weight(1f).fillMaxHeight(),
-        ) {
-            TileTitle("NOISE")
-            if (!compact) Text("〜", fontSize = 20.sp)
-            TileSub(ambientSummary(state.noiseEnabled, state.noiseColor, binauralOn))
-        }
+        )
     }
 }
 
@@ -353,29 +345,5 @@ private fun PresetTile(
         onLongClick = onLongClick,
         modifier = modifier,
         empty = slot == null,
-    )
-}
-
-@Composable
-private fun TileTitle(text: String) {
-    Text(
-        text = text,
-        color = LocalAppSkin.current.colors.onTile,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Bold,
-    )
-}
-
-@Composable
-private fun TileSub(text: String) {
-    Text(
-        text = text,
-        color = LocalAppSkin.current.colors.onTile,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.SemiBold,
-        textAlign = TextAlign.Center,
-        lineHeight = 12.sp,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
     )
 }

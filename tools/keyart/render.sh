@@ -12,3 +12,12 @@ for s in out dim lit; do
     --screenshot="key_$s.png" "file://$PWD/key_$s.svg"
   python3 -c "from PIL import Image; Image.open('key_$s.png').convert('RGBA').save('../../app/src/main/res/drawable-nodpi/channel_key_$s.webp','WEBP',lossless=True,quality=100,method=6)"
 done
+
+# ---- round pushbuttons (PLAY, previous, next) ----
+python3 make_round.py .
+for s in out in lit; do
+  google-chrome-stable --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
+    --force-device-scale-factor=1 --default-background-color=00000000 --window-size=240,240 \
+    --screenshot="round_$s.png" "file://$PWD/round_$s.svg"
+  python3 -c "from PIL import Image; Image.open('round_$s.png').convert('RGBA').save('../../app/src/main/res/drawable-nodpi/round_key_$s.webp','WEBP',lossless=True,quality=100,method=6)"
+done

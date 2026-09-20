@@ -5,6 +5,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,10 +23,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.imageResource
@@ -34,10 +42,13 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import org.dylanjones.sleepradio.R
 
 /** A rectangle in the sprite's own pixel space. */
@@ -69,6 +80,13 @@ object ChannelKeyArt {
 
     /** Extra sink while a finger is actually pressing it. */
     const val PRESS_EXTRA = 3f
+
+    /**
+     * The font size (dp) that makes [digits] characters of the bold condensed face fill a window of
+     * [windowW] x [windowH] dp: about the window's height for the glyph height, limited by the width.
+     */
+    fun fillFontSizeDp(digits: Int, windowW: Float, windowH: Float): Float =
+        minOf(windowH * 1.15f, windowW / (digits.coerceAtLeast(1) * 0.55f))
 }
 
 private val Condensed = FontFamily(Typeface.create("sans-serif-condensed", Typeface.BOLD))
@@ -83,17 +101,16 @@ private val LabelLit = Color(0xFFFFDB9A)
 private val LabelEmpty = Color(0xFF6F6453)
 private const val FadeMs = 250
 
+/** A symbol that can sit in a key's lit window instead of a number. */
+enum class KeyIcon { MOON, WAVE }
+
 /**
  * A wide 1970s radio channel button, drawn from bitmap artwork: idle (stands proud), paused (pressed
- * in, dim amber) and playing (pressed in, number window and lamp lit). The three pictures cross-fade
- * and only the words are live — the number and the station name are laid over empty windows in the
- * artwork, so any name fits and the pictures never change. The artwork keeps its shape and is centred
- * in whatever space it is given; nothing about the layout changes with the state.
+ * in, dim amber) and playing (pressed in, number window and lamp lit). See [RadioKey].
  *
  * @param lamp lamp intensity 0..1: how far the lit picture is blended over the dim one (a dim
  *   bedside setting), 1 = full.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChannelKey(
     number: Int,
@@ -107,23 +124,134 @@ fun ChannelKey(
     empty: Boolean = false,
     lamp: Float = 1f,
 ) {
+    RadioKey(
+        label = label,
+        active = active,
+        lit = playing,
+        contentDescription = contentDescription,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        modifier = modifier,
+        labelEmpty = empty,
+        lamp = lamp,
+    ) { color, lit, artWidth ->
+        val size = with(LocalDensity.current) { (artWidth * 0.215f).toSp() }
+        Text(
+            text = "$number",
+            color = color,
+            fontFamily = Condensed,
+            fontSize = size,
+            lineHeight = size,
+            textAlign = TextAlign.Center,
+            style = TextStyle(
+                // A lit numeral gets a soft highlight; an unlit one is engraved.
+                shadow = if (lit) Shadow(Color(0x88FFECBE), Offset(0f, 2f), 0f) else Shadow(Color.Black, Offset(0f, 2f), 0f),
+            ),
+        )
+    }
+}
+
+/**
+ * SLEEP / NOISE: the same wide key with a [icon] in its window; [on] lights it, like a playing channel.
+ * When [bigLabel] is set (e.g. the minutes left on the sleep timer) it replaces the small [label] and
+ * is drawn as large as the label window allows.
+ */
+@Composable
+fun ToggleKey(
+    icon: KeyIcon,
+    label: String,
+    on: Boolean,
+    contentDescription: String,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    lamp: Float = 1f,
+    bigLabel: String? = null,
+) {
+    RadioKey(
+        label = label,
+        bigLabel = bigLabel,
+        active = on,
+        lit = on,
+        contentDescription = contentDescription,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        modifier = modifier,
+        lamp = lamp,
+    ) { color, _, artWidth ->
+        KeyIconGlyph(icon, color, artWidth * 0.14f)
+    }
+}
+
+@Composable
+private fun KeyIconGlyph(icon: KeyIcon, color: Color, size: Dp) {
+    Canvas(Modifier.size(size)) {
+        val r = this.size.minDimension / 2f
+        when (icon) {
+            KeyIcon.MOON -> {
+                // A crescent: a disc with a second, offset disc cut out of it.
+                val disc = Path().apply { addOval(Rect(center, r)) }
+                val bite = Path().apply { addOval(Rect(Offset(center.x + r * 0.5f, center.y - r * 0.28f), r * 0.86f)) }
+                drawPath(Path.combine(PathOperation.Difference, disc, bite), color)
+            }
+            KeyIcon.WAVE -> {
+                val w = this.size.width
+                val path = Path().apply {
+                    moveTo(0f, center.y)
+                    // two gentle periods across the width
+                    for (i in 0..40) {
+                        val t = i / 40f
+                        lineTo(t * w, center.y - kotlin.math.sin(t * 4f * Math.PI.toFloat()) * r * 0.55f)
+                    }
+                }
+                drawPath(path, color, style = Stroke(width = r * 0.34f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
+        }
+    }
+}
+
+/**
+ * The shared radio pushbutton: three bitmap pictures (idle / paused / lit) cross-faded by state, and
+ * live words over the artwork's windows. [active] = latched in; [lit] = its lamp and window are lit
+ * (an [active] key that is not [lit] is paused: dim amber). [window] draws whatever goes in the left
+ * window — a number or an icon — given the colour it should use for the current state, whether it is
+ * lit, and the drawn artwork width (for sizing in dp, not sp: it lives inside a picture).
+ *
+ * The artwork keeps its shape and is centred in whatever space it is given; nothing about the layout
+ * changes with the state.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RadioKey(
+    label: String,
+    active: Boolean,
+    lit: Boolean,
+    contentDescription: String,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    labelEmpty: Boolean = false,
+    lamp: Float = 1f,
+    bigLabel: String? = null,
+    window: @Composable (color: Color, lit: Boolean, artWidth: Dp) -> Unit,
+) {
     val outArt = ImageBitmap.imageResource(R.drawable.channel_key_out)
     val dimArt = ImageBitmap.imageResource(R.drawable.channel_key_dim)
     val litArt = ImageBitmap.imageResource(R.drawable.channel_key_lit)
 
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val paused = active && !playing
+    val paused = active && !lit
 
     val latch by animateFloatAsState(if (active) 1f else 0f, tween(FadeMs), label = "key-latch")
-    val lit by animateFloatAsState(if (playing) 1f else 0f, tween(FadeMs), label = "key-lit")
+    val litLevel by animateFloatAsState(if (lit) 1f else 0f, tween(FadeMs), label = "key-lit")
     val press by animateFloatAsState(if (pressed) 1f else 0f, tween(80), label = "key-press")
 
     val numberColor by animateColorAsState(
-        when { playing -> NumberLit; paused -> NumberPaused; else -> NumberIdle }, tween(FadeMs), label = "number",
+        when { lit -> NumberLit; paused -> NumberPaused; else -> NumberIdle }, tween(FadeMs), label = "number",
     )
     val labelColor by animateColorAsState(
-        when { playing -> LabelLit; paused -> LabelPaused; empty -> LabelEmpty; else -> LabelIdle },
+        when { lit -> LabelLit; paused -> LabelPaused; labelEmpty -> LabelEmpty; else -> LabelIdle },
         tween(FadeMs), label = "label",
     )
 
@@ -148,37 +276,40 @@ fun ChannelKey(
         val artH = (ChannelKeyArt.HEIGHT * scale).dp
         val travelPx = with(density) { (ChannelKeyArt.TRAVEL * scale).dp.toPx() }
         val pressPx = with(density) { (ChannelKeyArt.PRESS_EXTRA * scale).dp.toPx() }
-        // Text sizes follow the artwork (dp, not sp): they live inside fixed windows in a picture,
-        // so a large system font size must not push them out of it.
-        val numberSize = with(density) { (artW * 0.215f).toSp() }
         val labelSize = with(density) { (artW * 0.060f).toSp() }
 
         Box(Modifier.size(artW, artH).graphicsLayer { translationY = press * pressPx }) {
             Image(outArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, alpha = 1f - latch, filterQuality = FilterQuality.High)
             Image(dimArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, alpha = latch, filterQuality = FilterQuality.High)
-            Image(litArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, alpha = lit * lamp.coerceIn(0f, 1f), filterQuality = FilterQuality.High)
+            Image(litArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, alpha = litLevel * lamp.coerceIn(0f, 1f), filterQuality = FilterQuality.High)
 
             // The live words move down with the artwork when it latches in.
             Box(Modifier.fillMaxSize().graphicsLayer { translationY = latch * travelPx }) {
-                ArtText(ChannelKeyArt.NUMBER, scale) {
-                    Text(
-                        text = "$number",
-                        color = numberColor,
-                        fontFamily = Condensed,
-                        fontSize = numberSize,
-                        lineHeight = numberSize,
-                        textAlign = TextAlign.Center,
-                        style = TextStyle(
-                            shadow = if (playing) {
-                                Shadow(Color(0x88FFECBE), Offset(0f, 2f), 0f) // a lit numeral: soft highlight
-                            } else {
-                                Shadow(Color.Black, Offset(0f, 2f), 0f)        // engraved
-                            },
-                        ),
-                    )
-                }
+                ArtText(ChannelKeyArt.NUMBER, scale) { window(numberColor, lit, artW) }
                 ArtText(ChannelKeyArt.LABEL, scale) {
-                    Text(
+                    if (bigLabel != null) {
+                        // Just the value, as large as the window allows (e.g. minutes left).
+                        val fontDp = ChannelKeyArt.fillFontSizeDp(bigLabel.length, ChannelKeyArt.LABEL.w * scale, ChannelKeyArt.LABEL.h * scale)
+                        val fontSize = with(density) { fontDp.dp.toSp() }
+                        Text(
+                            text = bigLabel,
+                            color = labelColor,
+                            fontFamily = Condensed,
+                            fontSize = fontSize,
+                            lineHeight = fontSize,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            softWrap = false,
+                            // Digits only: trim the font's built-in padding so they sit centred in the window.
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
+                                shadow = if (lit) Shadow(Color(0xCCFFA632), Offset.Zero, 18f) else null,
+                            ),
+                            // The digits are taller than the window's line box: let them overflow it, centred.
+                            modifier = Modifier.wrapContentSize(unbounded = true),
+                        )
+                    } else Text(
                         text = label.uppercase(),
                         color = labelColor,
                         fontFamily = CondensedMedium,
@@ -188,11 +319,7 @@ fun ChannelKey(
                         textAlign = TextAlign.Center,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        style = if (playing) {
-                            TextStyle(shadow = Shadow(Color(0xCCFFA632), Offset.Zero, 14f))
-                        } else {
-                            TextStyle.Default
-                        },
+                        style = if (lit) TextStyle(shadow = Shadow(Color(0xCCFFA632), Offset.Zero, 14f)) else TextStyle.Default,
                     )
                 }
             }

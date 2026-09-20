@@ -75,50 +75,6 @@ fun SkinPanel(
     )
 }
 
-/**
- * A pressable control tile (SLEEP, NOISE, …): a thin panel-coloured outline when off, a thick
- * amber outline on a lifted face when [active]. (The channel buttons use [RetroKey] instead.)
- */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun SkinTile(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    active: Boolean = false,
-    onLongClick: (() -> Unit)? = null,
-    contentDescription: String? = null,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val c = LocalAppSkin.current.colors
-    val clickModifier =
-        if (onLongClick != null) {
-            Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
-        } else {
-            Modifier.clickable(onClick = onClick)
-        }
-    val a11y = if (contentDescription != null) {
-        Modifier.semantics { this.contentDescription = contentDescription }
-    } else {
-        Modifier
-    }
-    Column(
-        modifier
-            .then(a11y)
-            .clip(RoundedCornerShape(14.dp))
-            .background(c.tileBrush(active))
-            .border(
-                width = if (active) 2.5.dp else 1.dp,
-                color = if (active) c.accent else c.panelStroke,
-                shape = RoundedCornerShape(14.dp),
-            )
-            .then(clickModifier)
-            .padding(horizontal = 4.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        content = content,
-    )
-}
-
 /** Non-interactive knob visual. Phase 3 replaces this with a draggable control. */
 @Composable
 fun StaticKnob(
@@ -176,82 +132,6 @@ fun StaticKnob(
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
         )
-    }
-}
-
-/** Small round glyph button used for prev / next. */
-@Composable
-fun CircleGlyphButton(
-    glyph: String,
-    contentDescription: String,
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-    size: androidx.compose.ui.unit.Dp = 48.dp,
-) {
-    val c = LocalAppSkin.current.colors
-    Box(
-        Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(c.panelTop)
-            .border(1.dp, c.panelStroke, CircleShape)
-            .clickable(enabled = enabled, onClickLabel = contentDescription, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = glyph,
-            color = if (enabled) c.textPrimary else c.textDim,
-            fontSize = 18.sp,
-        )
-    }
-}
-
-/** The big glowing play/pause disc, with its own pulsing ring. */
-@Composable
-fun PlayPauseButton(
-    isPlaying: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 84.dp,
-) {
-    val c = LocalAppSkin.current.colors
-    val pulse = rememberInfiniteTransition(label = "ring")
-    val glow by pulse.animateFloat(
-        initialValue = if (isPlaying) 0.15f else 0.28f,
-        targetValue = if (isPlaying) 0.55f else 0.28f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "glow",
-    )
-    Box(modifier.size(size), contentAlignment = Alignment.Center) {
-        Box(
-            Modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(listOf(c.glow.copy(alpha = glow), Color.Transparent)),
-                ),
-        )
-        Box(
-            Modifier
-                .size(size * 0.83f)
-                .clip(CircleShape)
-                .background(c.panelTop)
-                .border(2.dp, c.accent, CircleShape)
-                .clickable(
-                    onClickLabel = if (isPlaying) "Pause" else "Play",
-                    onClick = onClick,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = if (isPlaying) "⏸" else "▶",
-                color = c.textPrimary,
-                fontSize = (size.value * 0.31f).sp,
-            )
-        }
     }
 }
 
