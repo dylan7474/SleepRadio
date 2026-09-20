@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.map
 import org.dylanjones.sleepradio.core.audio.AmbientPattern
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.NoiseColor
-import org.dylanjones.sleepradio.core.design.SkinId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,20 +22,6 @@ import javax.inject.Singleton
 class SettingsRepositoryImpl @Inject constructor(
     private val dataStore: DataStore<Preferences>,
 ) : SettingsRepository {
-
-    override val skin: Flow<SkinId> = dataStore.data.map { prefs ->
-        when (prefs[KEY_SKIN]) {
-            SkinId.INDUSTRIAL.name -> SkinId.INDUSTRIAL
-            SkinId.STUDIO.name -> SkinId.STUDIO
-            else -> SkinId.NEON
-        }
-    }
-
-    override val skinChosen: Flow<Boolean> = dataStore.data.map { it[KEY_SKIN] != null }
-
-    override suspend fun setSkin(skin: SkinId) {
-        dataStore.edit { it[KEY_SKIN] = skin.name }
-    }
 
     override val audiobooksTreeUri: Flow<String?> =
         dataStore.data.map { it[KEY_AUDIOBOOKS_TREE] }
@@ -287,7 +272,6 @@ class SettingsRepositoryImpl @Inject constructor(
     }
 
     private companion object {
-        val KEY_SKIN = stringPreferencesKey("skin_id")
         val KEY_AUDIOBOOKS_TREE = stringPreferencesKey("audiobooks_tree_uri")
         val KEY_MUSIC_TREE = stringPreferencesKey("music_tree_uri")
         val KEY_AMBIENT = stringPreferencesKey("ambient_current")

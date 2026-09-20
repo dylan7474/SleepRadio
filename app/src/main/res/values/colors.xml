@@ -2,6 +2,6 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <!-- Cold-start window + splash background (matches the Neon skin ground). -->
-    <color name="splash_bg">#FF0B0E18</color>
+    <!-- Cold-start window + splash background (matches the Studio skin's screen ground). -->
+    <color name="splash_bg">#FF15120E</color>
 </resources>

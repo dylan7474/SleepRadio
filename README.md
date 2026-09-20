@@ -8,10 +8,10 @@ coloured noise and binaural beats. A sleep timer fades and stops the main source
 on schedule; the ambient channels keep playing.
 
 Built for a Pixel 9, in Kotlin + Jetpack Compose — also verified running on a
-Galaxy S8+ (Android 9). Three selectable skins —
-**Neon** (cyberpunk cyan/magenta) and **Industrial** (brushed steel, blue/amber)
-share one control layout; **Studio** (warm hi‑fi console) puts the controls in a
-single row and adds a pair of analogue L/R VU meters.
+Galaxy S8+ (Android 9). One look — the **Studio** warm hi‑fi console, with the controls
+in a single row and a pair of analogue L/R VU meters. Every source type (Broadcast, radio,
+album, audiobook, podcast) shares the same fixed screen: parts that don't apply to the
+current source fade out rather than disappear, so nothing shifts when you switch.
 
 ---
 
@@ -173,8 +173,7 @@ core/audio      MixerState/Controller, NoiseGenerator, BinauralGenerator, Ambien
                 VuCalibrator (VU-meter mic latency calibration)
 core/broadcast  BroadcastSelector, ShowClock, DjScriptBuilder (auto-DJ scripting)
 core/data       SourceModels, SettingsRepository (DataStore), RadioDirectory, Room DB
-core/design     AppSkin / SkinColors / PlayerLayout, Neon · Industrial · Studio skins,
-                RotaryKnob, SkinComponents
+core/design     AppSkin / SkinColors, the Studio skin, RotaryKnob, SkinComponents
 core/tts        OfflineTtsEngine (sherpa-onnx), DjVoicePlayer, VoicePack + install/resolve
 feature/player  PlayerRoute / PlayerViewModel / PlayerScreen + dialogs, VuMeters,
                 VuSyncDialog, BroadcastVoiceViewModel
@@ -293,7 +292,7 @@ bedside use.
 - [ ] Studio skin polish: engraved VU scale numbers, a tidier needle rest pose,
       and a separate (smaller) sync delay for the DJ‑voice path
 - [ ] Home‑screen widget and/or a quick‑settings tile (start last mix, toggle sleep timer)
-- [ ] The Industrial "PATTERN board" as a fuller mixer screen (PATTERN 1–3 + a morph knob)
+- [ ] A fuller ambient mixer screen (PATTERN 1–3 + a morph knob)
 - [ ] Lock‑screen / notification controls polish; media‑button (headset) handling
 - [ ] Alarm side: wake to a chosen source at a set time
 - [ ] Reduced‑motion honouring (kill the marquee / radar / pulsing glow), 120 fps pass

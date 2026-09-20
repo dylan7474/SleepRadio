@@ -1,12 +1,8 @@
 package org.dylanjones.sleepradio.feature.player
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -31,20 +27,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.dylanjones.sleepradio.core.design.LocalAppSkin
-import org.dylanjones.sleepradio.core.design.PlayerLayout
-import org.dylanjones.sleepradio.core.design.SkinId
 import org.dylanjones.sleepradio.core.design.panelBrush
 import org.dylanjones.sleepradio.playback.PlaybackState
 import java.util.Locale
@@ -97,8 +89,7 @@ fun NowPlayingBlock(
                 .clip(RoundedCornerShape(18.dp))
                 .background(c.panelBrush())
                 .border(1.dp, c.panelStroke, RoundedCornerShape(18.dp))
-            // Real cover art when the item has any; otherwise the skin's visual —
-            // an animated radar for Industrial, a ♪ placeholder for Neon.
+            // Real cover art when the item has any; otherwise a ♪ placeholder.
             val art = rememberAlbumArt(state.artworkUri, state.mediaUri)
             when {
                 art != null -> Image(
@@ -108,7 +99,6 @@ fun NowPlayingBlock(
                     modifier = visualModifier,
                 )
 
-                skin.id == SkinId.INDUSTRIAL -> RadarVisual(visualModifier)
                 else -> DefaultArtwork(visualModifier)
             }
             Spacer(Modifier.width(16.dp))
@@ -137,33 +127,19 @@ fun NowPlayingBlock(
             }
         }
         Spacer(Modifier.height(8.dp))
-        if (starting) {
-            Text(
-                text = "●  TUNING IN…",
-                color = c.accent,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(4.dp))
-        } else if (state.isBroadcast) {
-            Text(
-                text = if (state.djSpeaking) "🎙  ON AIR — DJ" else "●  ON AIR",
-                color = if (state.djSpeaking) c.accentAlt else c.accent,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.height(4.dp))
-        }
-        if (state.isRadio) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("● LIVE", color = c.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(8.dp))
-                if (state.isBuffering) {
-                    Text("buffering…", color = c.textDim, fontSize = 12.sp)
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-        } else {
+        // One fixed layout for every source type: nothing here is added or removed when the
+        // mode changes (that made the whole screen jump). The status line always has its row
+        // and just cross-fades its text; the time + seek bar are always laid out and fade to a
+        // dim, inert ghost when there is nothing to seek (live radio).
+        StatusRow(status = statusFor(state, starting))
+        Spacer(Modifier.height(4.dp))
+        val seekable = !state.isRadio
+        val seekAlpha by animateFloatAsState(
+            targetValue = if (seekable) 1f else INACTIVE_ALPHA,
+            animationSpec = tween(FADE_MS),
+            label = "seek-alpha",
+        )
+        Column(Modifier.fillMaxWidth().alpha(seekAlpha)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
                     "${formatTime(state.positionMs)} / ${formatTime(state.durationMs)}",
@@ -176,7 +152,7 @@ fun NowPlayingBlock(
                 value = state.positionMs.coerceIn(0L, state.durationMs.coerceAtLeast(0L)).toFloat(),
                 onValueChange = { onSeek(it.toLong()) },
                 valueRange = 0f..state.durationMs.coerceAtLeast(1L).toFloat(),
-                enabled = state.durationMs > 0,
+                enabled = seekable && state.durationMs > 0,
                 modifier = Modifier.height(20.dp),
                 colors = SliderDefaults.colors(
                     activeTrackColor = c.accent,
@@ -185,68 +161,61 @@ fun NowPlayingBlock(
                 ),
             )
         }
-        // The Studio (CONSOLE) skin shows analogue VU meters lower down instead.
-        if (skin.layout != PlayerLayout.CONSOLE) {
-            AudioVisualizerStrip(
-                playing = state.isPlaying,
-                color = c.accent,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(18.dp)
-                    .padding(top = 4.dp),
-            )
+    }
+}
+
+/** What the one-line status row says, or null for "nothing" (it then just fades out). */
+private data class StatusLine(val text: String, val kind: Kind, val extra: String? = null) {
+    enum class Kind { ACCENT, ACCENT_ALT }
+}
+
+private fun statusFor(state: PlaybackState, starting: Boolean): StatusLine? = when {
+    starting -> StatusLine("●  TUNING IN…", StatusLine.Kind.ACCENT)
+    state.isBroadcast ->
+        if (state.djSpeaking) StatusLine("🎙  ON AIR — DJ", StatusLine.Kind.ACCENT_ALT)
+        else StatusLine("●  ON AIR", StatusLine.Kind.ACCENT)
+    state.isRadio -> StatusLine("● LIVE", StatusLine.Kind.ACCENT, extra = if (state.isBuffering) "buffering…" else null)
+    else -> null
+}
+
+/**
+ * The status line ("ON AIR", "● LIVE", "TUNING IN…"). Its row is ALWAYS present at a fixed
+ * height (scaled with the font size) so changing source never moves the rest of the screen;
+ * the text cross-fades, and fades out entirely for sources with no status.
+ */
+@Composable
+private fun StatusRow(status: StatusLine?) {
+    val c = LocalAppSkin.current.colors
+    val rowHeight = with(LocalDensity.current) { 16.sp.toDp() }
+    Box(Modifier.fillMaxWidth().height(rowHeight), contentAlignment = Alignment.CenterStart) {
+        Crossfade(targetState = status, animationSpec = tween(FADE_MS), label = "status") { line ->
+            if (line != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = line.text,
+                        color = if (line.kind == StatusLine.Kind.ACCENT_ALT) c.accentAlt else c.accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    if (line.extra != null) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(line.extra, color = c.textDim, fontSize = 12.sp)
+                    }
+                }
+            }
         }
     }
 }
+
+/** Opacity of a control that exists in the layout but does not apply to the current source. */
+private const val INACTIVE_ALPHA = 0.25f
+private const val FADE_MS = 250
 
 @Composable
 private fun DefaultArtwork(modifier: Modifier) {
     val c = LocalAppSkin.current.colors
     Box(modifier, contentAlignment = Alignment.Center) {
         Text("♪", color = c.textDim, fontSize = 28.sp)
-    }
-}
-
-@Composable
-private fun RadarVisual(modifier: Modifier) {
-    val c = LocalAppSkin.current.colors
-    val sweep by rememberInfiniteTransition(label = "radar").animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "radar-sweep",
-    )
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxWidth().height(84.dp)) {
-            val r = size.minDimension / 2f * 0.82f
-            val center = Offset(size.width / 2f, size.height / 2f)
-            for (ring in 1..3) {
-                drawCircle(
-                    color = c.accent.copy(alpha = 0.25f),
-                    radius = r * ring / 3f,
-                    center = center,
-                    style = Stroke(1.dp.toPx()),
-                )
-            }
-            // Rotating sweep line + blip.
-            rotate(degrees = sweep, pivot = center) {
-                drawLine(
-                    color = c.accent,
-                    start = center,
-                    end = Offset(center.x + r, center.y),
-                    strokeWidth = 2.dp.toPx(),
-                    cap = StrokeCap.Round,
-                )
-            }
-            drawCircle(
-                color = c.accentAlt,
-                radius = 3.dp.toPx(),
-                center = Offset(center.x + r * 0.4f, center.y - r * 0.2f),
-            )
-        }
     }
 }
 

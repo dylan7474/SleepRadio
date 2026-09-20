@@ -8,8 +8,8 @@ import androidx.compose.runtime.Composable
  * Base Material 3 color scheme. SleepRadio is dark-only (both mockups are dark),
  * so there is no light scheme and no dynamic color.
  *
- * This is only the Material fallback. The per-skin palettes (Neon / Industrial)
- * are layered on top in Phase 2 via the AppSkin design system.
+ * This is only the Material fallback. The app's actual palette is the Studio skin
+ * ([org.dylanjones.sleepradio.core.design.StudioSkin]) layered on top via AppSkin.
  */
 private val DarkColorScheme = darkColorScheme(
     primary = NeonCyan,

@@ -85,24 +85,19 @@ import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_PERSONAL
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_STOCK
 import org.dylanjones.sleepradio.core.data.NEWS_VOICE_SAME
 import org.dylanjones.sleepradio.core.design.SkinBackground
-import org.dylanjones.sleepradio.core.design.SkinId
-import org.dylanjones.sleepradio.core.design.skinFor
+import org.dylanjones.sleepradio.core.design.StudioSkin
 import org.dylanjones.sleepradio.core.tts.VoicePackInstaller
 import org.dylanjones.sleepradio.core.tts.rememberDebugTtsTest
-import org.dylanjones.sleepradio.feature.root.RootViewModel
 import kotlin.math.roundToInt
 
 @Composable
 fun PlayerRoute(
-    rootViewModel: RootViewModel = hiltViewModel(),
     playerViewModel: PlayerViewModel = hiltViewModel(),
     broadcastVoiceViewModel: BroadcastVoiceViewModel = hiltViewModel(),
     backupViewModel: BackupViewModel = hiltViewModel(),
 ) {
-    val skinId by rootViewModel.skinId.collectAsStateWithLifecycle()
-    val skinChosen by rootViewModel.skinChosen.collectAsStateWithLifecycle()
     val state by playerViewModel.uiState.collectAsStateWithLifecycle()
-    val skin = skinFor(skinId)
+    val skin = StudioSkin
 
     val context = LocalContext.current
 
@@ -229,14 +224,12 @@ fun PlayerRoute(
         drawerState = drawerState,
         drawerContent = {
             AppDrawer(
-                currentSkin = skinId,
                 onNowPlaying = { closeDrawer() },
                 onAmbient = { closeDrawer(); ambientDialogOpen = true },
                 onSleep = { closeDrawer(); sleepDialogOpen = true },
                 onRadioStations = { closeDrawer(); radioStationsOpen = true },
                 onPodcasts = { closeDrawer(); podcastsOpen = true },
                 onBroadcastVoice = { closeDrawer(); broadcastVoiceOpen = true },
-                onSkin = { rootViewModel.chooseSkin(it); closeDrawer() },
                 onVuSync = { closeDrawer(); vuSyncOpen = true },
                 onAbout = { closeDrawer(); aboutOpen = true },
                 onBackup = { closeDrawer(); backupOpen = true },
@@ -246,10 +239,6 @@ fun PlayerRoute(
     ) {
         SkinBackground(skin) {
             PlayerScreen(state, actions, Modifier.fillMaxSize(), vu = playerViewModel.vu)
-
-            if (!skinChosen) {
-                SkinPickerOverlay(onPick = rootViewModel::chooseSkin)
-            }
 
             if (sleepDialogOpen) {
                 SleepDurationDialog(
@@ -473,14 +462,12 @@ fun PlayerRoute(
 
 @Composable
 private fun AppDrawer(
-    currentSkin: SkinId,
     onNowPlaying: () -> Unit,
     onAmbient: () -> Unit,
     onSleep: () -> Unit,
     onRadioStations: () -> Unit,
     onPodcasts: () -> Unit,
     onBroadcastVoice: () -> Unit,
-    onSkin: (SkinId) -> Unit,
     onVuSync: () -> Unit,
     onAbout: () -> Unit,
     onBackup: () -> Unit,
@@ -530,29 +517,11 @@ private fun AppDrawer(
                 onClick = onBroadcastVoice,
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            SectionHeader("APPEARANCE")
             NavigationDrawerItem(
-                label = { Text("Neon") },
-                selected = currentSkin == SkinId.NEON,
-                onClick = { onSkin(SkinId.NEON) },
+                label = { Text("VU meter sync") },
+                selected = false,
+                onClick = onVuSync,
             )
-            NavigationDrawerItem(
-                label = { Text("Industrial") },
-                selected = currentSkin == SkinId.INDUSTRIAL,
-                onClick = { onSkin(SkinId.INDUSTRIAL) },
-            )
-            NavigationDrawerItem(
-                label = { Text("Studio") },
-                selected = currentSkin == SkinId.STUDIO,
-                onClick = { onSkin(SkinId.STUDIO) },
-            )
-            if (currentSkin == SkinId.STUDIO) {
-                NavigationDrawerItem(
-                    label = { Text("VU meter sync") },
-                    selected = false,
-                    onClick = onVuSync,
-                )
-            }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             NavigationDrawerItem(
                 label = { Text("Backup & restore") },
@@ -1028,53 +997,6 @@ private fun RadioStationsDialog(
             }
         },
     )
-}
-
-@Composable
-private fun SkinPickerOverlay(onPick: (SkinId) -> Unit) {
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color(0xCC000000))
-            .safeDrawingPadding()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                "Choose a look",
-                color = androidx.compose.ui.graphics.Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                "Switch anytime from the ≡ menu",
-                color = androidx.compose.ui.graphics.Color(0xFFB0B0B0),
-                fontSize = 13.sp,
-            )
-            Spacer(Modifier.padding(8.dp))
-            SkinChoiceCard("NEON", "Cyberpunk cyan & magenta") { onPick(SkinId.NEON) }
-            Spacer(Modifier.padding(6.dp))
-            SkinChoiceCard("INDUSTRIAL", "Brushed steel, blue & amber") { onPick(SkinId.INDUSTRIAL) }
-            Spacer(Modifier.padding(6.dp))
-            SkinChoiceCard("STUDIO", "Warm console with L/R VU meters") { onPick(SkinId.STUDIO) }
-        }
-    }
-}
-
-@Composable
-private fun SkinChoiceCard(title: String, subtitle: String, onClick: () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(androidx.compose.ui.graphics.Color(0xFF1B1E27))
-            .clickable(onClick = onClick)
-            .padding(20.dp),
-    ) {
-        Text(title, color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text(subtitle, color = androidx.compose.ui.graphics.Color(0xFF9AA4B2), fontSize = 12.sp)
-    }
 }
 
 @Composable

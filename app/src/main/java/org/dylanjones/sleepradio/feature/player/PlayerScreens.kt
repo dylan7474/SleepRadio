@@ -33,11 +33,9 @@ import org.dylanjones.sleepradio.core.data.SourceType
 import org.dylanjones.sleepradio.core.design.CircleGlyphButton
 import org.dylanjones.sleepradio.core.design.LocalAppSkin
 import org.dylanjones.sleepradio.core.design.PlayPauseButton
-import org.dylanjones.sleepradio.core.design.PlayerLayout
 import org.dylanjones.sleepradio.core.design.RotaryKnob
 import org.dylanjones.sleepradio.core.design.SkinPanel
 import org.dylanjones.sleepradio.core.design.SkinTile
-import org.dylanjones.sleepradio.core.design.TransportCluster
 import org.dylanjones.sleepradio.core.design.Wordmark
 
 /** UI callbacks for the player screen. */
@@ -66,10 +64,10 @@ class PlayerActions(
 private val placeholderFreqs = listOf("94.7", "101.3", "88.5", "106.1")
 
 /**
- * The player layout. Neon / Industrial ([PlayerLayout.CLASSIC]) get a transport
- * cluster over a VOL/BAL knob row; Studio ([PlayerLayout.CONSOLE]) gets one
- * control row plus half-height ambient tiles and a pair of analogue VU meters.
- * Header, now-playing and the preset row are shared. See RETROSYNC_PLAN.md §3.
+ * The player layout — the same for every source type, so switching between them never moves
+ * anything: header, now-playing block, preset row, half-height SLEEP/NOISE tiles, a pair of
+ * analogue VU meters, and one control row (RWD · VOL · PAUSE · BAL · FFWD). See
+ * RETROSYNC_PLAN.md §3.
  */
 @Composable
 fun PlayerScreen(
@@ -79,7 +77,6 @@ fun PlayerScreen(
     vu: StateFlow<VuLevels> = remember { MutableStateFlow(VuLevels.SILENT) },
 ) {
     val pb = state.playback
-    val console = LocalAppSkin.current.layout == PlayerLayout.CONSOLE
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -98,68 +95,41 @@ fun PlayerScreen(
                 .weight(1f),
         ) {
             PresetRow(state, actions, Modifier.fillMaxWidth().weight(1f))
-            Spacer(Modifier.height(if (console) 8.dp else 10.dp))
+            Spacer(Modifier.height(8.dp))
             AmbientTiles(
                 state, actions,
-                Modifier.fillMaxWidth().weight(if (console) 0.42f else 1f),
-                compact = console,
+                Modifier.fillMaxWidth().weight(0.42f),
+                compact = true,
             )
-            if (console) {
-                Spacer(Modifier.height(8.dp))
-                val levels by vu.collectAsStateWithLifecycle()
-                VuMeterPair(levels, Modifier.fillMaxWidth().weight(0.6f))
-            }
+            Spacer(Modifier.height(8.dp))
+            val levels by vu.collectAsStateWithLifecycle()
+            VuMeterPair(levels, Modifier.fillMaxWidth().weight(0.6f))
         }
 
-        if (console) {
-            Spacer(Modifier.height(12.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val skipTransport = pb.isAudiobook || pb.isPodcast
-                CircleGlyphButton(
-                    "⏮",
-                    contentDescription = if (skipTransport) "Back one minute" else "Previous",
-                    onClick = actions.onPrevious,
-                    enabled = skipTransport || pb.hasPrevious,
-                )
-                RotaryKnob("VOL", state.volume, actions.onVolumeChange, size = 52.dp)
-                PlayPauseButton(isPlaying = pb.isPlaying, onClick = actions.onPlayPause, size = 68.dp)
-                RotaryKnob("BAL", state.balance, actions.onBalanceChange, size = 52.dp)
-                CircleGlyphButton(
-                    "⏭",
-                    contentDescription = if (skipTransport) "Forward one minute" else "Next",
-                    onClick = actions.onNext,
-                    enabled = skipTransport || pb.hasNext,
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-        } else {
-            Spacer(Modifier.height(16.dp))
-            // For an audiobook or podcast episode, prev/next become −1 min / +1 min
-            // and stay enabled; chapter/episode position is shown in the
-            // now-playing block up top.
-            TransportCluster(
-                isPlaying = pb.isPlaying,
-                hasPrevious = pb.isAudiobook || pb.isPodcast || pb.hasPrevious,
-                hasNext = pb.isAudiobook || pb.isPodcast || pb.hasNext,
-                onPrevious = actions.onPrevious,
-                onPlayPause = actions.onPlayPause,
-                onNext = actions.onNext,
-                isAudiobook = pb.isAudiobook || pb.isPodcast,
+        Spacer(Modifier.height(12.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val skipTransport = pb.isAudiobook || pb.isPodcast
+            CircleGlyphButton(
+                "⏮",
+                contentDescription = if (skipTransport) "Back one minute" else "Previous",
+                onClick = actions.onPrevious,
+                enabled = skipTransport || pb.hasPrevious,
             )
-            Spacer(Modifier.height(10.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                RotaryKnob("VOL", state.volume, actions.onVolumeChange)
-                RotaryKnob("BAL", state.balance, actions.onBalanceChange)
-            }
-            Spacer(Modifier.height(4.dp))
+            RotaryKnob("VOL", state.volume, actions.onVolumeChange, size = 52.dp)
+            PlayPauseButton(isPlaying = pb.isPlaying, onClick = actions.onPlayPause, size = 68.dp)
+            RotaryKnob("BAL", state.balance, actions.onBalanceChange, size = 52.dp)
+            CircleGlyphButton(
+                "⏭",
+                contentDescription = if (skipTransport) "Forward one minute" else "Next",
+                onClick = actions.onNext,
+                enabled = skipTransport || pb.hasNext,
+            )
         }
+        Spacer(Modifier.height(4.dp))
     }
 }
 

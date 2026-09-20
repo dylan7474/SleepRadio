@@ -252,39 +252,6 @@ fun PlayPauseButton(
     }
 }
 
-/** prev · big glowing play/pause · next */
-@Composable
-fun TransportCluster(
-    isPlaying: Boolean,
-    hasPrevious: Boolean,
-    hasNext: Boolean,
-    onPrevious: () -> Unit,
-    onPlayPause: () -> Unit,
-    onNext: () -> Unit,
-    modifier: Modifier = Modifier,
-    isAudiobook: Boolean = false,
-) {
-    androidx.compose.foundation.layout.Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CircleGlyphButton(
-            "⏮",
-            contentDescription = if (isAudiobook) "Back one minute" else "Previous",
-            onClick = onPrevious,
-            enabled = hasPrevious,
-        )
-        PlayPauseButton(isPlaying = isPlaying, onClick = onPlayPause)
-        CircleGlyphButton(
-            "⏭",
-            contentDescription = if (isAudiobook) "Forward one minute" else "Next",
-            onClick = onNext,
-            enabled = hasNext,
-        )
-    }
-}
-
 /** SLEEPRADIO / PLAYER wordmark. */
 @Composable
 fun Wordmark(modifier: Modifier = Modifier) {

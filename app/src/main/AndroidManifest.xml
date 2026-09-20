@@ -21,8 +21,8 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- Audio-reactive visualiser reads the output mix via android.media.audiofx.Visualizer.
-         Optional: denied -> the strip falls back to a decorative animation. -->
+    <!-- Used only by the VU meter sync calibration, which listens with the microphone to
+         measure output latency. Asked for at that moment, never at startup; optional. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application

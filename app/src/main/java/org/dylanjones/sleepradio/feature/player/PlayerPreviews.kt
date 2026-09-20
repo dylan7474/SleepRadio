@@ -6,9 +6,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import org.dylanjones.sleepradio.core.data.SourceSlot
 import org.dylanjones.sleepradio.core.data.SourceType
-import org.dylanjones.sleepradio.core.design.IndustrialSkin
-import org.dylanjones.sleepradio.core.design.NeonSkin
 import org.dylanjones.sleepradio.core.design.SkinBackground
+import org.dylanjones.sleepradio.core.design.StudioSkin
 import org.dylanjones.sleepradio.playback.PlaybackState
 
 private val previewState = PlayerUiState(
@@ -49,18 +48,10 @@ private val noopActions = PlayerActions(
     onNoiseColorPick = {},
 )
 
-@Preview(name = "Neon", widthDp = 412, heightDp = 900)
+@Preview(name = "Studio", widthDp = 412, heightDp = 900)
 @Composable
-private fun NeonPlayerPreview() {
-    SkinBackground(NeonSkin) {
-        PlayerScreen(previewState, noopActions, Modifier.fillMaxSize())
-    }
-}
-
-@Preview(name = "Industrial", widthDp = 412, heightDp = 900)
-@Composable
-private fun IndustrialPlayerPreview() {
-    SkinBackground(IndustrialSkin) {
+private fun StudioPlayerPreview() {
+    SkinBackground(StudioSkin) {
         PlayerScreen(previewState, noopActions, Modifier.fillMaxSize())
     }
 }
