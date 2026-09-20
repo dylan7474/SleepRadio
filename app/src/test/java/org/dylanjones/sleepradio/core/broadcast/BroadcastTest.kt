@@ -212,6 +212,22 @@ class DjScriptBuilderTest {
     }
 
     @Test
+    fun `time lead matches which side of the rounded time it is`() {
+        for (seed in 0L..20L) {
+            val b = DjScriptBuilder(Random(seed))
+            // 19:28 rounds up to half past: still coming up to it
+            assertTrue(b.timeLine(LocalTime.of(19, 28)).startsWith("It's coming up to half past"))
+            // 19:32 rounds down to half past: just gone it
+            assertTrue(b.timeLine(LocalTime.of(19, 32)).startsWith("It's just gone half past"))
+            // 19:59 rounds up to eight o'clock
+            assertTrue(b.timeLine(LocalTime.of(19, 59)).startsWith("It's coming up to eight"))
+            // dead on the mark: neither "coming up to" nor "just gone"
+            val exact = b.timeLine(LocalTime.of(19, 30))
+            assertTrue(exact, !exact.contains("coming up") && !exact.contains("just gone"))
+        }
+    }
+
+    @Test
     fun `outro and intro fall back to a filler line when a track is missing`() {
         val b = DjScriptBuilder(Random(0))
         // No track to name, but never an empty utterance or a dangling "by".

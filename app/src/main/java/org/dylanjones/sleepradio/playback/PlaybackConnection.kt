@@ -59,7 +59,6 @@ import org.dylanjones.sleepradio.core.tts.OfflineTtsEngine
 import org.dylanjones.sleepradio.core.tts.VoicePack
 import org.dylanjones.sleepradio.di.MainDispatcher
 import org.dylanjones.sleepradio.media.Track
-import java.time.Duration
 import java.time.LocalTime
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -114,6 +113,30 @@ private sealed interface SegueStep {
     data class Say(val text: String) : SegueStep
     /** [uri] null = pull the next one from the shuffle; set = play this exact clip. */
     data class Jingle(val uri: String? = null) : SegueStep
+
+    /**
+     * The spoken time, worded from the real clock when first needed (a
+     * prefetch during the clip before it, or the moment it is spoken) — never
+     * projected at track start, which pause/seek/restart make stale.
+     */
+    class Clock : SegueStep {
+        private var text: String? = null
+        var resolvedAt: LocalTime? = null
+            private set
+
+        @Synchronized
+        fun resolve(builder: DjScriptBuilder): String = text ?: run {
+            val now = LocalTime.now()
+            resolvedAt = now
+            builder.timeLine(now).also { text = it }
+        }
+    }
+}
+
+private fun SegueStep.describe(): String = when (this) {
+    is SegueStep.Say -> "say(\"$text\")"
+    is SegueStep.Clock -> "clock"
+    is SegueStep.Jingle -> "jingle"
 }
 
 /**
@@ -772,9 +795,7 @@ class PlaybackConnection @Inject constructor(
                     steps.forEach { if (it is SegueStep.Say) player.preload(it.text, announcerSpeed) }
                 }
                 if (!isBroadcast || !isActive || gen != broadcastGen) return@launch
-                Log.d(TAG, "broadcast: opening = " + steps.joinToString {
-                    if (it is SegueStep.Say) "say(\"${it.text}\")" else "jingle"
-                })
+                Log.d(TAG, "broadcast: opening = " + steps.joinToString { it.describe() })
                 seguePlan = ArrayDeque(steps)
                 runNextSegueStep()
             }
@@ -860,8 +881,9 @@ class PlaybackConnection @Inject constructor(
      * After a track starts: work out what fills the gap when it ends — a spoken
      * link, a jingle, or both (back-announce → jingle → next-track intro). The
      * plan is built and installed **synchronously** so a very short track can't
-     * outrun it; a background pass then pre-synthesises the speech and, for a
-     * time check, swaps in the clock projected to when it will actually be heard.
+     * outrun it; a background pass then pre-synthesises the speech. A time
+     * check is a [SegueStep.Clock], worded from the real clock only when the
+     * segue reaches it (see [runNextSegueStep]).
      */
     private fun onBroadcastTrackStarted() {
         val gen = ++broadcastGen
@@ -891,57 +913,41 @@ class PlaybackConnection @Inject constructor(
         }
         val historySnapshot = recentTrackHistory.toList()
 
-        fun planFor(spokenAt: LocalTime): List<SegueStep> = buildList {
+        val steps: List<SegueStep> = buildList {
             val talkyKind = kind == LinkKind.LINK || kind == LinkKind.TIME_CHECK
             when {
                 // Jingle with the DJ talking: always back-announce → jingle →
-                // next-track intro. A time check folds into the back-announce.
+                // next-track intro. A time check follows the back-announce.
                 jingleDue && hasVoice && talkyKind -> {
-                    val back = builder!!.outroLine(prev) +
-                        if (kind == LinkKind.TIME_CHECK) " ${builder.timeLine(spokenAt)}" else ""
-                    add(SegueStep.Say(back))
+                    add(SegueStep.Say(builder!!.outroLine(prev)))
+                    if (kind == LinkKind.TIME_CHECK) add(SegueStep.Clock())
                     add(SegueStep.Jingle())
                     if (!terse) add(SegueStep.Say(builder.introLine(next)))
                 }
                 jingleDue -> add(SegueStep.Jingle()) // NONE / IDENT, or no voice
+                hasVoice && kind == LinkKind.TIME_CHECK -> {
+                    if (everyTrack && !terse && prev != null) add(SegueStep.Say(builder!!.outroLine(prev)))
+                    add(SegueStep.Clock())
+                    if (!terse && next != null) add(SegueStep.Say(builder!!.introLine(next)))
+                }
                 hasVoice && kind != LinkKind.NONE -> {
-                    builder!!.build(kind, prev, next, spokenAt, terse, everyTrack)
+                    builder!!.build(kind, prev, next, LocalTime.now(), terse, everyTrack)
                         .takeIf { it.isNotBlank() }?.let { add(SegueStep.Say(it)) }
                 }
             }
         }
 
         segueRunning = false
-        val steps = planFor(LocalTime.now())
         seguePlan = ArrayDeque(steps)
-        Log.d(TAG, "broadcast: segue = " + steps.joinToString {
-            if (it is SegueStep.Say) "say(\"${it.text}\")" else "jingle"
-        })
+        Log.d(TAG, "broadcast: segue = " + steps.joinToString { it.describe() })
         if (steps.isEmpty()) return
 
         scope.launch(Dispatchers.Default) {
-            // For a time check, redo the plan with the clock projected to when it
-            // will actually be heard (past the track's remaining play time), then
-            // pre-synthesise every spoken line so the segue plays gaplessly.
-            val projected = if (kind == LinkKind.TIME_CHECK && hasVoice) {
-                val ahead = awaitTrackRemainingMs()
-                Log.d(TAG, "broadcast: time check projected ${ahead}ms ahead " +
-                    "(${LocalTime.now()} -> ${LocalTime.now().plus(Duration.ofMillis(ahead))})")
-                planFor(LocalTime.now().plus(Duration.ofMillis(ahead)))
-            } else {
-                null
-            }
-            val toSynth = projected ?: steps
+            // Pre-synthesise every fixed spoken line so the segue plays gaplessly.
+            // (A Clock step is deliberately left out: its words depend on the
+            // time it is finally spoken.)
             player?.let { p ->
-                toSynth.forEach { if (it is SegueStep.Say) p.preload(it.text, announcerSpeed) }
-            }
-            if (projected != null) {
-                withContext(mainDispatcher) {
-                    // Only swap in the projected text if the segue hasn't started.
-                    if (isBroadcast && gen == broadcastGen && !segueRunning) {
-                        seguePlan = ArrayDeque(projected)
-                    }
-                }
+                steps.forEach { if (it is SegueStep.Say) p.preload(it.text, announcerSpeed) }
             }
 
             // Phase 18: for a plain LINK gap (never the clock, an ident, a
@@ -1002,45 +1008,6 @@ class PlaybackConnection @Inject constructor(
         return jingleQueue.removeFirst().also { lastJingleUri = it }
     }
 
-    /**
-     * Best-effort remaining play time of the current Channel-A track. Polls the
-     * controller (on the main thread) until its duration resolves, up to ~2 s;
-     * returns 0 if it never does (unknown length / not ready).
-     */
-    private suspend fun awaitTrackRemainingMs(): Long {
-        // Prefer the length TrackProbe already decoded for this track: right
-        // after prepare() the controller's duration is usually still TIME_UNSET,
-        // and timing out here used to return 0 — so the time check was spoken as
-        // of the track *start*, minutes stale.
-        scannedRemainingMs()?.let {
-            Log.d(TAG, "broadcast: remaining ${it}ms from scan")
-            return it
-        }
-        repeat(15) {
-            val remaining = withContext(mainDispatcher) {
-                val c = controller ?: return@withContext -1L
-                val d = c.duration
-                if (d == C.TIME_UNSET || d <= 0L) -1L
-                else (d - c.currentPosition).coerceAtLeast(0L)
-            }
-            if (remaining >= 0L) return remaining
-            delay(200)
-        }
-        return 0L
-    }
-
-    /** Remaining play time of the current broadcast track from its pre-scan
-     *  (clip-aware container duration minus the current position); null if the
-     *  scan isn't cached or carries no usable duration. */
-    private suspend fun scannedRemainingMs(): Long? {
-        val uri = currentBroadcast?.uri ?: return null
-        val playable = trackProbe.cached(uri)?.playableMs?.takeIf { it > 0L } ?: return null
-        val pos = withContext(mainDispatcher) {
-            controller?.currentPosition?.coerceAtLeast(0L) ?: 0L
-        }
-        return (playable - pos).coerceAtLeast(0L)
-    }
-
     /** Channel A hit STATE_ENDED during a broadcast: run the gap's segue, then advance. */
     private fun onBroadcastTrackEnded() {
         advancing = true
@@ -1065,25 +1032,9 @@ class PlaybackConnection @Inject constructor(
                     advanceBroadcast()
                 }
             }
-            is SegueStep.Say -> {
-                val player = djPlayer ?: run { runNextSegueStep(); return }
-                djSpeaking = true
-                pushSnapshot()
-                scope.launch(Dispatchers.Default) {
-                    val ok = player.preload(step.text, announcerSpeed)
-                    withContext(mainDispatcher) {
-                        Log.d(TAG, "broadcast: segue say (ok=$ok) — \"${step.text}\"")
-                        if (ok) {
-                            player.playPreloaded(mixer.state.value.masterGain * announcerVolume) {
-                                djSpeaking = false
-                                runNextSegueStep()
-                            }
-                        } else {
-                            djSpeaking = false
-                            runNextSegueStep()
-                        }
-                    }
-                }
+            is SegueStep.Say -> speakSegueLine(null) { step.text }
+            is SegueStep.Clock -> speakSegueLine(step) {
+                scriptBuilder?.let { step.resolve(it) }
             }
             is SegueStep.Jingle -> {
                 val uri = step.uri ?: nextJingleUri()
@@ -1094,6 +1045,54 @@ class PlaybackConnection @Inject constructor(
                 playJingleItem(uri)
                 // STATE_ENDED (or onPlayerError) for the jingle continues the segue.
             }
+        }
+    }
+
+    /**
+     * Synthesise (or fetch from cache) and play one spoken segue line, then
+     * continue the segue. [textOf] runs on a worker thread; for a [clock] step
+     * it words the time then. While this line plays, a Clock step queued right
+     * behind it is worded and synthesised so it starts without a gap.
+     */
+    private fun speakSegueLine(clock: SegueStep.Clock?, textOf: () -> String?) {
+        val player = djPlayer ?: run { runNextSegueStep(); return }
+        djSpeaking = true
+        pushSnapshot()
+        val queuedAt = SystemClock.elapsedRealtime()
+        scope.launch(Dispatchers.Default) {
+            val text = textOf()
+            val ok = text != null && player.preload(text, announcerSpeed)
+            val readyMs = SystemClock.elapsedRealtime() - queuedAt
+            withContext(mainDispatcher) {
+                Log.d(TAG, "broadcast: segue say (ok=$ok, ready in ${readyMs}ms) — \"$text\"")
+                if (clock != null) {
+                    Log.d(TAG, "broadcast: time check worded at ${clock.resolvedAt}, " +
+                        "spoken at ${LocalTime.now()} (real clock)")
+                }
+                if (ok) {
+                    player.playPreloaded(mixer.state.value.masterGain * announcerVolume) {
+                        djSpeaking = false
+                        runNextSegueStep()
+                    }
+                    prefetchClockStep(player)
+                } else {
+                    djSpeaking = false
+                    runNextSegueStep()
+                }
+            }
+        }
+    }
+
+    /** If the next segue step is the clock, word and synthesise it now, while the
+     *  current line is still playing — so the time is read from the real clock
+     *  only moments before it is spoken, with no gap. */
+    private fun prefetchClockStep(player: DjVoicePlayer) {
+        val clock = seguePlan.firstOrNull() as? SegueStep.Clock ?: return
+        val builder = scriptBuilder ?: return
+        scope.launch(Dispatchers.Default) {
+            val t0 = SystemClock.elapsedRealtime()
+            player.preload(clock.resolve(builder), announcerSpeed)
+            Log.d(TAG, "broadcast: clock prefetched in ${SystemClock.elapsedRealtime() - t0}ms")
         }
     }
 

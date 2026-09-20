@@ -102,7 +102,7 @@ class DjScriptBuilder(
         LinkKind.NONE -> ""
         LinkKind.IDENT -> IDENTS.random(rng)
         LinkKind.TIME_CHECK -> {
-            val lead = "${TIME_LEADS.random(rng)} ${spokenTime(now)}."
+            val lead = timeLine(now)
             if (terse) {
                 lead
             } else {
@@ -134,7 +134,17 @@ class DjScriptBuilder(
 
     /** Just the spoken clock ("It's just gone half past seven."). */
     fun timeLine(now: LocalTime = LocalTime.now()): String =
-        "${TIME_LEADS.random(rng)} ${spokenTime(now)}."
+        "${timeLead(now)} ${spokenTime(now)}."
+
+    /**
+     * Lead-in that matches which side of the rounded five-minute mark [now] is
+     * on: "coming up to" only before it, "just gone" only after it.
+     */
+    private fun timeLead(now: LocalTime): String = when {
+        minutesPastRounded(now) < 0 -> "It's coming up to"
+        minutesPastRounded(now) > 0 -> "It's just gone"
+        else -> EXACT_TIME_LEADS.random(rng)
+    }
 
     /** "Song by Artist", or just the title when the artist is unknown/blank/==title. */
     private fun trackPhrase(t: BroadcastTrack): String {
@@ -170,13 +180,16 @@ class DjScriptBuilder(
         val OUTROS = listOf("That was", "You just heard", "We just heard")
         // Introduce the next track: "<intro> <title>, by <artist>."
         val INTROS = listOf("Coming up,", "Next up,", "Here's", "Let's hear")
-        val TIME_LEADS = listOf("It's coming up to", "The time is", "It's just gone")
+        val EXACT_TIME_LEADS = listOf("The time is", "It's")
         val STATION_ONLY = listOf(
             "You're with Sleep Radio.",
             "More music in a moment.",
         )
     }
 }
+
+/** Minutes [t] is past (+) or short of (−) the five-minute mark [spokenTime] rounds it to: −2..+2. */
+internal fun minutesPastRounded(t: LocalTime): Int = t.minute - ((t.minute + 2) / 5) * 5
 
 /** A loose, TTS-friendly spoken form of the time — no digits. */
 internal fun spokenTime(t: LocalTime): String {
