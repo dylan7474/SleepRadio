@@ -2,6 +2,7 @@ package org.dylanjones.sleepradio.core.audio
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /** Phase 14 — the pure silence-detection + clip-guard helpers of [TrackProbe]. */
@@ -93,5 +94,21 @@ class TrackProbeTest {
         // pathological short file: start pad would land past the computed end
         val t = edgeTrim(fileEndMs = 4_000, firstSoundMs = 3_800, lastSoundEndMs = 3_000)
         assertArrayEquals(longArrayOf(0L, 0L), t)
+    }
+
+    // --- early end for a track that started before its scan existed ---
+
+    @Test
+    fun `early end uses the scan's trailing edge for an unclipped track`() {
+        val scan = TrackProbe.TrackScan(gain = 1f, startMs = 0, endMs = 125_940, durationMs = 130_067)
+        assertEquals(125_940L, earlyEndPoint(scan, alreadyClipped = false))
+    }
+
+    @Test
+    fun `no early end when already clipped or nothing to trim`() {
+        val trimmed = TrackProbe.TrackScan(1f, 0, 125_940, 130_067)
+        assertNull(earlyEndPoint(trimmed, alreadyClipped = true))
+        assertNull(earlyEndPoint(TrackProbe.TrackScan(1f, 0, 0, 130_067), alreadyClipped = false))
+        assertNull(earlyEndPoint(TrackProbe.TrackScan.NONE, alreadyClipped = false))
     }
 }

@@ -38,6 +38,7 @@ import org.dylanjones.sleepradio.core.ai.DjCommentaryEngine
 import org.dylanjones.sleepradio.core.audio.AudioChannel
 import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.TrackProbe
+import org.dylanjones.sleepradio.core.audio.earlyEndPoint
 import org.dylanjones.sleepradio.core.audio.MixerController
 import org.dylanjones.sleepradio.core.broadcast.BroadcastConfig
 import org.dylanjones.sleepradio.core.broadcast.BroadcastSelector
@@ -185,6 +186,11 @@ class PlaybackConnection @Inject constructor(
     private var seguePlan: ArrayDeque<SegueStep> = ArrayDeque()
     /** True while a jingle MediaItem is on Channel A, so its STATE_ENDED continues the segue. */
     private var playingJingle: Boolean = false
+
+    /** True when the current broadcast track was started with a Phase 14 clip (so needs no early end). */
+    private var currentItemClipped: Boolean = false
+    /** Watches the current unclipped track and ends it at its trailing-silence edge once the scan lands. */
+    private var earlyEndJob: Job? = null
     /** True once the gap's segue has started draining, so a late pre-synth can't refill it. */
     private var segueRunning: Boolean = false
     /** Bumped each track start / (re)start, so a stale pre-synth coroutine can't install its plan. */
@@ -306,10 +312,40 @@ class PlaybackConnection @Inject constructor(
         trackProbe.cached(uri)?.let { mixer.setItemGain(it.gain); return }
         mixer.setItemGain(1f)
         scope.launch(Dispatchers.Default) {
-            val g = trackProbe.scanFor(appContext, uri).gain
+            val scan = trackProbe.scanFor(appContext, uri)
             withContext(mainDispatcher) {
-                if (isBroadcast && controller?.currentMediaItem?.mediaId == uri) mixer.setItemGain(g)
+                if (isBroadcast && controller?.currentMediaItem?.mediaId == uri) {
+                    mixer.setItemGain(scan.gain)
+                    // A track that began before its scan existed (the first of a Broadcast) plays
+                    // its trailing black in full unless we end it ourselves at the scan's edge.
+                    if (currentBroadcast?.uri == uri && !playingJingle) {
+                        earlyEndPoint(scan, currentItemClipped)?.let { scheduleEarlyEnd(uri, it) }
+                    }
+                }
             }
+        }
+    }
+
+    /**
+     * End the current (unclipped) broadcast track at [endMs] — its scanned trailing-silence edge —
+     * by pausing and running the normal end-of-track segue, exactly as STATE_ENDED would. Polls the
+     * playback position, so a pause or seek can't fire it early; gives up if the item changes
+     * (skip, segue, Broadcast ending). The natural STATE_ENDED is then a no-op because [advancing].
+     */
+    private fun scheduleEarlyEnd(uri: String, endMs: Long) {
+        earlyEndJob?.cancel()
+        val title = currentBroadcast?.title
+        Log.d(TAG, "broadcast: early end armed for '$title' at ${endMs}ms (position now ${controller?.currentPosition}ms)")
+        earlyEndJob = scope.launch {
+            while (true) {
+                val c = controller ?: return@launch
+                if (!isBroadcast || advancing || playingJingle || c.currentMediaItem?.mediaId != uri) return@launch
+                if (c.currentPosition >= endMs) break
+                delay(EARLY_END_POLL_MS)
+            }
+            Log.d(TAG, "broadcast: early end '$title' at ${endMs}ms — scan landed after start, skipping trailing silence")
+            controller?.pause()
+            onBroadcastTrackEnded()
         }
     }
 
@@ -799,10 +835,13 @@ class PlaybackConnection @Inject constructor(
                     .setIsPlayable(true)
                     .build(),
             )
-        broadcastClip(t.uri)?.let { clip ->
-            builder.setClippingConfiguration(clip)
-            trackProbe.cached(t.uri)?.let {
-                Log.d(TAG, "broadcast: clip '${t.title}' to [${it.startMs}..${it.endMs}]ms")
+        earlyEndJob?.cancel()
+        val clip = broadcastClip(t.uri)
+        currentItemClipped = clip != null
+        clip?.let {
+            builder.setClippingConfiguration(it)
+            trackProbe.cached(t.uri)?.let { scan ->
+                Log.d(TAG, "broadcast: clip '${t.title}' to [${scan.startMs}..${scan.endMs}]ms")
             }
         }
         c.setMediaItem(builder.build())
@@ -1105,6 +1144,7 @@ class PlaybackConnection @Inject constructor(
         advancing = false
         broadcastGen++
         seguePlan.clear()
+        earlyEndJob?.cancel()
         playingJingle = false
         segueRunning = false
         announceEveryTrack = false
@@ -1228,6 +1268,8 @@ class PlaybackConnection @Inject constructor(
         const val STARTUP_JINGLE_MAX_MS = 45_000L
         /** Broadcast: how many picks ahead of the current track to keep queued + pre-scanned. */
         const val BROADCAST_LOOKAHEAD = 3
+        /** How often the early-end watcher checks the playback position (ms). */
+        const val EARLY_END_POLL_MS = 250L
         /** Phase 18: give an AI commentary line this long to land before giving up
          *  and keeping the already-installed template line. */
         const val AI_COMMENTARY_TIMEOUT_MS = 6_000L

@@ -344,6 +344,15 @@ internal fun soundBounds(windowMeanSq: DoubleArray, windowMs: Long): LongArray {
  * [TRIM_MAX_MS]] before [fileEndMs]; a decay pad is left on. An inverted or
  * empty result collapses to no clip.
  */
+/**
+ * Phase 14 follow-up: where to end a track EARLY when it started without a clip.
+ * The first track of a Broadcast begins before its scan exists (a `MediaItem` can't be
+ * re-clipped mid-play), so once the scan lands we end it ourselves at the scan's trailing
+ * edge. Null = leave it to end naturally (already clipped, or nothing worth trimming).
+ */
+internal fun earlyEndPoint(scan: TrackProbe.TrackScan, alreadyClipped: Boolean): Long? =
+    scan.endMs.takeIf { !alreadyClipped && it > 0L }
+
 internal fun edgeTrim(fileEndMs: Long, firstSoundMs: Long, lastSoundEndMs: Long): LongArray {
     var start = 0L
     if (firstSoundMs in LEAD_MIN_MS..LEAD_MAX_MS) {
