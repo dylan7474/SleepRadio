@@ -238,8 +238,13 @@ bedside use.
 - [ ] Extend loudness levelling + silence trimming to ordinary folder playback,
       not just the Broadcast rotation; real‑time loudness for internet radio
       (nothing to pre‑scan there)
-- [ ] Weather & news readouts for the Broadcast DJ (keyless sources, opt‑in,
-      inert offline)
+- [x] **News bulletins** for the Broadcast — an off‑by‑default switch in the Broadcast
+      voice dialog: top stories around :00 and lighter stories around :30, read in the
+      gap between tracks (never cutting a track off), in a chosen voice, silent during
+      sleep‑timer wind‑down and, by default, 11 pm – 6 am. Rule‑based, keyless BBC News
+      RSS, inert offline. Every bulletin credits "BBC News" aloud and on screen, as the
+      BBC's RSS terms require (see Credits)
+- [ ] Weather readout for the Broadcast DJ (keyless source, opt‑in, inert offline)
 - [ ] Per‑station now‑playing providers — e.g. Radio Paradise's JSON API for cover art and
       exact track timing, ICY staying the generic fallback
 - [ ] "Stop at end of chapter / track" option for audiobooks (deferred from the sleep timer)
@@ -305,6 +310,12 @@ bedside use.
 
 - Online station directory: **[radio‑browser.info](https://www.radio-browser.info/)**
   (community‑run, public domain)
+- News headlines: **[BBC News](https://www.bbc.co.uk/news)** RSS feeds, used under the BBC's
+  [Terms of Use, section 15](https://www.bbc.co.uk/usingthebbc/terms-of-use/#15metadataandrssfeeds)
+  — the feed is credited as "BBC News" (spoken in each bulletin, and linked in the app), no BBC
+  logos are used, and the feed text is only trimmed/respelled so it can be read aloud.
+  **Personal, non‑commercial use only: business use of the feeds needs the BBC's permission
+  (and may carry a fee), so don't ship this news feature in a commercial build without it.**
 - On‑device TTS: **[sherpa‑onnx](https://github.com/k2-fsa/sherpa-onnx)** (Apache‑2.0),
   **[Piper](https://github.com/rhasspy/piper)** VITS voices (MIT),
   **[eSpeak‑NG](https://github.com/espeak-ng/espeak-ng)** phonemiser (GPL‑3.0‑or‑later)

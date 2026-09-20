@@ -240,4 +240,14 @@ class NewsTextTest {
             assertTrue(out, out.indexOf("B two") < out.indexOf("C three") && out.indexOf("C three") < out.indexOf("D four"))
         }
     }
+
+    // --- attribution (BBC RSS terms of use) ---
+
+    @Test
+    fun `every bulletin credits BBC News, for both slots`() {
+        for (slot in NewsSlot.entries) for (seed in 0..20) {
+            val b = buildBulletinBody(slot, listOf("Alpha story."), Random(seed))!!
+            assertTrue("$slot: $b", b.contains("BBC News"))
+        }
+    }
 }

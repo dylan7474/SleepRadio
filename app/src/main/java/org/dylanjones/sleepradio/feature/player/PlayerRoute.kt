@@ -31,6 +31,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -51,6 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -622,6 +625,27 @@ private fun BackupDialog(
     )
 }
 
+/**
+ * The credit the BBC's RSS terms of use (section 15) ask for wherever its headlines are
+ * used: "BBC News" / bbc.co.uk/news as text plus a hyperlink. Plain text, no BBC logo.
+ */
+@Composable
+private fun BbcNewsCredit(fontSize: Int) {
+    val uriHandler = LocalUriHandler.current
+    Column {
+        Text("News headlines: BBC News", fontSize = fontSize.sp)
+        Text(
+            "bbc.co.uk/news",
+            fontSize = fontSize.sp,
+            textDecoration = TextDecoration.Underline,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.clickable {
+                runCatching { uriHandler.openUri("https://www.bbc.co.uk/news") }
+            },
+        )
+    }
+}
+
 @Composable
 private fun AboutDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -650,6 +674,8 @@ private fun AboutDialog(onDismiss: () -> Unit) {
                         "public domain).",
                     fontSize = 12.sp,
                 )
+                Spacer(Modifier.padding(6.dp))
+                BbcNewsCredit(fontSize = 12)
             }
         },
     )
@@ -735,6 +761,7 @@ private fun BroadcastVoiceDialog(
                         enabled = state.newsEnabled,
                     )
                 }
+                BbcNewsCredit(fontSize = 11)
 
                 Spacer(Modifier.padding(4.dp))
                 SectionHeader("NEWS READER VOICE")

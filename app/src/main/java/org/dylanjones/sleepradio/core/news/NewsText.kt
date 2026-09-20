@@ -151,11 +151,17 @@ internal fun speakableNews(text: String): String {
     return t.trim()
 }
 
-private val TOP_INTROS = listOf("Here's the news.", "The headlines.", "In the news.")
+// Every bulletin names its source: the BBC's RSS terms (Terms of Use, section 15) require the
+// feed to be credited as "BBC News". These lines are the spoken credit.
+private val TOP_INTROS = listOf(
+    "Here's the news from BBC News.",
+    "The headlines, from BBC News.",
+    "In the news, from BBC News.",
+)
 private val SOFT_INTROS = listOf(
-    "And now, a few gentler stories.",
-    "A few softer stories from today.",
-    "Something a little lighter from the news.",
+    "And now, a few gentler stories from BBC News.",
+    "A few softer stories from BBC News.",
+    "Something a little lighter, from BBC News.",
 )
 private const val OUTRO = "Now, back to the music."
 

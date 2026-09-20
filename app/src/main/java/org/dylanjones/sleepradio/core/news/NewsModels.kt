@@ -17,7 +17,17 @@ data class NewsHeadline(
 
 data class NewsFeed(val name: String, val url: String)
 
-/** Keyless public RSS feeds (no API key, no account). */
+/**
+ * Keyless public RSS feeds (no API key, no account), all BBC News feeds.
+ *
+ * Terms (checked 2026-09-20, BBC Terms of Use section 15 "Metadata and RSS feeds",
+ * https://www.bbc.co.uk/usingthebbc/terms-of-use/#15metadataandrssfeeds): personal use is
+ * fine provided the feed isn't changed, the BBC is credited as "BBC News" / bbc.co.uk/news
+ * (text plus a hyperlink nearby) and no BBC logos are used; **business use needs the BBC's
+ * permission and may carry a fee**. So: this must stay a free, non-commercial app, and the
+ * credit must stay — spoken in every bulletin ([buildBulletinBody]) and shown with a link in
+ * the Broadcast voice dialog and About.
+ */
 object NewsFeeds {
     val TOP_STORIES = listOf(
         NewsFeed("BBC News", "https://feeds.bbci.co.uk/news/rss.xml"),
