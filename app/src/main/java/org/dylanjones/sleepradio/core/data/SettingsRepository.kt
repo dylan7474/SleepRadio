@@ -64,6 +64,15 @@ interface SettingsRepository {
 
     suspend fun setBroadcastVoice(id: String)
 
+    /**
+     * Which voice reads the news bulletins: [NEWS_VOICE_SAME] (default — whatever the DJ
+     * uses), [BROADCAST_VOICE_STOCK] or [BROADCAST_VOICE_PERSONAL]. Lets a listener keep a
+     * personal voice for the DJ but have the downloaded stock voice read the news.
+     */
+    val broadcastNewsVoice: Flow<String>
+
+    suspend fun setBroadcastNewsVoice(id: String)
+
     /** How chatty the auto-DJ is: a [org.dylanjones.sleepradio.core.broadcast.Chattiness] id. */
     val broadcastChattiness: Flow<String>
 
@@ -156,3 +165,6 @@ const val VU_DELAY_MAX_MS = 500
 const val BROADCAST_VOICE_OFF = "off"
 const val BROADCAST_VOICE_STOCK = "stock"
 const val BROADCAST_VOICE_PERSONAL = "personal"
+
+/** News reader voice: use the same voice as the DJ. */
+const val NEWS_VOICE_SAME = "same"

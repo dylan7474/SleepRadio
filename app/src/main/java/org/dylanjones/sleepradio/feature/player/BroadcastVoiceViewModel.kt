@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -18,7 +19,9 @@ import org.dylanjones.sleepradio.core.broadcast.Chattiness
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_PERSONAL
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_STOCK
+import org.dylanjones.sleepradio.core.data.NEWS_VOICE_SAME
 import org.dylanjones.sleepradio.core.data.SettingsRepository
+import org.dylanjones.sleepradio.core.news.NewsVoiceSettings
 import org.dylanjones.sleepradio.core.tts.VoicePackInstaller
 import org.dylanjones.sleepradio.core.tts.VoicePackResolver
 import org.dylanjones.sleepradio.di.IoDispatcher
@@ -58,6 +61,8 @@ class BroadcastVoiceViewModel @Inject constructor(
         val jingleEvery: Int = 4,
         val install: VoicePackInstaller.InstallState = VoicePackInstaller.InstallState.Idle,
         val djHooksEnabled: Boolean = false,
+        /** [org.dylanjones.sleepradio.core.data.NEWS_VOICE_SAME], stock or personal. */
+        val newsVoice: String = NEWS_VOICE_SAME,
     )
 
     val uiState: StateFlow<UiState> =
@@ -76,8 +81,9 @@ class BroadcastVoiceViewModel @Inject constructor(
             combine(
                 combine(installer.state, rescan) { install, _ -> install },
                 settings.broadcastDjHooks,
-            ) { install, hooks -> install to hooks },
-        ) { selected, chat, (vol, speed), (jinEnabled, jinEvery, jinSet), (install, hooks) ->
+                settings.broadcastNewsVoice,
+            ) { install, hooks, newsVoice -> Triple(install, hooks, newsVoice) },
+        ) { selected, chat, (vol, speed), (jinEnabled, jinEvery, jinSet), (install, hooks, newsVoice) ->
             UiState(
                 selected = selected,
                 stockInstalled = resolver.isInstalled(VoicePackResolver.ID_STOCK),
@@ -90,6 +96,7 @@ class BroadcastVoiceViewModel @Inject constructor(
                 jingleEvery = jinEvery,
                 install = install,
                 djHooksEnabled = hooks,
+                newsVoice = newsVoice,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
 
@@ -154,6 +161,17 @@ class BroadcastVoiceViewModel @Inject constructor(
     }
 
     fun dismissInstallResult() = installer.resetState()
+
+    fun selectNewsVoice(id: String) {
+        viewModelScope.launch { settings.setBroadcastNewsVoice(id) }
+    }
+
+    /** DJ voice, news voice and announcer volume — for callers that read the news themselves. */
+    suspend fun voiceSettings(): NewsVoiceSettings = NewsVoiceSettings(
+        djVoice = settings.broadcastVoice.first(),
+        newsVoice = settings.broadcastNewsVoice.first(),
+        announcerVolume = settings.broadcastAnnouncerVolume.first(),
+    )
 
     fun setDjHooksEnabled(enabled: Boolean) {
         viewModelScope.launch { settings.setBroadcastDjHooks(enabled) }

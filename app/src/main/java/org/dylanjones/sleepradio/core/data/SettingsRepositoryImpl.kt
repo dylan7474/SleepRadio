@@ -103,6 +103,13 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_BROADCAST_VOICE] = id }
     }
 
+    override val broadcastNewsVoice: Flow<String> =
+        dataStore.data.map { it[KEY_BROADCAST_NEWS_VOICE] ?: NEWS_VOICE_SAME }
+
+    override suspend fun setBroadcastNewsVoice(id: String) {
+        dataStore.edit { it[KEY_BROADCAST_NEWS_VOICE] = id }
+    }
+
     override val broadcastChattiness: Flow<String> =
         dataStore.data.map { it[KEY_BROADCAST_CHATTINESS] ?: "balanced" }
 
@@ -231,6 +238,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_SLEEP_MIN = intPreferencesKey("sleep_duration_min")
         val KEY_CUSTOM_STATIONS = stringPreferencesKey("custom_stations")
         val KEY_BROADCAST_VOICE = stringPreferencesKey("broadcast_voice")
+        val KEY_BROADCAST_NEWS_VOICE = stringPreferencesKey("broadcast_news_voice")
         val KEY_BROADCAST_CHATTINESS = stringPreferencesKey("broadcast_chattiness")
         val KEY_BROADCAST_ANNOUNCER_VOLUME = floatPreferencesKey("broadcast_announcer_volume")
         val KEY_BROADCAST_ANNOUNCER_SPEED = floatPreferencesKey("broadcast_announcer_speed")

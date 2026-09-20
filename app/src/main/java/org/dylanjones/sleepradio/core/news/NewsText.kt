@@ -1,0 +1,171 @@
+package org.dylanjones.sleepradio.core.news
+
+import org.dylanjones.sleepradio.core.broadcast.cardinalWords
+import org.dylanjones.sleepradio.core.broadcast.normalizeForSpeech
+import org.dylanjones.sleepradio.core.broadcast.spokenTime
+import java.time.LocalTime
+import kotlin.random.Random
+
+private const val MIN_HEADLINE_CHARS = 20
+private const val MAX_HEADLINE_CHARS = 170
+
+// "Watch: …", "Live: …", "In pictures: …" — labels for the web page, not for speech.
+private val LABEL_PREFIX = Regex(
+    "^(watch|live|listen|video|in pictures|pictures|analysis|opinion|review|newscast|podcast)\\s*[:\\-–—]\\s*",
+    RegexOption.IGNORE_CASE,
+)
+
+// Stories that only make sense on a screen.
+private val NOT_SPEAKABLE = Regex(
+    "\\b(live updates?|live blog|newsletter|quiz|how to watch|in pictures|photo gallery)\\b",
+    RegexOption.IGNORE_CASE,
+)
+
+/**
+ * Words that shouldn't reach a sleeper in the soft-stories bulletin. Deliberately blunt:
+ * a false positive just skips one story, a miss wakes someone up.
+ */
+private val GRIM = Regex(
+    "\\b(kill(s|ed|ing|er)?|dead|death|deaths|dies|died|dying|murder(s|ed|er)?|shot|shooting|stabb(ed|ing)|" +
+        "terror(ist|ism)?|bomb(s|ing|ed)?|war|wars|attack(s|ed)?|crash(es|ed)?|victims?|abus(e|ed|er|ers)|" +
+        "rape[sd]?|suicide|massacre|hostages?|missiles?|explosions?|fatal(ity|ities)?|casualt(y|ies)|" +
+        "drones?|invasion|genocide|torture[dr]?|cancer|tumou?rs?)\\b",
+    RegexOption.IGNORE_CASE,
+)
+
+internal fun isGrim(text: String): Boolean = GRIM.containsMatchIn(text)
+
+/**
+ * Turn a raw feed title into a sentence fit to read aloud, or null if the story isn't
+ * speakable (a live blog, a quiz, too short/long to make sense). Rule-based on purpose:
+ * it can only drop or trim words, never invent them — see the 2026-09-20 finding that
+ * on-device AI can't run with the screen off, so news stays rule-based.
+ */
+internal fun tidyHeadline(raw: String): String? {
+    var t = raw.replace(Regex("\\s+"), " ").trim()
+    t = LABEL_PREFIX.replace(t, "").trim()
+    if (t.length < MIN_HEADLINE_CHARS || t.length > MAX_HEADLINE_CHARS) return null
+    if (NOT_SPEAKABLE.containsMatchIn(t)) return null
+    // A spaced dash is a page-layout pause; read it as a comma-length break.
+    t = t.replace(Regex("\\s[-–—]\\s"), ", ")
+    if (t.last() !in ".!?") t += "."
+    return t
+}
+
+/** Stable identity for "have we read this already / is it a near-duplicate": first six words, letters only. */
+internal fun newsKey(title: String): String =
+    title.lowercase().replace(Regex("[^a-z0-9 ]"), " ").split(Regex("\\s+"))
+        .filter { it.isNotEmpty() }.take(6).joinToString(" ")
+
+/**
+ * Choose up to [max] headlines to read: newest first within each feed, feeds
+ * interleaved (so one feed can't take every slot), un-speakable and already-read
+ * stories dropped, near-duplicates collapsed, and — for [NewsSlot.HALF_PAST] only —
+ * anything [isGrim] skipped. Returns tidied text.
+ */
+internal fun pickHeadlines(
+    candidates: List<NewsHeadline>,
+    slot: NewsSlot,
+    alreadyRead: Set<String> = emptySet(),
+    max: Int = 3,
+): List<String> {
+    val perFeed = candidates
+        .groupBy { it.source }
+        .values
+        .map { list -> list.sortedByDescending { it.pubDateMs ?: Long.MIN_VALUE } }
+    // Round-robin across feeds.
+    val interleaved = buildList {
+        var i = 0
+        while (perFeed.any { i < it.size }) {
+            perFeed.forEach { list -> list.getOrNull(i)?.let(::add) }
+            i++
+        }
+    }
+    val seen = HashSet<String>()
+    val out = ArrayList<String>()
+    for (h in interleaved) {
+        if (out.size >= max) break
+        val tidy = tidyHeadline(h.title) ?: continue
+        if (slot == NewsSlot.HALF_PAST && (isGrim(h.title) || isGrim(h.summary))) continue
+        val key = newsKey(tidy)
+        if (key in alreadyRead || !seen.add(key)) continue
+        out += tidy
+    }
+    return out
+}
+
+// --- Making news text speakable -------------------------------------------------------
+// normalizeForSpeech() only reads plain digit runs (fine for track titles). News is full of
+// money, percentages and pence, which it would mangle ("£1m" -> "£onem"), so those are
+// spelled out first.
+
+private val MONEY = Regex("([£$€])(\\d[\\d,]*(?:\\.\\d+)?)\\s?(bn|billion|m|million|k|thousand)?\\b", RegexOption.IGNORE_CASE)
+private val PERCENT = Regex("(\\d[\\d,]*(?:\\.\\d+)?)\\s?%")
+private val PENCE = Regex("\\b(\\d+)p\\b")
+private val GROUPED_OR_DECIMAL = Regex("\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?|\\d+\\.\\d+")
+
+/** "12,000" -> "twelve thousand"; "2.5" -> "two point five". Falls back to the digits if it can't. */
+private fun numberWords(raw: String): String {
+    val clean = raw.replace(",", "")
+    val whole = clean.substringBefore('.')
+    val n = whole.toIntOrNull() ?: return raw
+    if (n > 999_999) return raw
+    val intWords = cardinalWords(n)
+    val frac = clean.substringAfter('.', "")
+    return if (frac.isEmpty()) intWords
+    else intWords + " point " + frac.map { cardinalWords(it - '0') }.joinToString(" ")
+}
+
+private fun scaleWord(s: String): String = when (s.lowercase()) {
+    "bn", "billion" -> "billion"
+    "m", "million" -> "million"
+    else -> "thousand"
+}
+
+internal fun speakableNews(text: String): String {
+    var t = text
+    t = MONEY.replace(t) { m ->
+        val unit = when (m.groupValues[1]) { "£" -> "pound" ; "$" -> "dollar" ; else -> "euro" }
+        val scale = m.groupValues[3]
+        val num = numberWords(m.groupValues[2])
+        when {
+            scale.isNotEmpty() -> "$num ${scaleWord(scale)} ${unit}s"
+            m.groupValues[2] == "1" -> "one $unit"
+            else -> "$num ${unit}s"
+        }
+    }
+    t = PERCENT.replace(t) { "${numberWords(it.groupValues[1])} percent" }
+    t = PENCE.replace(t) { if (it.groupValues[1] == "1") "one penny" else "${numberWords(it.groupValues[1])} pence" }
+    t = GROUPED_OR_DECIMAL.replace(t) { numberWords(it.value) }
+    t = t.replace(Regex("(?<=[A-Za-z])\\+"), "")   // "LGBTQ+" -> "LGBTQ"
+    t = t.replace("&", " and ").replace(Regex("\\s+"), " ")
+    return t.trim()
+}
+
+private val TOP_INTROS = listOf("Here's the news.", "The headlines.", "In the news.")
+private val SOFT_INTROS = listOf(
+    "And now, a few gentler stories.",
+    "A few softer stories from today.",
+    "Something a little lighter from the news.",
+)
+private const val OUTRO = "Now, back to the music."
+
+/**
+ * The spoken bulletin: `<time line> <intro> <headline> <headline> … <outro>`, or null when
+ * there's nothing to say. [timeLine] is the accurate spoken time ("It's just gone ten
+ * o'clock.") — passed in so the caller can build it as late as possible.
+ */
+internal fun buildBulletin(
+    slot: NewsSlot,
+    headlines: List<String>,
+    timeLine: String,
+    rng: Random = Random.Default,
+): String? {
+    if (headlines.isEmpty()) return null
+    val intros = if (slot == NewsSlot.TOP_OF_HOUR) TOP_INTROS else SOFT_INTROS
+    val body = headlines.joinToString(" ") { normalizeForSpeech(speakableNews(it)) }
+    return "$timeLine ${intros[rng.nextInt(intros.size)]} $body $OUTRO"
+}
+
+/** Convenience for the test buttons: the time line for [now] using the DJ's spoken clock. */
+internal fun bulletinTimeLine(now: LocalTime): String = "It's ${spokenTime(now)}."

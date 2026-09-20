@@ -79,14 +79,11 @@ class PodcastRepository @Inject constructor() {
 // --- Pure RSS parsing (no Android dependency — testable on the host JVM) --
 
 /**
- * Parse a podcast RSS/Atom-with-enclosures document into its show metadata +
- * episode list. Deliberately not namespace-aware — `itunes:duration` etc. are
- * matched by their literal qualified tag name, which is simpler and good
- * enough for the handful of `itunes:*` tags real-world feeds use. An episode
- * missing a title or an audio enclosure is skipped rather than failing the
- * whole feed; a channel-less document throws (caller treats it as a failure).
+ * Parse untrusted third-party XML (podcast / news feeds) into a DOM, refusing
+ * DOCTYPEs and external entities outright. Shared by the podcast and news
+ * parsers so the XXE hardening lives in one place.
  */
-internal fun parsePodcastRss(feedUrl: String, xml: String): ParsedPodcastFeed {
+internal fun parseXmlSecurely(xml: String): org.w3c.dom.Document {
     // Android's on-device DocumentBuilderFactory (a different implementation
     // from the JDK's Xerces used by host-JVM unit tests) throws
     // UnsupportedOperationException on setXIncludeAware/setExpandEntityReferences
@@ -107,7 +104,19 @@ internal fun parsePodcastRss(feedUrl: String, xml: String): ParsedPodcastFeed {
         "http://xml.org/sax/features/load-external-dtd" to false,
     ).forEach { (name, value) -> runCatching { factory.setFeature(name, value) } }
 
-    val doc = factory.newDocumentBuilder().parse(InputSource(StringReader(xml)))
+    return factory.newDocumentBuilder().parse(InputSource(StringReader(xml)))
+}
+
+/**
+ * Parse a podcast RSS/Atom-with-enclosures document into its show metadata +
+ * episode list. Deliberately not namespace-aware — `itunes:duration` etc. are
+ * matched by their literal qualified tag name, which is simpler and good
+ * enough for the handful of `itunes:*` tags real-world feeds use. An episode
+ * missing a title or an audio enclosure is skipped rather than failing the
+ * whole feed; a channel-less document throws (caller treats it as a failure).
+ */
+internal fun parsePodcastRss(feedUrl: String, xml: String): ParsedPodcastFeed {
+    val doc = parseXmlSecurely(xml)
     val channel = doc.getElementsByTagName("channel").item(0) as? Element
         ?: error("no <channel> in feed")
 
@@ -137,7 +146,7 @@ internal fun parsePodcastRss(feedUrl: String, xml: String): ParsedPodcastFeed {
 }
 
 /** The direct child element named [tag] (not a descendant), or null. */
-private fun Element.child(tag: String): Element? {
+internal fun Element.child(tag: String): Element? {
     val kids = childNodes
     for (i in 0 until kids.length) {
         val n = kids.item(i)
@@ -147,7 +156,7 @@ private fun Element.child(tag: String): Element? {
 }
 
 /** All direct child elements named [tag], in document order. */
-private fun Element.children(tag: String): List<Element> {
+internal fun Element.children(tag: String): List<Element> {
     val out = ArrayList<Element>()
     val kids = childNodes
     for (i in 0 until kids.length) {
@@ -157,7 +166,7 @@ private fun Element.children(tag: String): List<Element> {
     return out
 }
 
-private fun Element.text(): String = (textContent ?: "").trim()
+internal fun Element.text(): String = (textContent ?: "").trim()
 
 /** RSS `pubDate` (RFC 822 / RFC 1123, e.g. "Wed, 15 Jun 2023 07:00:00 GMT") ->
  *  epoch ms. Null if blank or unparseable — the episode just sorts last. */

@@ -75,10 +75,12 @@ import org.dylanjones.sleepradio.core.broadcast.Chattiness
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_PERSONAL
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_STOCK
+import org.dylanjones.sleepradio.core.data.NEWS_VOICE_SAME
 import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.SkinId
 import org.dylanjones.sleepradio.core.design.skinFor
 import org.dylanjones.sleepradio.core.tts.VoicePackInstaller
+import org.dylanjones.sleepradio.core.news.rememberDebugNewsTest
 import org.dylanjones.sleepradio.core.tts.rememberDebugTtsTest
 import org.dylanjones.sleepradio.feature.root.RootViewModel
 import kotlin.math.roundToInt
@@ -184,6 +186,12 @@ fun PlayerRoute(
 
     // Debug-only TTS smoke test (Phase 9 Chunk A); null in release builds.
     val onTtsTest = rememberDebugTtsTest()
+    // TEMPORARY debug-only news test buttons; null in release builds.
+    val newsTest = rememberDebugNewsTest(
+        voiceSettings = broadcastVoiceViewModel::voiceSettings,
+        masterVolume = { state.volume },
+        onLevel = playerViewModel::reportDjPeak,
+    )
 
     var ambientDialogOpen by remember { mutableStateOf(false) }
     var sleepDialogOpen by remember { mutableStateOf(false) }
@@ -232,6 +240,8 @@ fun PlayerRoute(
                 onAbout = { closeDrawer(); aboutOpen = true },
                 onBackup = { closeDrawer(); backupOpen = true },
                 onTtsTest = onTtsTest?.let { test -> { closeDrawer(); test() } },
+                onNewsTopOfHour = newsTest?.let { n -> { closeDrawer(); n.topOfHour() } },
+                onNewsHalfPast = newsTest?.let { n -> { closeDrawer(); n.halfPast() } },
             )
         },
     ) {
@@ -360,6 +370,7 @@ fun PlayerRoute(
                 BroadcastVoiceDialog(
                     state = voiceState,
                     onSelect = broadcastVoiceViewModel::select,
+                    onSelectNewsVoice = broadcastVoiceViewModel::selectNewsVoice,
                     onChattiness = broadcastVoiceViewModel::setChattiness,
                     onAnnouncerVolume = broadcastVoiceViewModel::setAnnouncerVolume,
                     onAnnouncerSpeed = broadcastVoiceViewModel::setAnnouncerSpeed,
@@ -471,6 +482,8 @@ private fun AppDrawer(
     onAbout: () -> Unit,
     onBackup: () -> Unit,
     onTtsTest: (() -> Unit)? = null,
+    onNewsTopOfHour: (() -> Unit)? = null,
+    onNewsHalfPast: (() -> Unit)? = null,
 ) {
     ModalDrawerSheet {
         Column(
@@ -555,6 +568,20 @@ private fun AppDrawer(
                     label = { Text("▶ Speak test line (debug)") },
                     selected = false,
                     onClick = onTtsTest,
+                )
+            }
+            if (onNewsTopOfHour != null) {
+                NavigationDrawerItem(
+                    label = { Text("▶ News on the hour: top stories (debug)") },
+                    selected = false,
+                    onClick = onNewsTopOfHour,
+                )
+            }
+            if (onNewsHalfPast != null) {
+                NavigationDrawerItem(
+                    label = { Text("▶ News at half past: soft stories (debug)") },
+                    selected = false,
+                    onClick = onNewsHalfPast,
                 )
             }
         }
@@ -655,6 +682,7 @@ private fun AboutDialog(onDismiss: () -> Unit) {
 private fun BroadcastVoiceDialog(
     state: BroadcastVoiceViewModel.UiState,
     onSelect: (String) -> Unit,
+    onSelectNewsVoice: (String) -> Unit,
     onChattiness: (Chattiness) -> Unit,
     onAnnouncerVolume: (Float) -> Unit,
     onAnnouncerSpeed: (Float) -> Unit,
@@ -700,6 +728,30 @@ private fun BroadcastVoiceDialog(
                         title = "My voice",
                         subtitle = "Imported on this device",
                         onClick = { onSelect(BROADCAST_VOICE_PERSONAL) },
+                    )
+                }
+
+                Spacer(Modifier.padding(4.dp))
+                SectionHeader("NEWS READER VOICE")
+                VoiceOptionRow(
+                    selected = state.newsVoice == NEWS_VOICE_SAME,
+                    title = "Same as the DJ",
+                    subtitle = "Uses the DJ voice above",
+                    onClick = { onSelectNewsVoice(NEWS_VOICE_SAME) },
+                )
+                VoiceOptionRow(
+                    selected = state.newsVoice == BROADCAST_VOICE_STOCK,
+                    title = "Stock voice",
+                    subtitle = if (state.stockInstalled) "The downloaded default voice" else "Not installed",
+                    enabled = state.stockInstalled,
+                    onClick = { onSelectNewsVoice(BROADCAST_VOICE_STOCK) },
+                )
+                if (state.personalInstalled) {
+                    VoiceOptionRow(
+                        selected = state.newsVoice == BROADCAST_VOICE_PERSONAL,
+                        title = "My voice",
+                        subtitle = "Imported on this device",
+                        onClick = { onSelectNewsVoice(BROADCAST_VOICE_PERSONAL) },
                     )
                 }
 
