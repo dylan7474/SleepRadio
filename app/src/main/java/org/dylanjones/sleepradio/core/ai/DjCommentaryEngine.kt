@@ -68,10 +68,16 @@ class DjCommentaryEngine {
      * failure, timeout upstream (the caller wraps this in its own
      * `withTimeoutOrNull`), or empty output — never throws.
      */
-    suspend fun generateLink(systemInstruction: String, prompt: String): String? =
+    suspend fun generateLink(
+        systemInstruction: String,
+        prompt: String,
+        temperature: Float = 0.9f,
+        topK: Int? = null,
+    ): String? =
         runCatching {
             val request = generateContentRequest(SystemInstruction(systemInstruction), TextPart(prompt)) {
-                temperature = 0.9f
+                this.temperature = temperature
+                topK?.let { this.topK = it }
                 candidateCount = 1
                 maxOutputTokens = 80
             }

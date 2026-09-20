@@ -1,0 +1,212 @@
+[
+ {
+  "artist": "Bob Dylan with The Band",
+  "title": "Forever Young",
+  "album": "Planet Waves",
+  "year": "1974",
+  "genre": "Rock"
+ },
+ {
+  "artist": "Aerosmith",
+  "title": "Draw The Line",
+  "album": "O, Yeah! Ultimate Aerosmith Hits (disc 1)",
+  "year": "2002",
+  "genre": "Hard Rock"
+ },
+ {
+  "artist": "Gorillaz",
+  "title": "Kids With Guns",
+  "album": "Demon Days",
+  "year": "2005",
+  "genre": "Alternative"
+ },
+ {
+  "artist": "The Raconteurs",
+  "title": "Steady, as She Goes",
+  "album": "Broken Boy Soldiers",
+  "year": "2006",
+  "genre": "Rock"
+ },
+ {
+  "artist": "Paul Simon",
+  "title": "Still Crazy After All These Years",
+  "album": "Greatest Hits: Shining Like a National Guitar",
+  "year": "2000",
+  "genre": ""
+ },
+ {
+  "artist": "The Kinks",
+  "title": "Lola",
+  "album": "The Best Of: 20 Classic Tracks",
+  "year": "1994",
+  "genre": ""
+ },
+ {
+  "artist": "10cc",
+  "title": "I'm Mandy Fly Me",
+  "album": "The Very Best of 10cc",
+  "year": "1997",
+  "genre": "Pop/Rock"
+ },
+ {
+  "artist": "Bob Dylan",
+  "title": "It Takes a Lot to Laugh, It Takes a Train to Cry",
+  "album": "Highway 61 Revisited",
+  "year": "1965",
+  "genre": ""
+ },
+ {
+  "artist": "The Beatles",
+  "title": "Hold Me Tight",
+  "album": "With the Beatles",
+  "year": "1963",
+  "genre": "Oldies"
+ },
+ {
+  "artist": "Jimi Hendrix",
+  "title": "Highway Chile",
+  "album": "War Heroes",
+  "year": "1972",
+  "genre": "Rock"
+ },
+ {
+  "artist": "Bread",
+  "title": "It Don't Matter to Me",
+  "album": "The Very Best of Bread",
+  "year": "1988",
+  "genre": ""
+ },
+ {
+  "artist": "John Lennon & Yoko Ono",
+  "title": "Woman",
+  "album": "Double Fantasy",
+  "year": "1980",
+  "genre": ""
+ },
+ {
+  "artist": "The Mills Brothers",
+  "title": "Some of These Days",
+  "album": "The Mills Brothers",
+  "year": "",
+  "genre": ""
+ },
+ {
+  "artist": "James Taylor",
+  "title": "You've Got a Friend",
+  "album": "Classic Songs",
+  "year": "1990",
+  "genre": ""
+ },
+ {
+  "artist": "Brendan Benson",
+  "title": "The Pledge",
+  "album": "The Alternative to Love",
+  "year": "2005",
+  "genre": "Indie"
+ },
+ {
+  "artist": "Ian Dury",
+  "title": "Wake Up and Make Love With Me",
+  "album": "New Boots and Panties!!",
+  "year": "1996",
+  "genre": "Rock"
+ },
+ {
+  "artist": "Traveling Wilburys",
+  "title": "New Blue Moon",
+  "album": "Traveling Wilburys, Volume 2",
+  "year": "1990",
+  "genre": ""
+ },
+ {
+  "artist": "Men At Work",
+  "title": "Overkill",
+  "album": "Men At Work",
+  "year": "",
+  "genre": ""
+ },
+ {
+  "artist": "Crowded House",
+  "title": "Not the Girl You Think You Are",
+  "album": "Recurring Dream: The Very Best of Crowded House",
+  "year": "1996",
+  "genre": ""
+ },
+ {
+  "artist": "Andrew Lloyd Webber",
+  "title": "Introduction",
+  "album": "Variations",
+  "year": "1978",
+  "genre": "Classical"
+ },
+ {
+  "artist": "George Martin and George Martin Orchestra",
+  "title": "Sea of Monsters",
+  "album": "Yellow Submarine",
+  "year": "1969",
+  "genre": "Oldies"
+ },
+ {
+  "artist": "The Wallflowers",
+  "title": "After the Black Bird Sings",
+  "album": "The Wallflowers",
+  "year": "1992",
+  "genre": ""
+ },
+ {
+  "artist": "UB40",
+  "title": "Rat in Mi Kitchen",
+  "album": "The Best of UB40, Volume One",
+  "year": "1987",
+  "genre": ""
+ },
+ {
+  "artist": "Kraftwerk",
+  "title": "Kometenmelodie 1",
+  "album": "Autobahn",
+  "year": "",
+  "genre": "Classical"
+ },
+ {
+  "artist": "The Ink Spots",
+  "title": "Whispering Grass",
+  "album": "Ink Spots",
+  "year": "",
+  "genre": ""
+ },
+ {
+  "artist": "The Who",
+  "title": "I Can't Reach You",
+  "album": "The Who Sell Out",
+  "year": "1967",
+  "genre": "Rock"
+ },
+ {
+  "artist": "Yvonne Elliman",
+  "title": "Love Me",
+  "album": "100 Essential Hits - 70s",
+  "year": "2010",
+  "genre": "Pop"
+ },
+ {
+  "artist": "Beck",
+  "title": "Broken Train",
+  "album": "Midnite Vultures",
+  "year": "1999",
+  "genre": "Rock"
+ },
+ {
+  "artist": "Neil",
+  "title": "The Amoeba Song (From \"A Very Cellular Song\")",
+  "album": "Neil's Heavy Concept Album",
+  "year": "1984",
+  "genre": ""
+ },
+ {
+  "artist": "Randy Newman",
+  "title": "A Fool in Love",
+  "album": "Randy Newman",
+  "year": "",
+  "genre": "soundtrack"
+ }
+]
