@@ -701,7 +701,11 @@ class PlaybackConnection @Inject constructor(
         if (voice != null) {
             if (ttsEngine == null) ttsEngine = OfflineTtsEngine()
             if (djPlayer == null) {
-            djPlayer = DjVoicePlayer(ttsEngine!!).apply { onLevel = mixer::reportDjPeak }
+            djPlayer = DjVoicePlayer(ttsEngine!!).apply {
+                onLevel = mixer::reportDjPeak
+                // VOL knob (and the announcer level) apply live, even mid-sentence.
+                volumeSource = { mixer.state.value.masterGain * announcerVolume }
+            }
         }
             val engine = ttsEngine!!
             val player = djPlayer!!
@@ -753,7 +757,11 @@ class PlaybackConnection @Inject constructor(
         if (pack == null) return
         if (ttsEngine == null) ttsEngine = OfflineTtsEngine()
         if (djPlayer == null) {
-            djPlayer = DjVoicePlayer(ttsEngine!!).apply { onLevel = mixer::reportDjPeak }
+            djPlayer = DjVoicePlayer(ttsEngine!!).apply {
+                onLevel = mixer::reportDjPeak
+                // VOL knob (and the announcer level) apply live, even mid-sentence.
+                volumeSource = { mixer.state.value.masterGain * announcerVolume }
+            }
         }
         val engine = ttsEngine!!
         scope.launch(Dispatchers.Default) { engine.ensureLoaded(pack) }

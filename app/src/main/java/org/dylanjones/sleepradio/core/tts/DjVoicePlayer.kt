@@ -36,6 +36,13 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
     @Volatile private var pending: Clip? = null
     @Volatile private var volume: Float = 1f
 
+    /**
+     * Live output volume (0..1). When set it is polled every ~33 ms while a clip plays and
+     * applied to the AudioTrack, so the VOL knob turns the DJ up and down mid-sentence. The
+     * `volume` passed to [speak]/[playPreloaded] is only the fallback when this is null.
+     */
+    @Volatile var volumeSource: (() -> Float)? = null
+
     /** Called on the playback thread with the peak (0..1, post-volume) of each
      *  ~40 ms slice as it's written — lets the Studio skin's VU meters show the
      *  DJ voice, which plays on its own [AudioTrack] outside the ExoPlayer sink. */
@@ -209,7 +216,7 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
             return
         }
         track = t
-        t.setVolume(volume.coerceIn(0f, 1f))
+        t.setVolume((volumeSource?.invoke() ?: volume).coerceIn(0f, 1f))
         t.play()
 
         // The buffer holds the whole clip, so this returns fast.
@@ -230,11 +237,20 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
         // the Studio skin's VU meters move with the voice — not in a burst at
         // the start (WRITE_BLOCKING doesn't pace against a clip-sized buffer).
         val cb = onLevel
-        val vol = volume.coerceIn(0f, 1f)
+        val src = volumeSource
+        var vol = (src?.invoke() ?: volume).coerceIn(0f, 1f)
         val win = (clip.sampleRate / 25).coerceAtLeast(256)
         var ticks = 0
         var maxLvl = 0f
         while (track === t) {
+            if (src != null) {
+                val now = src().coerceIn(0f, 1f)
+                if (kotlin.math.abs(now - vol) > 0.005f) {
+                    vol = now
+                    runCatching { t.setVolume(vol) }
+                    Log.d(TAG, "live volume -> ${"%.3f".format(vol)}")
+                }
+            }
             val pos = t.playbackHeadPosition
             if (pos >= clip.pcm.size) break
             if (cb != null && pos >= 0) {
