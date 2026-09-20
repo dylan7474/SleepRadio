@@ -51,9 +51,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import android.app.TimePickerDialog
+import android.text.format.DateFormat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextDecoration
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -374,6 +379,8 @@ fun PlayerRoute(
                     onDjHooksEnabled = broadcastVoiceViewModel::setDjHooksEnabled,
                     onNewsEnabled = broadcastVoiceViewModel::setNewsEnabled,
                     onNewsQuietHours = broadcastVoiceViewModel::setNewsQuietHours,
+                    onNewsQuietStart = broadcastVoiceViewModel::setNewsQuietStart,
+                    onNewsQuietEnd = broadcastVoiceViewModel::setNewsQuietEnd,
                     onDownloadStock = broadcastVoiceViewModel::downloadStock,
                     onImport = {
                         importVoiceLauncher.launch(
@@ -625,6 +632,28 @@ private fun BackupDialog(
     )
 }
 
+/** A "From 11:00 PM" style button that opens the system time picker; [minutes] is since midnight. */
+@Composable
+private fun QuietTimeButton(label: String, minutes: Int, enabled: Boolean, onPick: (Int) -> Unit) {
+    val context = LocalContext.current
+    val text = remember(minutes) {
+        LocalTime.ofSecondOfDay(minutes.coerceIn(0, 24 * 60 - 1) * 60L)
+            .format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+    }
+    TextButton(
+        enabled = enabled,
+        onClick = {
+            TimePickerDialog(
+                context,
+                { _, hour, minute -> onPick(hour * 60 + minute) },
+                minutes / 60,
+                minutes % 60,
+                DateFormat.is24HourFormat(context),
+            ).show()
+        },
+    ) { Text("$label $text", fontSize = 13.sp) }
+}
+
 /**
  * The credit the BBC's RSS terms of use (section 15) ask for wherever its headlines are
  * used: "BBC News" / bbc.co.uk/news as text plus a hyperlink. Plain text, no BBC logo.
@@ -695,6 +724,8 @@ private fun BroadcastVoiceDialog(
     onDjHooksEnabled: (Boolean) -> Unit,
     onNewsEnabled: (Boolean) -> Unit,
     onNewsQuietHours: (Boolean) -> Unit,
+    onNewsQuietStart: (Int) -> Unit,
+    onNewsQuietEnd: (Int) -> Unit,
     onDownloadStock: () -> Unit,
     onImport: () -> Unit,
     onRemovePersonal: () -> Unit,
@@ -751,7 +782,7 @@ private fun BroadcastVoiceDialog(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "No news 11 pm – 6 am",
+                        "Quiet hours (no news)",
                         fontSize = 13.sp,
                         modifier = Modifier.weight(1f),
                     )
@@ -760,6 +791,14 @@ private fun BroadcastVoiceDialog(
                         onCheckedChange = onNewsQuietHours,
                         enabled = state.newsEnabled,
                     )
+                }
+                val quietPickersOn = state.newsEnabled && state.newsQuietHours
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QuietTimeButton("From", state.newsQuietStartMin, quietPickersOn, onNewsQuietStart)
+                    QuietTimeButton("Until", state.newsQuietEndMin, quietPickersOn, onNewsQuietEnd)
+                }
+                if (state.newsQuietStartMin == state.newsQuietEndMin) {
+                    Text("Start and end are the same, so there is no quiet period.", fontSize = 11.sp)
                 }
                 BbcNewsCredit(fontSize = 11)
 

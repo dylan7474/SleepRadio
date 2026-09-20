@@ -11,8 +11,19 @@ data class DueNews(val slot: NewsSlot, val key: String, val mark: LocalDateTime)
  * wrap past midnight (23:00 to 06:00).
  */
 data class QuietHours(val start: LocalTime, val end: LocalTime) {
+    /** Start equal to end is an empty window (no quiet period), not "all day". */
     operator fun contains(t: LocalTime): Boolean =
         if (start <= end) t >= start && t < end else t >= start || t < end
+
+    companion object {
+        const val MINUTES_PER_DAY = 24 * 60
+
+        /** From minutes-since-midnight (as stored in settings); out-of-range values are clamped. */
+        fun ofMinutes(startMin: Int, endMin: Int) = QuietHours(
+            LocalTime.of(startMin.coerceIn(0, MINUTES_PER_DAY - 1) / 60, startMin.coerceIn(0, MINUTES_PER_DAY - 1) % 60),
+            LocalTime.of(endMin.coerceIn(0, MINUTES_PER_DAY - 1) / 60, endMin.coerceIn(0, MINUTES_PER_DAY - 1) % 60),
+        )
+    }
 }
 
 /**
@@ -71,6 +82,8 @@ class NewsSchedule {
         const val PREP_LEAD_MIN = 15
 
         /** The default quiet stretch: no news from 11 pm until 6 am. */
-        val OVERNIGHT = QuietHours(LocalTime.of(23, 0), LocalTime.of(6, 0))
+        const val DEFAULT_QUIET_START_MIN = 23 * 60
+        const val DEFAULT_QUIET_END_MIN = 6 * 60
+        val OVERNIGHT = QuietHours.ofMinutes(DEFAULT_QUIET_START_MIN, DEFAULT_QUIET_END_MIN)
     }
 }

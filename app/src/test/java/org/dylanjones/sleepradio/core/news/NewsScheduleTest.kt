@@ -145,4 +145,37 @@ class QuietHoursTest {
         assertEquals(NewsSlot.HALF_PAST, s.dueAt(at(3, 30))?.slot)
         assertEquals(NewsSlot.TOP_OF_HOUR, s.dueAt(at(23, 1))?.slot)
     }
+
+    // --- adjustable quiet hours (settings store minutes since midnight) ---
+
+    @Test fun `ofMinutes matches the overnight default`() {
+        assertEquals(NewsSchedule.OVERNIGHT, QuietHours.ofMinutes(23 * 60, 6 * 60))
+        assertEquals(NewsSchedule.OVERNIGHT, QuietHours.ofMinutes(NewsSchedule.DEFAULT_QUIET_START_MIN, NewsSchedule.DEFAULT_QUIET_END_MIN))
+    }
+
+    @Test fun `a custom window with minutes is honoured`() {
+        val q = QuietHours.ofMinutes(22 * 60 + 30, 7 * 60 + 15)   // 22:30 to 07:15
+        assertEquals(true, LocalTime.of(22, 30) in q)
+        assertEquals(true, LocalTime.of(7, 14) in q)
+        assertEquals(false, LocalTime.of(7, 15) in q)
+        assertEquals(false, LocalTime.of(22, 29) in q)
+        val s = NewsSchedule().apply { quiet = q }
+        assertNull(s.dueAt(at(22, 31)))                                   // the 22:30 mark is quiet
+        assertEquals(NewsSlot.TOP_OF_HOUR, s.dueAt(at(22, 1))?.slot)      // the 22:00 mark is not
+        assertNull(s.dueAt(at(7, 1)))                                     // 07:00 is still quiet
+        assertEquals(NewsSlot.HALF_PAST, s.dueAt(at(7, 31))?.slot)        // 07:30 is read
+    }
+
+    @Test fun `same start and end means no quiet period, not all day`() {
+        val q = QuietHours.ofMinutes(9 * 60, 9 * 60)
+        assertEquals(false, LocalTime.of(9, 0) in q)
+        assertEquals(false, LocalTime.of(3, 0) in q)
+        assertEquals(NewsSlot.HALF_PAST, NewsSchedule().apply { quiet = q }.dueAt(at(3, 30))?.slot)
+    }
+
+    @Test fun `out of range minutes are clamped, never thrown`() {
+        val q = QuietHours.ofMinutes(-5, 99_999)
+        assertEquals(LocalTime.of(0, 0), q.start)
+        assertEquals(LocalTime.of(23, 59), q.end)
+    }
 }

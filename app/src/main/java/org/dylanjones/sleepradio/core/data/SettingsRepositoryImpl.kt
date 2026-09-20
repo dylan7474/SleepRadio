@@ -180,6 +180,20 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_BROADCAST_NEWS_QUIET_HOURS] = enabled }
     }
 
+    override val broadcastNewsQuietStartMin: Flow<Int> =
+        dataStore.data.map { it[KEY_BROADCAST_NEWS_QUIET_START] ?: (23 * 60) }
+
+    override val broadcastNewsQuietEndMin: Flow<Int> =
+        dataStore.data.map { it[KEY_BROADCAST_NEWS_QUIET_END] ?: (6 * 60) }
+
+    override suspend fun setBroadcastNewsQuietStartMin(minutes: Int) {
+        dataStore.edit { it[KEY_BROADCAST_NEWS_QUIET_START] = minutes.coerceIn(0, 24 * 60 - 1) }
+    }
+
+    override suspend fun setBroadcastNewsQuietEndMin(minutes: Int) {
+        dataStore.edit { it[KEY_BROADCAST_NEWS_QUIET_END] = minutes.coerceIn(0, 24 * 60 - 1) }
+    }
+
     override val vuSyncAuto: Flow<Boolean> =
         dataStore.data.map { it[KEY_VU_SYNC_AUTO] ?: true }
 
@@ -263,6 +277,8 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_BROADCAST_DJ_HOOKS = booleanPreferencesKey("broadcast_dj_hooks")
         val KEY_BROADCAST_NEWS_ENABLED = booleanPreferencesKey("broadcast_news_enabled")
         val KEY_BROADCAST_NEWS_QUIET_HOURS = booleanPreferencesKey("broadcast_news_quiet_hours")
+        val KEY_BROADCAST_NEWS_QUIET_START = intPreferencesKey("broadcast_news_quiet_start_min")
+        val KEY_BROADCAST_NEWS_QUIET_END = intPreferencesKey("broadcast_news_quiet_end_min")
         val KEY_VU_SYNC_AUTO = booleanPreferencesKey("vu_sync_auto")
         val KEY_VU_DELAY_PHONE = intPreferencesKey("vu_delay_phone_ms")
         val KEY_VU_DELAY_BT = intPreferencesKey("vu_delay_bt_ms")

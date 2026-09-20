@@ -64,6 +64,8 @@ class BroadcastVoiceViewModel @Inject constructor(
         val newsVoice: String = NEWS_VOICE_SAME,
         val newsEnabled: Boolean = false,
         val newsQuietHours: Boolean = true,
+        val newsQuietStartMin: Int = 23 * 60,
+        val newsQuietEndMin: Int = 6 * 60,
     )
 
     val uiState: StateFlow<UiState> =
@@ -84,14 +86,19 @@ class BroadcastVoiceViewModel @Inject constructor(
                 settings.broadcastDjHooks,
                 settings.broadcastNewsVoice,
                 settings.broadcastNewsEnabled,
-                settings.broadcastNewsQuietHours,
+                combine(
+                    settings.broadcastNewsQuietHours,
+                    settings.broadcastNewsQuietStartMin,
+                    settings.broadcastNewsQuietEndMin,
+                ) { on, start, end -> Triple(on, start, end) },
             ) { install, hooks, newsVoice, newsOn, quiet -> arrayOf(install, hooks, newsVoice, newsOn, quiet) },
         ) { selected, chat, (vol, speed), (jinEnabled, jinEvery, jinSet), misc ->
             val install = misc[0] as VoicePackInstaller.InstallState
             val hooks = misc[1] as Boolean
             val newsVoice = misc[2] as String
             val newsOn = misc[3] as Boolean
-            val newsQuiet = misc[4] as Boolean
+            @Suppress("UNCHECKED_CAST")
+            val newsQuiet = misc[4] as Triple<Boolean, Int, Int>
             UiState(
                 selected = selected,
                 stockInstalled = resolver.isInstalled(VoicePackResolver.ID_STOCK),
@@ -106,7 +113,9 @@ class BroadcastVoiceViewModel @Inject constructor(
                 djHooksEnabled = hooks,
                 newsVoice = newsVoice,
                 newsEnabled = newsOn,
-                newsQuietHours = newsQuiet,
+                newsQuietHours = newsQuiet.first,
+                newsQuietStartMin = newsQuiet.second,
+                newsQuietEndMin = newsQuiet.third,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
 
@@ -186,5 +195,13 @@ class BroadcastVoiceViewModel @Inject constructor(
 
     fun setNewsQuietHours(enabled: Boolean) {
         viewModelScope.launch { settings.setBroadcastNewsQuietHours(enabled) }
+    }
+
+    fun setNewsQuietStart(minutes: Int) {
+        viewModelScope.launch { settings.setBroadcastNewsQuietStartMin(minutes) }
+    }
+
+    fun setNewsQuietEnd(minutes: Int) {
+        viewModelScope.launch { settings.setBroadcastNewsQuietEndMin(minutes) }
     }
 }

@@ -57,6 +57,7 @@ import org.dylanjones.sleepradio.core.data.Chapter
 import org.dylanjones.sleepradio.core.news.DueNews
 import org.dylanjones.sleepradio.core.news.NewsRepository
 import org.dylanjones.sleepradio.core.news.NewsSchedule
+import org.dylanjones.sleepradio.core.news.QuietHours
 import org.dylanjones.sleepradio.core.news.buildBulletinBody
 import org.dylanjones.sleepradio.core.news.bulletinTimeLine
 import org.dylanjones.sleepradio.core.tts.DjVoicePlayer
@@ -771,7 +772,11 @@ class PlaybackConnection @Inject constructor(
         announceEveryTrack = config.announceEveryTrack
         newsEnabled = config.newsEnabled && newsVoice != null
         newsPack = newsVoice.takeIf { newsEnabled }
-        newsSchedule.quiet = if (config.newsQuietHours) NewsSchedule.OVERNIGHT else null
+        newsSchedule.quiet = if (config.newsQuietHours) {
+            QuietHours.ofMinutes(config.newsQuietStartMin, config.newsQuietEndMin)
+        } else {
+            null
+        }
         announcerVolume = config.announcerVolume.coerceIn(0f, 1f)
         announcerSpeed = config.announcerSpeed.coerceIn(0.5f, 2f)
         // Hooks own the plain-link slot; the AI pass would only overwrite them.

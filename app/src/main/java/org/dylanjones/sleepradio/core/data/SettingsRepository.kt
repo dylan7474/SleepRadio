@@ -135,6 +135,13 @@ interface SettingsRepository {
 
     suspend fun setBroadcastNewsQuietHours(enabled: Boolean)
 
+    /** Quiet hours start / end, minutes since midnight (defaults 23:00 and 06:00). */
+    val broadcastNewsQuietStartMin: Flow<Int>
+    val broadcastNewsQuietEndMin: Flow<Int>
+
+    suspend fun setBroadcastNewsQuietStartMin(minutes: Int)
+    suspend fun setBroadcastNewsQuietEndMin(minutes: Int)
+
     // --- Studio-skin VU meter output-latency compensation (Phase 16) ---
 
     /** True = pick the delay by the live output route; false = use [vuDelayCustomMs]. Default true. */

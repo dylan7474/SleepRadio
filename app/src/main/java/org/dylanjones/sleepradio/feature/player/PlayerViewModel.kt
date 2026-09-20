@@ -716,6 +716,8 @@ class PlayerViewModel @Inject constructor(
                                 djHooksEnabled = settings.broadcastDjHooks.first(),
                                 newsEnabled = newsOn && newsPack != null,
                                 newsQuietHours = settings.broadcastNewsQuietHours.first(),
+                                newsQuietStartMin = settings.broadcastNewsQuietStartMin.first(),
+                                newsQuietEndMin = settings.broadcastNewsQuietEndMin.first(),
                             ),
                             newsVoice = newsPack,
                         )
