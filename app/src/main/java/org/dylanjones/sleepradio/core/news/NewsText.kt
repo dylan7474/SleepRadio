@@ -18,9 +18,16 @@ private val LABEL_PREFIX = Regex(
 
 // Stories that only make sense on a screen.
 private val NOT_SPEAKABLE = Regex(
-    "\\b(live updates?|live blog|newsletter|quiz|how to watch|in pictures|photo gallery)\\b",
+    "\\b(live updates?|live blog|newsletter|quiz|how to watch|in pictures|photo gallery|" +
+        "iplayer|bbc sounds|watch the full|watch live|listen live)\\b",
     RegexOption.IGNORE_CASE,
 )
+
+// "Golf: PGA Championship", "Tennis: US Open day two" — a section/event label (up to three
+// words, a colon, up to four more), not a story. Real colon headlines have a longer second
+// half ("Assisted dying: How laws differ around the world"), a quoted second half
+// ("The Deadlifting Grandma: 'I'm a world champion'") or a quoted first half.
+private val TOPIC_LABEL = Regex("^\\S+(?:\\s\\S+){0,2}:\\s(?![\'\"‘“])\\S+(?:\\s\\S+){0,3}[.!?]?$")
 
 /**
  * Words that shouldn't reach a sleeper in the soft-stories bulletin. Deliberately blunt:
@@ -38,7 +45,8 @@ internal fun isGrim(text: String): Boolean = GRIM.containsMatchIn(text)
 
 /**
  * Turn a raw feed title into a sentence fit to read aloud, or null if the story isn't
- * speakable (a live blog, a quiz, too short/long to make sense). Rule-based on purpose:
+ * speakable (a live blog, a quiz, a bare "Golf: PGA Championship" label, a promo for
+ * video/iPlayer, too short/long to make sense). Rule-based on purpose:
  * it can only drop or trim words, never invent them — see the 2026-09-20 finding that
  * on-device AI can't run with the screen off, so news stays rule-based.
  */
@@ -46,7 +54,7 @@ internal fun tidyHeadline(raw: String): String? {
     var t = raw.replace(Regex("\\s+"), " ").trim()
     t = LABEL_PREFIX.replace(t, "").trim()
     if (t.length < MIN_HEADLINE_CHARS || t.length > MAX_HEADLINE_CHARS) return null
-    if (NOT_SPEAKABLE.containsMatchIn(t)) return null
+    if (NOT_SPEAKABLE.containsMatchIn(t) || TOPIC_LABEL.matches(t)) return null
     // A spaced dash is a page-layout pause; read it as a comma-length break.
     t = t.replace(Regex("\\s[-–—]\\s"), ", ")
     if (t.last() !in ".!?") t += "."

@@ -62,6 +62,39 @@ class NewsTextTest {
         assertNull(tidyHeadline("x".repeat(200)))
     }
 
+    @Test
+    fun `bare topic labels are not stories`() {
+        assertNull(tidyHeadline("Golf: PGA Championship"))
+        assertNull(tidyHeadline("Tennis: US Open day two."))
+        assertNull(tidyHeadline("Cricket: England v India"))
+    }
+
+    @Test
+    fun `colon headlines that are real stories still pass`() {
+        assertEquals(
+            "'People forget we exist': Why older LGBTQ+ people fear losing identity.",
+            tidyHeadline("'People forget we exist': Why older LGBTQ+ people fear losing identity"),
+        )
+        assertEquals(
+            "The Deadlifting Grandma: 'I'm a world champion'.",
+            tidyHeadline("The Deadlifting Grandma: 'I'm a world champion'"),
+        )
+        assertEquals(
+            "Assisted dying: How laws differ around the world.",
+            tidyHeadline("Assisted dying: How laws differ around the world"),
+        )
+        assertEquals(
+            "Menstrual fitness: Why some women are 'cycle-syncing' their workouts.",
+            tidyHeadline("Menstrual fitness: Why some women are 'cycle-syncing' their workouts"),
+        )
+    }
+
+    @Test
+    fun `promos for video and iPlayer are dropped`() {
+        assertNull(tidyHeadline("Watch the full interview with Earl Spencer on iPlayer in Princess Diana: My Sister's Story"))
+        assertNull(tidyHeadline("Listen live to the debate on BBC Sounds tonight"))
+    }
+
     // --- grim filter ---
 
     @Test
