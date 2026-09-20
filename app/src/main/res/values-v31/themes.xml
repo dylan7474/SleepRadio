@@ -5,5 +5,7 @@
     <style name="Theme.SleepRadio" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowSplashScreenBackground">@color/splash_bg</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:colorAccent">@color/studio_accent</item>
+        <item name="android:colorBackgroundFloating">@color/studio_dialog</item>
     </style>
 </resources>

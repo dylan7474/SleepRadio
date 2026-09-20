@@ -10,5 +10,9 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
+        <!-- Platform dialogs (e.g. the quiet-hours time picker) take their accent and
+             background from here, not from the Compose Material scheme. -->
+        <item name="android:colorAccent">@color/studio_accent</item>
+        <item name="android:colorBackgroundFloating">@color/studio_dialog</item>
     </style>
 </resources>

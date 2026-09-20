@@ -4,4 +4,7 @@
     <color name="white">#FFFFFFFF</color>
     <!-- Cold-start window + splash background (matches the Studio skin's screen ground). -->
     <color name="splash_bg">#FF15120E</color>
+    <!-- Studio palette for platform (non-Compose) dialogs such as the system time picker. -->
+    <color name="studio_accent">#FFE0A64C</color>
+    <color name="studio_dialog">#FF2C2620</color>
 </resources>

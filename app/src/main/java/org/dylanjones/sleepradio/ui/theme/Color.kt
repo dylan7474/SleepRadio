@@ -2,16 +2,10 @@ package org.dylanjones.sleepradio.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// --- Shared base (dark) ---
-val BaseBackground = Color(0xFF0B0E14)
-val BaseSurface = Color(0xFF141922)
-
-// --- Neon skin (cyberpunk) — placeholder tokens, refined in Phase 2 ---
-val NeonCyan = Color(0xFF3FE0FF)
-val NeonMagenta = Color(0xFFFF3FA6)
-val NeonIndigo = Color(0xFF1A1440)
-
-// --- Industrial skin (brushed metal) — placeholder tokens, refined in Phase 2 ---
-val IndustrialBlue = Color(0xFF5AA9E6)
-val IndustrialAmber = Color(0xFFE8912D)
-val IndustrialSteel = Color(0xFF2A2E33)
+// Surface steps for the Material scheme (Theme.kt), in the Studio skin's warm espresso family.
+// The accent, text and outline colours come straight from StudioSkin so there is one palette.
+val StudioSurfaceLowest = Color(0xFF100D0A)
+val StudioSurfaceLow = Color(0xFF1B1611)
+val StudioSurface = Color(0xFF1F1A14)
+val StudioSurfaceHigh = Color(0xFF2C2620)   // dialogs and menus
+val StudioSurfaceHighest = Color(0xFF3A322A)
