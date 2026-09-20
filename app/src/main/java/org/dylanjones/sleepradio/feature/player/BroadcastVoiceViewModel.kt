@@ -55,6 +55,7 @@ class BroadcastVoiceViewModel @Inject constructor(
         val chattiness: Chattiness = Chattiness.DEFAULT,
         val announcerVolume: Float = 1f,
         val announcerSpeed: Float = 1f,
+        val newsSpeed: Float = 0.75f,
         val jinglesFolderSet: Boolean = false,
         val jingleEnabled: Boolean = false,
         val jingleEvery: Int = 4,
@@ -75,7 +76,8 @@ class BroadcastVoiceViewModel @Inject constructor(
             combine(
                 settings.broadcastAnnouncerVolume,
                 settings.broadcastAnnouncerSpeed,
-            ) { vol, speed -> vol to speed },
+                settings.broadcastNewsSpeed,
+            ) { vol, speed, newsSpeed -> Triple(vol, speed, newsSpeed) },
             combine(
                 settings.broadcastJingleEnabled,
                 settings.broadcastJingleEvery,
@@ -92,7 +94,7 @@ class BroadcastVoiceViewModel @Inject constructor(
                     settings.broadcastNewsQuietEndMin,
                 ) { on, start, end -> Triple(on, start, end) },
             ) { install, hooks, newsVoice, newsOn, quiet -> arrayOf(install, hooks, newsVoice, newsOn, quiet) },
-        ) { selected, chat, (vol, speed), (jinEnabled, jinEvery, jinSet), misc ->
+        ) { selected, chat, (vol, speed, newsSpeed), (jinEnabled, jinEvery, jinSet), misc ->
             val install = misc[0] as VoicePackInstaller.InstallState
             val hooks = misc[1] as Boolean
             val newsVoice = misc[2] as String
@@ -106,6 +108,7 @@ class BroadcastVoiceViewModel @Inject constructor(
                 chattiness = Chattiness.fromId(chat),
                 announcerVolume = vol,
                 announcerSpeed = speed,
+                newsSpeed = newsSpeed,
                 jinglesFolderSet = jinSet,
                 jingleEnabled = jinEnabled,
                 jingleEvery = jinEvery,
@@ -133,6 +136,10 @@ class BroadcastVoiceViewModel @Inject constructor(
 
     fun setAnnouncerSpeed(value: Float) {
         viewModelScope.launch { settings.setBroadcastAnnouncerSpeed(value) }
+    }
+
+    fun setNewsSpeed(value: Float) {
+        viewModelScope.launch { settings.setBroadcastNewsSpeed(value) }
     }
 
     fun setJingleEnabled(enabled: Boolean) {

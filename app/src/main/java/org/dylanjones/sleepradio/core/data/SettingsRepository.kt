@@ -79,6 +79,14 @@ interface SettingsRepository {
 
     suspend fun setBroadcastAnnouncerSpeed(value: Float)
 
+    /**
+     * News-reading speech rate, separate from the DJ's: the news voice often sounds more rushed
+     * than the DJ at the same rate. 1.0 = the voice's natural rate. Default 0.75.
+     */
+    val broadcastNewsSpeed: Flow<Float>
+
+    suspend fun setBroadcastNewsSpeed(value: Float)
+
     /** Persisted SAF tree URI for the folder holding the user's jingle files, or null. */
     val jinglesTreeUri: Flow<String?>
 
@@ -93,19 +101,6 @@ interface SettingsRepository {
     val broadcastJingleEvery: Flow<Int>
 
     suspend fun setBroadcastJingleEvery(tracks: Int)
-
-    /**
-     * Phase 18: let the on-device AI (Gemini Nano via AICore) generate the
-     * occasional DJ link, on top of the deterministic templates. Off by
-     * default — beta API, only available on a narrow set of devices.
-     *
-     * No UI sets this any more (AI DJ personality was shelved, see
-     * [org.dylanjones.sleepradio.core.broadcast.BroadcastConfig.aiCommentaryEnabled]);
-     * the key stays so backups that contain it still restore cleanly.
-     */
-    val broadcastAiCommentary: Flow<Boolean>
-
-    suspend fun setBroadcastAiCommentary(enabled: Boolean)
 
     /** 70s-style DJ hook lines before track intros (bundled pool). Off by default. */
     val broadcastDjHooks: Flow<Boolean>

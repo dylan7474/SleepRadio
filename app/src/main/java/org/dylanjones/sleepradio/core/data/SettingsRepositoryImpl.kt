@@ -116,6 +116,13 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_BROADCAST_ANNOUNCER_SPEED] = value.coerceIn(0.5f, 2f) }
     }
 
+    override val broadcastNewsSpeed: Flow<Float> =
+        dataStore.data.map { (it[KEY_BROADCAST_NEWS_SPEED] ?: DEFAULT_NEWS_SPEED).coerceIn(0.5f, 2f) }
+
+    override suspend fun setBroadcastNewsSpeed(value: Float) {
+        dataStore.edit { it[KEY_BROADCAST_NEWS_SPEED] = value.coerceIn(0.5f, 2f) }
+    }
+
     override val jinglesTreeUri: Flow<String?> =
         dataStore.data.map { it[KEY_JINGLES_TREE] }
 
@@ -135,13 +142,6 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setBroadcastJingleEvery(tracks: Int) {
         dataStore.edit { it[KEY_JINGLE_EVERY] = tracks.coerceIn(1, 10) }
-    }
-
-    override val broadcastAiCommentary: Flow<Boolean> =
-        dataStore.data.map { it[KEY_BROADCAST_AI_COMMENTARY] ?: false }
-
-    override suspend fun setBroadcastAiCommentary(enabled: Boolean) {
-        dataStore.edit { it[KEY_BROADCAST_AI_COMMENTARY] = enabled }
     }
 
     override val broadcastDjHooks: Flow<Boolean> =
@@ -282,10 +282,11 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_BROADCAST_CHATTINESS = stringPreferencesKey("broadcast_chattiness")
         val KEY_BROADCAST_ANNOUNCER_VOLUME = floatPreferencesKey("broadcast_announcer_volume")
         val KEY_BROADCAST_ANNOUNCER_SPEED = floatPreferencesKey("broadcast_announcer_speed")
+        val KEY_BROADCAST_NEWS_SPEED = floatPreferencesKey("broadcast_news_speed")
+        const val DEFAULT_NEWS_SPEED = 0.75f
         val KEY_JINGLES_TREE = stringPreferencesKey("jingles_tree_uri")
         val KEY_JINGLE_ENABLED = booleanPreferencesKey("broadcast_jingle_enabled")
         val KEY_JINGLE_EVERY = intPreferencesKey("broadcast_jingle_every")
-        val KEY_BROADCAST_AI_COMMENTARY = booleanPreferencesKey("broadcast_ai_commentary")
         val KEY_BROADCAST_DJ_HOOKS = booleanPreferencesKey("broadcast_dj_hooks")
         val KEY_BROADCAST_NEWS_ENABLED = booleanPreferencesKey("broadcast_news_enabled")
         val KEY_BROADCAST_NEWS_QUIET_HOURS = booleanPreferencesKey("broadcast_news_quiet_hours")
@@ -297,6 +298,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val FLOAT_KEY_NAMES: Set<String> = setOf(
             KEY_BROADCAST_ANNOUNCER_VOLUME.name,
             KEY_BROADCAST_ANNOUNCER_SPEED.name,
+            KEY_BROADCAST_NEWS_SPEED.name,
             KEY_MIXER_VOLUME.name,
             KEY_MIXER_BALANCE.name,
         )

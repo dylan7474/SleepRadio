@@ -362,6 +362,7 @@ fun PlayerRoute(
                     onChattiness = broadcastVoiceViewModel::setChattiness,
                     onAnnouncerVolume = broadcastVoiceViewModel::setAnnouncerVolume,
                     onAnnouncerSpeed = broadcastVoiceViewModel::setAnnouncerSpeed,
+                    onNewsSpeed = broadcastVoiceViewModel::setNewsSpeed,
                     onChooseJinglesFolder = { jinglesFolderLauncher.launch(null) },
                     onJingleEnabled = broadcastVoiceViewModel::setJingleEnabled,
                     onJingleEvery = broadcastVoiceViewModel::setJingleEvery,
@@ -687,6 +688,7 @@ private fun BroadcastVoiceDialog(
     onChattiness: (Chattiness) -> Unit,
     onAnnouncerVolume: (Float) -> Unit,
     onAnnouncerSpeed: (Float) -> Unit,
+    onNewsSpeed: (Float) -> Unit,
     onChooseJinglesFolder: () -> Unit,
     onJingleEnabled: (Boolean) -> Unit,
     onJingleEvery: (Int) -> Unit,
@@ -794,6 +796,21 @@ private fun BroadcastVoiceDialog(
                         onClick = { onSelectNewsVoice(BROADCAST_VOICE_PERSONAL) },
                     )
                 }
+                Text(
+                    "Reading speed  ${(state.newsSpeed * 100).toInt()}%" +
+                        when {
+                            state.newsSpeed < 0.98f -> "  (slower)"
+                            state.newsSpeed > 1.02f -> "  (faster)"
+                            else -> "  (natural)"
+                        },
+                    fontSize = 11.sp,
+                )
+                Slider(
+                    value = state.newsSpeed,
+                    onValueChange = onNewsSpeed,
+                    valueRange = 0.6f..1.2f,
+                    steps = 11,
+                )
 
                 Spacer(Modifier.padding(4.dp))
                 SectionHeader("CHATTINESS")

@@ -277,6 +277,8 @@ class PlaybackConnection @Inject constructor(
     private var announcerVolume: Float = 1f
     /** DJ speech rate (1.0 = natural, higher is faster). */
     private var announcerSpeed: Float = 1f
+    /** News-reading speech rate (separate from the DJ's [announcerSpeed]). */
+    private var newsSpeed: Float = 0.75f
     /** Phase 18: on-device AI DJ commentary, news up only when a broadcast
      *  starts with it enabled — see [startBroadcast] / [endBroadcastInternal]. */
     private var aiEngine: DjCommentaryEngine? = null
@@ -779,6 +781,7 @@ class PlaybackConnection @Inject constructor(
         }
         announcerVolume = config.announcerVolume.coerceIn(0f, 1f)
         announcerSpeed = config.announcerSpeed.coerceIn(0.5f, 2f)
+        newsSpeed = config.newsSpeed.coerceIn(0.5f, 2f)
         // Hooks own the plain-link slot; the AI pass would only overwrite them.
         val useAi = config.aiCommentaryEnabled && !config.djHooksEnabled
         aiCommentaryEnabled = useAi
@@ -1205,7 +1208,7 @@ class PlaybackConnection @Inject constructor(
                 null
             } else {
                 val (player, engine) = withContext(mainDispatcher) { newsVoice(pack) }
-                val body = if (engine.ensureLoaded(pack)) player.prepare(bodyText, announcerSpeed) else null
+                val body = if (engine.ensureLoaded(pack)) player.prepare(bodyText, newsSpeed) else null
                 body?.let { PreparedNews(due, headlines, it) }
             }
             withContext(mainDispatcher) {
@@ -1285,7 +1288,7 @@ class PlaybackConnection @Inject constructor(
         }
         scope.launch(Dispatchers.Default) {
             val timeLine = bulletinTimeLine(news.due.mark, LocalDateTime.now())
-            val ok = player.preload(timeLine, announcerSpeed)
+            val ok = player.preload(timeLine, newsSpeed)
             withContext(mainDispatcher) {
                 Log.d(TAG, "broadcast: news ${news.due.slot} — \"$timeLine\" then ${news.headlines.size} stories")
                 if (ok) {
@@ -1350,6 +1353,7 @@ class PlaybackConnection @Inject constructor(
         announceEveryTrack = false
         announcerVolume = 1f
         announcerSpeed = 1f
+        newsSpeed = 0.75f
         jingleUris = emptyList()
         jingleEvery = 0
         tracksSinceJingle = 0

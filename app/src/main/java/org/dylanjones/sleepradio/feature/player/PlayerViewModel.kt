@@ -734,6 +734,7 @@ class PlayerViewModel @Inject constructor(
                                 announceEveryTrack = chat == Chattiness.MAXIMUM,
                                 announcerVolume = settings.broadcastAnnouncerVolume.first(),
                                 announcerSpeed = settings.broadcastAnnouncerSpeed.first(),
+                                newsSpeed = settings.broadcastNewsSpeed.first(),
                                 jingleEvery = jingleEvery,
                                 djHooksEnabled = settings.broadcastDjHooks.first(),
                                 newsEnabled = newsOn && newsPack != null,

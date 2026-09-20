@@ -57,6 +57,8 @@ data class BroadcastConfig(
     val announcerVolume: Float = 1f,
     /** DJ speech rate: 1.0 = the voice's natural rate, higher is faster. */
     val announcerSpeed: Float = 1f,
+    /** News-reading speech rate, separate from the DJ's (same scale). */
+    val newsSpeed: Float = 0.75f,
     /** Drop a jingle in every N tracks (1..10); 0 = jingles off. */
     val jingleEvery: Int = 0,
     /**

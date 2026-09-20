@@ -144,4 +144,23 @@ class SettingsRepositoryImplBackupTest {
         assertEquals(1f, levels.volume, 0f)
         assertEquals(0f, levels.balance, 0f)
     }
+
+    @Test
+    fun `news speed defaults slower than natural, persists, clamps and survives backup`() = runTest {
+        val src = File.createTempFile("settings_news_speed_src", ".preferences_pb").also { it.deleteOnExit() }
+        val dst = File.createTempFile("settings_news_speed_dst", ".preferences_pb").also { it.deleteOnExit() }
+        val repo = newRepo(src)
+        assertEquals(0.75f, repo.broadcastNewsSpeed.first(), 1e-4f)
+
+        repo.setBroadcastNewsSpeed(0.65f)
+        assertEquals(0.65f, repo.broadcastNewsSpeed.first(), 1e-4f)
+        repo.setBroadcastNewsSpeed(9f)
+        assertEquals(2f, repo.broadcastNewsSpeed.first(), 0f)
+
+        // A whole-number speed (1.0 = natural) is the case that used to come back as an Int.
+        repo.setBroadcastNewsSpeed(1f)
+        val to = newRepo(dst)
+        to.importAll(roundTripThroughJsonText(repo.exportAll()))
+        assertEquals(1f, to.broadcastNewsSpeed.first(), 0f)
+    }
 }
