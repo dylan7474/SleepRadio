@@ -48,6 +48,7 @@ import org.dylanjones.sleepradio.core.data.SourceType
 import org.dylanjones.sleepradio.core.design.CircleGlyphButton
 import org.dylanjones.sleepradio.core.design.LocalAppSkin
 import org.dylanjones.sleepradio.core.design.PlayPauseButton
+import org.dylanjones.sleepradio.core.design.ChannelKey
 import org.dylanjones.sleepradio.core.design.RotaryKnob
 import org.dylanjones.sleepradio.core.design.SkinPanel
 import org.dylanjones.sleepradio.core.design.SkinTile
@@ -178,23 +179,29 @@ private fun PresetRow(state: PlayerUiState, actions: PlayerActions, modifier: Mo
             pageSpacing = 10.dp,
         ) { page ->
             val first = page * PRESETS_PER_PAGE
-            Row(
+            // Four wide buttons in a 2 x 2 block (the artwork keeps its shape inside each cell).
+            Column(
                 Modifier
                     .fillMaxSize()
                     .semantics { contentDescription = "Channels ${first + 1} to ${first + PRESETS_PER_PAGE}" },
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                for (i in first until first + PRESETS_PER_PAGE) {
-                    PresetTile(
-                        index = i,
-                        slot = state.presets.getOrNull(i),
-                        active = active[i],
-                        playing = playing[i],
-                        broadcastReady = state.broadcastReady,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                        onClick = { actions.onPresetClick(i) },
-                        onLongClick = { actions.onPresetLongClick(i) },
-                    )
+                for (row in 0 until PRESETS_PER_PAGE / 2) {
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        for (col in 0 until 2) {
+                            val i = first + row * 2 + col
+                            PresetTile(
+                                index = i,
+                                slot = state.presets.getOrNull(i),
+                                active = active[i],
+                                playing = playing[i],
+                                broadcastReady = state.broadcastReady,
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                onClick = { actions.onPresetClick(i) },
+                                onLongClick = { actions.onPresetLongClick(i) },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -295,15 +302,6 @@ private fun AmbientTiles(
     }
 }
 
-private fun SourceType.badge(): String = when (this) {
-    SourceType.ALBUM -> "ALBUM"
-    SourceType.MUSIC_FOLDER -> "ALBUM"
-    SourceType.AUDIOBOOK -> "BOOK"
-    SourceType.RADIO -> "RADIO"
-    SourceType.BROADCAST -> "LIVE"
-    SourceType.PODCAST -> "POD"
-}
-
 internal fun NoiseColor.label(): String = when (this) {
     NoiseColor.WHITE -> "WHITE"
     NoiseColor.PINK -> "PINK"
@@ -332,13 +330,8 @@ private fun PresetTile(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val colors = LocalAppSkin.current.colors
-    // Playing = solid amber tile with dark text; paused/selected = thick amber outline;
-    // otherwise the quiet default.
-    val filled = active && playing
-    val onTile = if (filled) colors.screenTop else colors.onTile
     val showReadyDot = slot?.type == SourceType.BROADCAST && broadcastReady && !active
-    val label = if (slot == null) {
+    val description = if (slot == null) {
         "Preset ${index + 1}, empty. Double tap to assign a source."
     } else {
         "Preset ${index + 1}, ${slot.label}" +
@@ -349,70 +342,18 @@ private fun PresetTile(
                 else -> ". Double tap to play."
             } + " Long press to clear."
     }
-    SkinTile(
+    ChannelKey(
+        number = index + 1,
+        // A Broadcast that is ready to start instantly shows a dot before its name.
+        label = (if (showReadyDot) "● " else "") + (slot?.label ?: "FM ${placeholderFreqs.getOrElse(index) { "—" }}"),
+        active = active,
+        playing = playing,
+        contentDescription = description,
         onClick = onClick,
         onLongClick = onLongClick,
         modifier = modifier,
-        active = active,
-        filled = filled,
-        contentDescription = label,
-    ) {
-        // Number, plus a state glyph on the active preset: ▶ playing, ❚❚ paused. The row is the
-        // same height with or without the glyph, so nothing shifts when a preset becomes active.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "${index + 1}",
-                color = onTile,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            if (active) {
-                Text(
-                    text = if (playing) "  ▶" else "  ❚❚",
-                    color = if (filled) onTile else colors.accent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-        }
-        if (slot == null) {
-            Text("[FM]", color = onTile, fontSize = 10.sp)
-            Text(
-                text = placeholderFreqs.getOrElse(index) { "—" },
-                color = onTile,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                softWrap = false,
-            )
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    slot.type.badge(),
-                    color = onTile.copy(alpha = 0.65f),
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                if (showReadyDot) {
-                    Text(
-                        " ●",
-                        color = LocalAppSkin.current.colors.accent,
-                        fontSize = 8.sp,
-                    )
-                }
-            }
-            Text(
-                slot.label,
-                color = onTile,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                lineHeight = 12.sp,
-            )
-        }
-    }
+        empty = slot == null,
+    )
 }
 
 @Composable

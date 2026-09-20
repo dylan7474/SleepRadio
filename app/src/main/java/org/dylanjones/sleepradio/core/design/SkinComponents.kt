@@ -26,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -77,11 +76,8 @@ fun SkinPanel(
 }
 
 /**
- * A pressable control tile (preset slot, SLEEP, NOISE, …).
- *
- * States, from quietest to boldest: inactive (thin panel-coloured outline); [active] (thick amber
- * outline on a lifted face — "this one is selected/on"); [filled] (solid amber face — "this one is
- * running right now"). A [filled] tile's content must use a dark colour, e.g. `screenTop`.
+ * A pressable control tile (SLEEP, NOISE, …): a thin panel-coloured outline when off, a thick
+ * amber outline on a lifted face when [active]. (The channel buttons use [RetroKey] instead.)
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -91,16 +87,9 @@ fun SkinTile(
     active: Boolean = false,
     onLongClick: (() -> Unit)? = null,
     contentDescription: String? = null,
-    filled: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = LocalAppSkin.current.colors
-    val bold = active || filled
-    val face = if (filled) {
-        Brush.verticalGradient(listOf(c.accent, lerp(c.accent, c.screenTop, 0.2f)))
-    } else {
-        c.tileBrush(active)
-    }
     val clickModifier =
         if (onLongClick != null) {
             Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
@@ -116,10 +105,10 @@ fun SkinTile(
         modifier
             .then(a11y)
             .clip(RoundedCornerShape(14.dp))
-            .background(face)
+            .background(c.tileBrush(active))
             .border(
-                width = if (bold) 2.5.dp else 1.dp,
-                color = if (bold) c.accent else c.panelStroke,
+                width = if (active) 2.5.dp else 1.dp,
+                color = if (active) c.accent else c.panelStroke,
                 shape = RoundedCornerShape(14.dp),
             )
             .then(clickModifier)
