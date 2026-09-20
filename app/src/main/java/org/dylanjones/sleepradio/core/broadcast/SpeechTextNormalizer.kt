@@ -16,7 +16,14 @@ package org.dylanjones.sleepradio.core.broadcast
 internal fun normalizeForSpeech(text: String): String {
     if (text.isBlank()) return text
     val overridden = applyPronunciationOverrides(text)
-    return NUMBER_TOKEN.replace(overridden) { normalizeNumberToken(it.value) }
+    return NUMBER_TOKEN.replace(overridden) { m ->
+        val spoken = normalizeNumberToken(m.value)
+        // A number stuck to letters ("UB40", "2Pac", "H2O") must not fuse with them into one
+        // unreadable word ("UBforty"): keep it a separate word.
+        val glueBefore = m.range.first > 0 && overridden[m.range.first - 1].isLetter()
+        val glueAfter = m.range.last + 1 < overridden.length && overridden[m.range.last + 1].isLetter()
+        (if (glueBefore) " " else "") + spoken + (if (glueAfter) " " else "")
+    }
 }
 
 /**
@@ -26,7 +33,11 @@ internal fun normalizeForSpeech(text: String): String {
  * that reads right through espeak-ng; matched as a whole word/phrase,
  * case-insensitively, so casing in the replacement is what's actually said).
  */
-private val PRONUNCIATION_OVERRIDES: Map<String, String> = mapOf()
+private val PRONUNCIATION_OVERRIDES: Map<String, String> = mapOf(
+    // Band names whose letters are spelled out; without the spaces a voice says "ub" as a word.
+    "UB40" to "U B forty",
+    "10cc" to "ten C C",
+)
 
 private fun applyPronunciationOverrides(text: String): String {
     var out = text
@@ -36,15 +47,28 @@ private fun applyPronunciationOverrides(text: String): String {
     return out
 }
 
-/** A run of digits, optionally with a trailing ordinal suffix (1st, 22nd…). */
-private val NUMBER_TOKEN = Regex("\\d+(st|nd|rd|th)?", RegexOption.IGNORE_CASE)
+/**
+ * A run of digits, optionally with a trailing ordinal suffix (1st, 22nd…) or a plural "s"
+ * (70s, 1990s) — the "s" only when it ends the word, so "3Stooges" isn't taken for one.
+ */
+private val NUMBER_TOKEN = Regex("\\d+(?:(?:st|nd|rd|th)|s(?![A-Za-z]))?", RegexOption.IGNORE_CASE)
 
 private fun normalizeNumberToken(token: String): String {
+    if (token.endsWith("s", ignoreCase = true)) {
+        // Decades and plurals: "70s" -> "seventies", "1990s" -> "nineteen nineties".
+        val digits = token.dropLast(1)
+        val n = digits.toIntOrNull() ?: return token
+        return pluralWords(cardinalOrYearWords(digits, n))
+    }
     val ordinalSuffix = Regex("(st|nd|rd|th)$", RegexOption.IGNORE_CASE).find(token)?.value
     val digits = if (ordinalSuffix != null) token.dropLast(ordinalSuffix.length) else token
     val n = digits.toIntOrNull() ?: return token
     return if (ordinalSuffix != null) ordinalWords(n) else cardinalOrYearWords(digits, n)
 }
+
+/** Pluralise the last word: "seventy" -> "seventies", "two thousand" -> "two thousands", "five" -> "fives". */
+private fun pluralWords(words: String): String =
+    if (words.endsWith("y")) words.dropLast(1) + "ies" else words + "s"
 
 /**
  * A bare 4-digit token with no leading zero reads as a year ("1984" -> nineteen

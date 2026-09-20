@@ -377,8 +377,39 @@ class SpeechTextNormalizerTest {
     }
 
     @Test
+    fun `a number stuck to letters is kept a separate word`() {
+        assertEquals("Sum forty-one", normalizeForSpeech("Sum41"))
+        assertEquals("two Pac", normalizeForSpeech("2Pac"))
+        assertEquals("H two O", normalizeForSpeech("H2O"))
+        assertEquals("three D", normalizeForSpeech("3D"))
+        assertEquals("Blink one hundred and eighty-two", normalizeForSpeech("Blink182"))
+        // ...and does not disturb the ordinary cases
+        assertEquals("Highway sixty-one", normalizeForSpeech("Highway 61"))
+        assertEquals("nineteen eighty-four", normalizeForSpeech("1984"))
+    }
+
+    @Test
+    fun `band names spelled out are respelled`() {
+        assertEquals("U B forty", normalizeForSpeech("UB40"))
+        assertEquals("Food for Thought, by U B forty", normalizeForSpeech("Food for Thought, by UB40"))
+        assertEquals("U B forty", normalizeForSpeech("ub40"))
+        assertEquals("ten C C", normalizeForSpeech("10cc"))
+    }
+
+    @Test
+    fun `decades and plurals read as words`() {
+        assertEquals("Hits of the seventies", normalizeForSpeech("Hits of the 70s"))
+        assertEquals("nineteen nineties", normalizeForSpeech("1990s"))
+        assertEquals("two thousands", normalizeForSpeech("2000s"))
+        assertEquals("nineteen sixties classics", normalizeForSpeech("1960s classics"))
+    }
+
+    @Test
     fun `never leaves a digit behind for anything it recognises`() {
-        val samples = listOf("1984", "2024", "Highway 61", "Apartment 23", "Track 21st", "100th")
+        val samples = listOf(
+            "1984", "2024", "Highway 61", "Apartment 23", "Track 21st", "100th",
+            "UB40", "Sum41", "2Pac", "70s", "1990s", "10cc",
+        )
         for (s in samples) {
             val out = normalizeForSpeech(s)
             assertTrue("$s -> $out", out.none { it.isDigit() })
