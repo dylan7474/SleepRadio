@@ -130,14 +130,32 @@ private sealed interface SegueStep {
      */
     class Clock : SegueStep {
         private var text: String? = null
+        private var resolvedAtMs = 0L
+        private var prefetching = false
         var resolvedAt: LocalTime? = null
             private set
 
+        /**
+         * The line, worded from the real clock — unless one was made more than
+         * [STALE_MS] ago (a prefetch that then sat through a pause), in which
+         * case it is reworded so the time is never stale when spoken.
+         */
         @Synchronized
-        fun resolve(builder: DjScriptBuilder): String = text ?: run {
+        fun resolve(builder: DjScriptBuilder): String {
+            val age = SystemClock.elapsedRealtime() - resolvedAtMs
+            text?.let { if (age <= STALE_MS) return it }
             val now = LocalTime.now()
             resolvedAt = now
-            builder.timeLine(now).also { text = it }
+            resolvedAtMs = SystemClock.elapsedRealtime()
+            return builder.timeLine(now).also { text = it }
+        }
+
+        /** True the first time it is called: whoever gets true does the prefetch. */
+        @Synchronized
+        fun claimPrefetch(): Boolean = !prefetching.also { prefetching = true }
+
+        private companion object {
+            const val STALE_MS = 30_000L
         }
     }
 }
@@ -1131,11 +1149,30 @@ class PlaybackConnection @Inject constructor(
     private fun prefetchClockStep(player: DjVoicePlayer) {
         val clock = seguePlan.firstOrNull() as? SegueStep.Clock ?: return
         val builder = scriptBuilder ?: return
+        if (!clock.claimPrefetch()) return
         scope.launch(Dispatchers.Default) {
             val t0 = SystemClock.elapsedRealtime()
             player.preload(clock.resolve(builder), announcerSpeed)
             Log.d(TAG, "broadcast: clock prefetched in ${SystemClock.elapsedRealtime() - t0}ms")
         }
+    }
+
+    /**
+     * A time check that comes straight after a track has no clip before it to hide
+     * its ~350 ms synthesis behind. So while that track plays (the ticker only runs
+     * while it is playing, so never across a pause), word and synthesise the clock
+     * [CLOCK_PREFETCH_LEAD_MS] before the track ends. A prefetch that then goes
+     * stale (see [SegueStep.Clock.resolve]) is simply redone when spoken.
+     */
+    private fun maybePrefetchClockBeforeEnd() {
+        if (!isBroadcast || segueRunning) return
+        if (seguePlan.firstOrNull() !is SegueStep.Clock) return
+        val player = djPlayer ?: return
+        val c = controller ?: return
+        val duration = c.duration
+        if (duration == C.TIME_UNSET || duration <= 0L) return
+        if (duration - c.currentPosition > CLOCK_PREFETCH_LEAD_MS) return
+        prefetchClockStep(player)
     }
 
     // --- News bulletins ---
@@ -1348,6 +1385,7 @@ class PlaybackConnection @Inject constructor(
         ticker = scope.launch {
             while (true) {
                 pushSnapshot()
+                maybePrefetchClockBeforeEnd()
                 delay(POSITION_POLL_MS)
             }
         }
@@ -1424,6 +1462,8 @@ class PlaybackConnection @Inject constructor(
     private companion object {
         const val TAG = "PlaybackConnection"
         const val POSITION_POLL_MS = 500L
+        /** How long before a track's end a bare time check's clip is prepared. */
+        const val CLOCK_PREFETCH_LEAD_MS = 8_000L
         const val SLEEP_FADE_MS = 20_000L
         /** Broadcast: with less than this left on the sleep timer, the DJ goes silent. */
         const val WINDDOWN_SILENT_MS = 5 * 60_000L
