@@ -5,7 +5,6 @@ import org.dylanjones.sleepradio.core.broadcast.normalizeForSpeech
 import org.dylanjones.sleepradio.core.broadcast.spokenTime
 import java.time.Duration
 import java.time.LocalDateTime
-import java.time.LocalTime
 import kotlin.random.Random
 
 private const val MIN_HEADLINE_CHARS = 20
@@ -213,6 +212,3 @@ internal fun bulletinTimeLine(mark: LocalDateTime, now: LocalDateTime): String {
 }
 
 private const val JUST_GONE_MAX_MIN = 5L
-
-/** Convenience for the test buttons: the time line for [now] using the DJ's spoken clock. */
-internal fun bulletinTimeLine(now: LocalTime): String = "It's ${spokenTime(now)}."

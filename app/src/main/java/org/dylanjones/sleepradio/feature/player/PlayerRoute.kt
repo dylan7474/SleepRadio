@@ -80,7 +80,6 @@ import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.SkinId
 import org.dylanjones.sleepradio.core.design.skinFor
 import org.dylanjones.sleepradio.core.tts.VoicePackInstaller
-import org.dylanjones.sleepradio.core.news.rememberDebugNewsTest
 import org.dylanjones.sleepradio.core.tts.rememberDebugTtsTest
 import org.dylanjones.sleepradio.feature.root.RootViewModel
 import kotlin.math.roundToInt
@@ -186,12 +185,6 @@ fun PlayerRoute(
 
     // Debug-only TTS smoke test (Phase 9 Chunk A); null in release builds.
     val onTtsTest = rememberDebugTtsTest()
-    // TEMPORARY debug-only news test buttons; null in release builds.
-    val newsTest = rememberDebugNewsTest(
-        voiceSettings = broadcastVoiceViewModel::voiceSettings,
-        masterVolume = { state.volume },
-        onLevel = playerViewModel::reportDjPeak,
-    )
 
     var ambientDialogOpen by remember { mutableStateOf(false) }
     var sleepDialogOpen by remember { mutableStateOf(false) }
@@ -240,8 +233,6 @@ fun PlayerRoute(
                 onAbout = { closeDrawer(); aboutOpen = true },
                 onBackup = { closeDrawer(); backupOpen = true },
                 onTtsTest = onTtsTest?.let { test -> { closeDrawer(); test() } },
-                onNewsTopOfHour = newsTest?.let { n -> { closeDrawer(); n.topOfHour() } },
-                onNewsHalfPast = newsTest?.let { n -> { closeDrawer(); n.halfPast() } },
             )
         },
     ) {
@@ -483,8 +474,6 @@ private fun AppDrawer(
     onAbout: () -> Unit,
     onBackup: () -> Unit,
     onTtsTest: (() -> Unit)? = null,
-    onNewsTopOfHour: (() -> Unit)? = null,
-    onNewsHalfPast: (() -> Unit)? = null,
 ) {
     ModalDrawerSheet {
         Column(
@@ -569,20 +558,6 @@ private fun AppDrawer(
                     label = { Text("▶ Speak test line (debug)") },
                     selected = false,
                     onClick = onTtsTest,
-                )
-            }
-            if (onNewsTopOfHour != null) {
-                NavigationDrawerItem(
-                    label = { Text("▶ News on the hour: top stories (debug)") },
-                    selected = false,
-                    onClick = onNewsTopOfHour,
-                )
-            }
-            if (onNewsHalfPast != null) {
-                NavigationDrawerItem(
-                    label = { Text("▶ News at half past: soft stories (debug)") },
-                    selected = false,
-                    onClick = onNewsHalfPast,
                 )
             }
         }

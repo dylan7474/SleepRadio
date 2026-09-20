@@ -21,7 +21,6 @@ import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_PERSONAL
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_STOCK
 import org.dylanjones.sleepradio.core.data.NEWS_VOICE_SAME
 import org.dylanjones.sleepradio.core.data.SettingsRepository
-import org.dylanjones.sleepradio.core.news.NewsVoiceSettings
 import org.dylanjones.sleepradio.core.tts.VoicePackInstaller
 import org.dylanjones.sleepradio.core.tts.VoicePackResolver
 import org.dylanjones.sleepradio.di.IoDispatcher
@@ -172,13 +171,6 @@ class BroadcastVoiceViewModel @Inject constructor(
     fun selectNewsVoice(id: String) {
         viewModelScope.launch { settings.setBroadcastNewsVoice(id) }
     }
-
-    /** DJ voice, news voice and announcer volume — for callers that read the news themselves. */
-    suspend fun voiceSettings(): NewsVoiceSettings = NewsVoiceSettings(
-        djVoice = settings.broadcastVoice.first(),
-        newsVoice = settings.broadcastNewsVoice.first(),
-        announcerVolume = settings.broadcastAnnouncerVolume.first(),
-    )
 
     fun setDjHooksEnabled(enabled: Boolean) {
         viewModelScope.launch { settings.setBroadcastDjHooks(enabled) }

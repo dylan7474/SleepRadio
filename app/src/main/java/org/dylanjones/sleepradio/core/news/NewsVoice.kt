@@ -5,9 +5,6 @@ import org.dylanjones.sleepradio.core.data.NEWS_VOICE_SAME
 import org.dylanjones.sleepradio.core.tts.VoicePack
 import org.dylanjones.sleepradio.core.tts.VoicePackResolver
 
-/** What the news reader needs from settings: the two voice choices and the DJ/announcer volume. */
-class NewsVoiceSettings(val djVoice: String, val newsVoice: String, val announcerVolume: Float)
-
 /**
  * The voice pack that should read the news, given the two settings.
  *
