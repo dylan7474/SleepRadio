@@ -26,7 +26,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
@@ -35,12 +34,14 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -87,6 +88,11 @@ import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_PERSONAL
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_STOCK
 import org.dylanjones.sleepradio.core.data.NEWS_VOICE_SAME
+import org.dylanjones.sleepradio.core.design.RadioDialog
+import org.dylanjones.sleepradio.core.design.RadioLamp
+import org.dylanjones.sleepradio.core.design.RadioSlider
+import org.dylanjones.sleepradio.core.design.RadioSwitch
+import org.dylanjones.sleepradio.core.design.RadioTextButton
 import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.ChannelKey
 import org.dylanjones.sleepradio.core.design.LocalLampBrightness
@@ -495,18 +501,50 @@ private fun AppDrawer(
     onBackup: () -> Unit,
     onTtsTest: (() -> Unit)? = null,
 ) {
-    ModalDrawerSheet {
+    ModalDrawerSheet(
+        modifier = Modifier.drawWithContent {
+            drawContent()
+            // a chrome edge down the right-hand side of the faceplate
+            val edge = 4.dp.toPx()
+            drawRect(
+                Brush.horizontalGradient(
+                    listOf(Color(0xFF3A342B), Color(0xFFE6DCC8), Color(0xFF8F8676), Color(0xFF15110C)),
+                    startX = size.width - edge, endX = size.width,
+                ),
+                topLeft = Offset(size.width - edge, 0f),
+                size = Size(edge, size.height),
+            )
+        },
+        drawerContainerColor = Color(0xFF1B1611),
+        drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
+    ) {
         Column(
             Modifier
                 .safeDrawingPadding()
                 .padding(horizontal = 12.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
+            // the engraved nameplate
             Text(
                 "SLEEPRADIO",
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp,
-                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.titleLarge.copy(
+                    letterSpacing = 4.sp,
+                    shadow = Shadow(Color.Black, Offset(0f, 2f), 0f),
+                ),
+                color = Color(0xFFE0A64C),
+                modifier = Modifier.padding(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 8.dp),
+            )
+            Box(
+                Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 10.dp)
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color(0xFFB9AC97), Color(0xFFE6DCC8), Color(0x00B9AC97)),
+                        ),
+                    ),
             )
             NavigationDrawerItem(
                 label = { Text("Now playing") },
@@ -578,10 +616,10 @@ private fun BackupDialog(
     onRestore: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { RadioTextButton(onClick = onDismiss) { Text("Close") } },
         title = { Text("Backup & restore") },
         text = {
             Column {
@@ -621,8 +659,8 @@ private fun BackupDialog(
                     BackupViewModel.Result.Idle -> Unit
                 }
                 Spacer(Modifier.padding(6.dp))
-                TextButton(onClick = onExport) { Text("Create backup…") }
-                TextButton(onClick = onRestore) { Text("Restore backup…") }
+                RadioTextButton(onClick = onExport) { Text("Create backup…") }
+                RadioTextButton(onClick = onRestore) { Text("Restore backup…") }
             }
         },
     )
@@ -636,7 +674,7 @@ private fun QuietTimeButton(label: String, minutes: Int, enabled: Boolean, onPic
         LocalTime.ofSecondOfDay(minutes.coerceIn(0, 24 * 60 - 1) * 60L)
             .format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
     }
-    TextButton(
+    RadioTextButton(
         enabled = enabled,
         onClick = {
             TimePickerDialog(
@@ -678,9 +716,9 @@ private fun BbcNewsCredit(fontSize: Int) {
 @Composable
 private fun LampBrightnessDialog(current: Float, onCommit: (Float) -> Unit, onDismiss: () -> Unit) {
     var value by remember { mutableFloatStateOf(current) }
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { RadioTextButton(onClick = onDismiss) { Text("Done") } },
         title = { Text("Lamp brightness") },
         text = {
             Column {
@@ -716,7 +754,7 @@ private fun LampBrightnessDialog(current: Float, onCommit: (Float) -> Unit, onDi
                 }
                 Spacer(Modifier.padding(4.dp))
                 Text("Brightness  ${(value * 100).toInt()}%", fontSize = 13.sp)
-                Slider(
+                RadioSlider(
                     value = value,
                     onValueChange = { value = it },
                     onValueChangeFinished = { onCommit(value) },
@@ -736,9 +774,9 @@ private fun AboutDialog(onDismiss: () -> Unit) {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull() ?: "—"
     }
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+        confirmButton = { RadioTextButton(onClick = onDismiss) { Text("OK") } },
         title = { Text("SleepRadio") },
         text = {
             Column {
@@ -785,10 +823,10 @@ private fun BroadcastVoiceDialog(
     onRemovePersonal: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { RadioTextButton(onClick = onDismiss) { Text("Close") } },
         title = { Text("Broadcast voice") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -832,7 +870,7 @@ private fun BroadcastVoiceDialog(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("News bulletins", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    Switch(checked = state.newsEnabled, onCheckedChange = onNewsEnabled)
+                    RadioSwitch(checked = state.newsEnabled, onCheckedChange = onNewsEnabled)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -840,7 +878,7 @@ private fun BroadcastVoiceDialog(
                         fontSize = 13.sp,
                         modifier = Modifier.weight(1f),
                     )
-                    Switch(
+                    RadioSwitch(
                         checked = state.newsQuietHours,
                         onCheckedChange = onNewsQuietHours,
                         enabled = state.newsEnabled,
@@ -888,7 +926,7 @@ private fun BroadcastVoiceDialog(
                         },
                     fontSize = 11.sp,
                 )
-                Slider(
+                RadioSlider(
                     value = state.newsSpeed,
                     onValueChange = onNewsSpeed,
                     valueRange = 0.6f..1.2f,
@@ -931,7 +969,7 @@ private fun BroadcastVoiceDialog(
                     "Volume  ${(state.announcerVolume * 100).toInt()}%  (of the VOL knob)",
                     fontSize = 11.sp,
                 )
-                Slider(
+                RadioSlider(
                     value = state.announcerVolume,
                     onValueChange = onAnnouncerVolume,
                     valueRange = 0f..1f,
@@ -945,7 +983,7 @@ private fun BroadcastVoiceDialog(
                         },
                     fontSize = 11.sp,
                 )
-                Slider(
+                RadioSlider(
                     value = state.announcerSpeed,
                     onValueChange = onAnnouncerSpeed,
                     valueRange = 0.7f..1.3f,
@@ -959,7 +997,7 @@ private fun BroadcastVoiceDialog(
                         "short audio clips; they play shuffled.",
                     fontSize = 11.sp,
                 )
-                TextButton(onClick = onChooseJinglesFolder) {
+                RadioTextButton(onClick = onChooseJinglesFolder) {
                     Text(
                         if (state.jinglesFolderSet) "Change jingles folder…"
                         else "Choose jingles folder…",
@@ -972,7 +1010,7 @@ private fun BroadcastVoiceDialog(
                         fontSize = 13.sp,
                         modifier = Modifier.weight(1f),
                     )
-                    Switch(
+                    RadioSwitch(
                         checked = state.jingleEnabled,
                         onCheckedChange = onJingleEnabled,
                         enabled = state.jinglesFolderSet,
@@ -984,7 +1022,7 @@ private fun BroadcastVoiceDialog(
                             if (state.jingleEvery == 1) "" else "s",
                         fontSize = 11.sp,
                     )
-                    Slider(
+                    RadioSlider(
                         value = state.jingleEvery.toFloat(),
                         onValueChange = { onJingleEvery(it.roundToInt()) },
                         valueRange = 1f..10f,
@@ -1002,7 +1040,7 @@ private fun BroadcastVoiceDialog(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("70s DJ hooks", fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    Switch(checked = state.djHooksEnabled, onCheckedChange = onDjHooksEnabled)
+                    RadioSwitch(checked = state.djHooksEnabled, onCheckedChange = onDjHooksEnabled)
                 }
 
                 Spacer(Modifier.padding(6.dp))
@@ -1024,11 +1062,11 @@ private fun BroadcastVoiceDialog(
                 }
 
                 if (!state.stockInstalled) {
-                    TextButton(onClick = onDownloadStock) { Text("Download stock voice") }
+                    RadioTextButton(onClick = onDownloadStock) { Text("Download stock voice") }
                 }
-                TextButton(onClick = onImport) { Text("Import a voice…") }
+                RadioTextButton(onClick = onImport) { Text("Import a voice…") }
                 if (state.personalInstalled) {
-                    TextButton(onClick = onRemovePersonal) { Text("Remove my voice") }
+                    RadioTextButton(onClick = onRemovePersonal) { Text("Remove my voice") }
                 }
             }
         },
@@ -1050,7 +1088,7 @@ private fun VoiceOptionRow(
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(selected = selected, onClick = onClick, enabled = enabled)
+        RadioLamp(selected = selected, onClick = onClick, enabled = enabled)
         Column(Modifier.padding(start = 4.dp)) {
             Text(title, fontWeight = FontWeight.SemiBold, maxLines = 1)
             Text(subtitle, fontSize = 12.sp, maxLines = 1)
@@ -1068,10 +1106,10 @@ private fun RadioStationsDialog(
     onBrowseDirectory: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { RadioTextButton(onClick = onDismiss) { Text("Close") } },
         title = { Text("Radio stations") },
         text = {
             LazyColumn(Modifier.heightIn(max = 460.dp)) {
@@ -1120,10 +1158,10 @@ private fun SourcePickerDialog(
     onChooseMusicFolder: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { RadioTextButton(onClick = onDismiss) { Text("Cancel") } },
         title = { Text("Assign a source") },
         text = {
             LazyColumn(Modifier.heightIn(max = 460.dp)) {
@@ -1247,10 +1285,10 @@ private fun SleepDurationDialog(
     onDismiss: () -> Unit,
 ) {
     val options = listOf(5, 10, 15, 20, 30, 45, 60, 90)
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { RadioTextButton(onClick = onDismiss) { Text("Cancel") } },
         title = { Text("Sleep timer") },
         text = {
             LazyColumn {
@@ -1281,10 +1319,10 @@ private fun AmbientDialog(
     onClearPattern: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        dismissButton = { RadioTextButton(onClick = onDismiss) { Text("Done") } },
         title = { Text("Ambient mix") },
         text = {
             LazyColumn(Modifier.heightIn(max = 460.dp)) {
@@ -1329,7 +1367,7 @@ private fun AmbientDialog(
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 12.dp),
                     )
-                    Slider(
+                    RadioSlider(
                         value = binauralLevel,
                         onValueChange = onBinauralLevel,
                         valueRange = 0f..1f,
@@ -1364,7 +1402,7 @@ private fun PatternRow(
             )
         }
         if (pattern != null) {
-            TextButton(onClick = onClear) { Text("Clear") }
+            RadioTextButton(onClick = onClear) { Text("Clear") }
         }
     }
 }
@@ -1383,10 +1421,11 @@ private fun NoiseColor.blurb(): String = when (this) {
 
 @Composable
 private fun SectionHeader(text: String) {
+    // an engraved section plate: small amber capitals, widely spaced
     Text(
         text = text,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
+        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 2.4.sp),
+        color = Color(0xFFE0A64C),
         modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
     )
 }
@@ -1431,7 +1470,7 @@ private fun StationRow(
             Text(description, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (deletable) {
-            TextButton(onClick = onRemove) { Text("Remove") }
+            RadioTextButton(onClick = onRemove) { Text("Remove") }
         }
     }
 }
@@ -1443,11 +1482,11 @@ private fun AddStationDialog(
 ) {
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { RadioTextButton(onClick = onDismiss) { Text("Cancel") } },
         confirmButton = {
-            TextButton(
+            RadioTextButton(
                 enabled = url.isNotBlank(),
                 onClick = { onAdd(name, url); onDismiss() },
             ) { Text("Add") }
@@ -1493,10 +1532,10 @@ private fun DirectoryDialog(
     onDismiss: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { RadioTextButton(onClick = onDismiss) { Text("Close") } },
         title = { Text("Online directory") },
         text = {
             Column {
@@ -1510,7 +1549,7 @@ private fun DirectoryDialog(
                         keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { onSearch(query) }) { Text("Go") }
+                    RadioTextButton(onClick = { onSearch(query) }) { Text("Go") }
                 }
                 Spacer(Modifier.padding(4.dp))
                 when {
@@ -1548,10 +1587,10 @@ private fun PodcastsDialog(
     onBrowseDirectory: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { RadioTextButton(onClick = onDismiss) { Text("Close") } },
         title = { Text("Podcasts") },
         text = {
             LazyColumn(Modifier.heightIn(max = 460.dp)) {
@@ -1600,7 +1639,7 @@ private fun PodcastFeedRow(feed: PodcastFeed, onClick: () -> Unit, onRemove: () 
             Text(feed.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("Podcast", fontSize = 12.sp, maxLines = 1)
         }
-        TextButton(onClick = onRemove) { Text("Remove") }
+        RadioTextButton(onClick = onRemove) { Text("Remove") }
     }
 }
 
@@ -1638,13 +1677,13 @@ private fun PodcastEpisodesDialog(
     onBack: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
         dismissButton = {
             Row {
-                TextButton(onClick = onBack) { Text("Back") }
-                TextButton(onClick = onDismiss) { Text("Close") }
+                RadioTextButton(onClick = onBack) { Text("Back") }
+                RadioTextButton(onClick = onDismiss) { Text("Close") }
             }
         },
         title = { Text(feed.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
@@ -1705,11 +1744,11 @@ private fun PodcastEpisodeRow(episode: PodcastEpisode, progress: PodcastProgress
 @Composable
 private fun AddPodcastDialog(onAdd: (url: String) -> Unit, onDismiss: () -> Unit) {
     var url by remember { mutableStateOf("") }
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { RadioTextButton(onClick = onDismiss) { Text("Cancel") } },
         confirmButton = {
-            TextButton(
+            RadioTextButton(
                 enabled = url.isNotBlank(),
                 onClick = { onAdd(url); onDismiss() },
             ) { Text("Add") }
@@ -1739,10 +1778,10 @@ private fun PodcastDirectoryDialog(
     onDismiss: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { RadioTextButton(onClick = onDismiss) { Text("Close") } },
         title = { Text("Podcast directory") },
         text = {
             Column {
@@ -1756,7 +1795,7 @@ private fun PodcastDirectoryDialog(
                         keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { onSearch(query) }) { Text("Go") }
+                    RadioTextButton(onClick = { onSearch(query) }) { Text("Go") }
                 }
                 Spacer(Modifier.padding(4.dp))
                 when {

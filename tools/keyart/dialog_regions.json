@@ -1,0 +1,18 @@
+{
+ "frame": {
+  "size": [
+   192,
+   192
+  ],
+  "inset": 64
+ },
+ "button": {
+  "size": [
+   128,
+   96
+  ],
+  "insetX": 40,
+  "insetTop": 34,
+  "insetBottom": 44
+ }
+}

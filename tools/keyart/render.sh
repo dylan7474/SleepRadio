@@ -21,3 +21,13 @@ for s in out in lit; do
     --screenshot="round_$s.png" "file://$PWD/round_$s.svg"
   python3 -c "from PIL import Image; Image.open('round_$s.png').convert('RGBA').save('../../app/src/main/res/drawable-nodpi/round_key_$s.webp','WEBP',lossless=True,quality=100,method=6)"
 done
+
+# ---- radio-style dialogs: 9-slice frame + push buttons ----
+python3 make_dialog.py .
+for spec in "dialog_frame 192 192" "dialog_button_out 128 96" "dialog_button_in 128 96"; do
+  set -- $spec
+  google-chrome-stable --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
+    --force-device-scale-factor=1 --default-background-color=00000000 --window-size=$2,$3 \
+    --screenshot="$1.png" "file://$PWD/$1.svg"
+  python3 -c "from PIL import Image; Image.open('$1.png').convert('RGBA').save('../../app/src/main/res/drawable-nodpi/$1.webp','WEBP',lossless=True,quality=100,method=6)"
+done

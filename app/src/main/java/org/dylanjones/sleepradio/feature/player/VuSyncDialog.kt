@@ -1,5 +1,10 @@
 package org.dylanjones.sleepradio.feature.player
 
+import org.dylanjones.sleepradio.core.design.RadioDialog
+import org.dylanjones.sleepradio.core.design.RadioLamp
+import org.dylanjones.sleepradio.core.design.RadioSlider
+import org.dylanjones.sleepradio.core.design.RadioSwitch
+import org.dylanjones.sleepradio.core.design.RadioTextButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,14 +15,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,10 +52,10 @@ fun VuSyncDialog(
     onCalDismiss: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    RadioDialog(
         onDismissRequest = { onCalDismiss(); onDismiss() },
         confirmButton = {
-            TextButton(onClick = { onCalDismiss(); onDismiss() }) { Text("Close") }
+            RadioTextButton(onClick = { onCalDismiss(); onDismiss() }) { Text("Close") }
         },
         title = { Text("VU meter sync") },
         text = {
@@ -128,7 +130,7 @@ private fun CalibrationSection(
                 )
             }
             Spacer(Modifier.height(6.dp))
-            TextButton(onClick = onDone) { Text("Stop") }
+            RadioTextButton(onClick = onDone) { Text("Stop") }
         }
 
         is VuCalibrator.Progress.Done -> {
@@ -137,12 +139,12 @@ private fun CalibrationSection(
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
             )
-            TextButton(onClick = onDone) { Text("OK") }
+            RadioTextButton(onClick = onDone) { Text("OK") }
         }
 
         is VuCalibrator.Progress.Failed -> {
             Text(state.reason, fontSize = 12.sp)
-            TextButton(onClick = onDone) { Text("Back") }
+            RadioTextButton(onClick = onDone) { Text("Back") }
         }
     }
 }
@@ -157,7 +159,7 @@ private fun DelaySlider(label: String, ms: Int, onChange: (Int) -> Unit) {
             Text(label, fontSize = 13.sp)
             Text("$ms ms", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
-        Slider(
+        RadioSlider(
             value = ms.toFloat(),
             onValueChange = { onChange((it / 10f).roundToInt() * 10) },
             valueRange = 0f..VU_DELAY_MAX_MS.toFloat(),
