@@ -25,6 +25,7 @@ import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.audio.VuCalibrator
 import org.dylanjones.sleepradio.core.audio.VuLevels
 import org.dylanjones.sleepradio.core.broadcast.BroadcastConfig
+import org.dylanjones.sleepradio.core.news.resolveNewsPack
 import org.dylanjones.sleepradio.core.broadcast.BroadcastTrack
 import org.dylanjones.sleepradio.core.broadcast.Chattiness
 import org.dylanjones.sleepradio.core.data.AMBIENT_PATTERN_SLOTS
@@ -695,6 +696,16 @@ class PlayerViewModel @Inject constructor(
                         }
                         val jingleEvery =
                             if (jingles.isNotEmpty()) settings.broadcastJingleEvery.first() else 0
+                        val newsOn = settings.broadcastNewsEnabled.first()
+                        val newsPack = if (newsOn) {
+                            resolveNewsPack(
+                                VoicePackResolver(appContext),
+                                settings.broadcastNewsVoice.first(),
+                                voiceId,
+                            )
+                        } else {
+                            null
+                        }
                         playback.startBroadcast(
                             pool,
                             pack,
@@ -706,7 +717,9 @@ class PlayerViewModel @Inject constructor(
                                 announcerSpeed = settings.broadcastAnnouncerSpeed.first(),
                                 jingleEvery = jingleEvery,
                                 djHooksEnabled = settings.broadcastDjHooks.first(),
+                                newsEnabled = newsOn && newsPack != null,
                             ),
+                            newsVoice = newsPack,
                         )
                         local.value = local.value.copy(nowPlayingRef = slot.refId)
                     } finally {

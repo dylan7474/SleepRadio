@@ -179,4 +179,32 @@ class NewsTextTest {
         )!!
         assertFalse(b, b.any { it.isDigit() || it in "£$€%" })
     }
+
+    // --- signposts between stories ---
+
+    @Test
+    fun `a lone story has no signpost`() {
+        val b = buildBulletinBody(NewsSlot.TOP_OF_HOUR, listOf("Library reopens."), Random(0))!!
+        assertFalse(b, b.contains("First up") || b.contains("And finally"))
+    }
+
+    @Test
+    fun `two stories are first up then and finally`() {
+        val b = buildBulletinBody(NewsSlot.TOP_OF_HOUR, listOf("Alpha.", "Beta."), Random(0))!!
+        assertTrue(b, b.contains("First up, Alpha. And finally, Beta."))
+    }
+
+    @Test
+    fun `middle stories are signposted, in order, without repeats`() {
+        for (seed in 0..30) {
+            val out = signpost(listOf("A one.", "B two.", "C three.", "D four.", "E five."), Random(seed))
+            assertTrue(out, out.startsWith("First up, A one."))
+            assertTrue(out, out.endsWith("And finally, E five."))
+            val leads = Regex("(Also,|And also,|Meanwhile,|In other news,|Elsewhere,) [B-D] ")
+                .findAll(out).map { it.groupValues[1] }.toList()
+            assertEquals(out, 3, leads.size)
+            assertEquals(out, 3, leads.toSet().size)
+            assertTrue(out, out.indexOf("B two") < out.indexOf("C three") && out.indexOf("C three") < out.indexOf("D four"))
+        }
+    }
 }

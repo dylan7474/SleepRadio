@@ -54,11 +54,17 @@ import org.dylanjones.sleepradio.core.broadcast.WindDownPhase
 import org.dylanjones.sleepradio.core.broadcast.buildDjCommentaryPrompt
 import org.dylanjones.sleepradio.core.broadcast.sanitizeAiLine
 import org.dylanjones.sleepradio.core.data.Chapter
+import org.dylanjones.sleepradio.core.news.DueNews
+import org.dylanjones.sleepradio.core.news.NewsRepository
+import org.dylanjones.sleepradio.core.news.NewsSchedule
+import org.dylanjones.sleepradio.core.news.buildBulletinBody
+import org.dylanjones.sleepradio.core.news.bulletinTimeLine
 import org.dylanjones.sleepradio.core.tts.DjVoicePlayer
 import org.dylanjones.sleepradio.core.tts.OfflineTtsEngine
 import org.dylanjones.sleepradio.core.tts.VoicePack
 import org.dylanjones.sleepradio.di.MainDispatcher
 import org.dylanjones.sleepradio.media.Track
+import java.time.LocalDateTime
 import java.time.LocalTime
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -114,6 +120,9 @@ private sealed interface SegueStep {
     /** [uri] null = pull the next one from the shuffle; set = play this exact clip. */
     data class Jingle(val uri: String? = null) : SegueStep
 
+    /** A news bulletin, read in the news voice: a time line worded when it starts, then the prepared body. */
+    class News(val prepared: PreparedNews) : SegueStep
+
     /**
      * The spoken time, worded from the real clock when first needed (a
      * prefetch during the clip before it, or the moment it is spoken) — never
@@ -133,7 +142,15 @@ private sealed interface SegueStep {
     }
 }
 
+/** A bulletin made ahead of its gap: the tidied [headlines] (marked read once spoken) and their synthesised [body]. */
+private class PreparedNews(
+    val due: DueNews,
+    val headlines: List<String>,
+    val body: DjVoicePlayer.Prepared,
+)
+
 private fun SegueStep.describe(): String = when (this) {
+    is SegueStep.News -> "news(${prepared.due.slot})"
     is SegueStep.Say -> "say(\"$text\")"
     is SegueStep.Clock -> "clock"
     is SegueStep.Jingle -> "jingle"
@@ -188,6 +205,23 @@ class PlaybackConnection @Inject constructor(
     private var voicePack: VoicePack? = null
     private var ttsEngine: OfflineTtsEngine? = null
     private var djPlayer: DjVoicePlayer? = null
+
+    // --- Broadcast news (Phase 10) ---
+    // A bulletin is prepared (fetched, tidied, synthesised) during the tracks before a
+    // :00/:30 mark and read in the first gap inside its window. It gets its OWN engine and
+    // player — not the DJ's — so a ~10 s synthesis never holds the DJ engine's lock, and
+    // so the news voice can differ from the DJ's. The engine is loaded per bulletin and
+    // released after it is read.
+    private var newsEnabled: Boolean = false
+    private var newsPack: VoicePack? = null
+    // Kept across broadcasts so restarting one inside a window doesn't re-read the bulletin.
+    private val newsSchedule = NewsSchedule()
+    private val newsRepo = NewsRepository()
+    private var newsEngine: OfflineTtsEngine? = null
+    private var newsPlayer: DjVoicePlayer? = null
+    private var newsPrepKey: String? = null
+    private var newsPrepJob: Job? = null
+    private var newsPrepared: PreparedNews? = null
     private var currentBroadcast: BroadcastTrack? = null
     /**
      * Picks queued beyond [currentBroadcast], in play order (head = next up).
@@ -664,6 +698,7 @@ class PlaybackConnection @Inject constructor(
             // Skip straight to a freshly picked track (drop the pending segue).
             advancing = true
             djPlayer?.stop()
+            newsPlayer?.stop()
             djSpeaking = false
             playingJingle = false
             segueRunning = false
@@ -696,6 +731,8 @@ class PlaybackConnection @Inject constructor(
         voice: VoicePack?,
         jingles: List<JingleClip>,
         config: BroadcastConfig,
+        /** Voice that reads the news when [BroadcastConfig.newsEnabled]; may differ from [voice]. */
+        newsVoice: VoicePack? = null,
     ) {
         val c = controller ?: return
         endBroadcastInternal()
@@ -714,6 +751,8 @@ class PlaybackConnection @Inject constructor(
         showClock = ShowClock(config)
         scriptBuilder = DjScriptBuilder(hooks = if (config.djHooksEnabled) loadHookPool() else null)
         announceEveryTrack = config.announceEveryTrack
+        newsEnabled = config.newsEnabled && newsVoice != null
+        newsPack = newsVoice.takeIf { newsEnabled }
         announcerVolume = config.announcerVolume.coerceIn(0f, 1f)
         announcerSpeed = config.announcerSpeed.coerceIn(0.5f, 2f)
         // Hooks own the plain-link slot; the AI pass would only overwrite them.
@@ -894,6 +933,7 @@ class PlaybackConnection @Inject constructor(
             "after this track: link=$kind jingle=$jingleDue (windDown=$phase)")
         // Keep the lookahead queue topped up (and pre-scanned) while this one plays (Phase 12).
         refillBroadcastQueue()
+        maybePrepareNews(phase)
 
         val builder = scriptBuilder
         val player = djPlayer
@@ -1012,6 +1052,7 @@ class PlaybackConnection @Inject constructor(
     private fun onBroadcastTrackEnded() {
         advancing = true
         segueRunning = true
+        injectNewsIfDue()
         runNextSegueStep()
     }
 
@@ -1033,6 +1074,7 @@ class PlaybackConnection @Inject constructor(
                 }
             }
             is SegueStep.Say -> speakSegueLine(null) { step.text }
+            is SegueStep.News -> speakNews(step.prepared)
             is SegueStep.Clock -> speakSegueLine(step) {
                 scriptBuilder?.let { step.resolve(it) }
             }
@@ -1093,6 +1135,122 @@ class PlaybackConnection @Inject constructor(
             val t0 = SystemClock.elapsedRealtime()
             player.preload(clock.resolve(builder), announcerSpeed)
             Log.d(TAG, "broadcast: clock prefetched in ${SystemClock.elapsedRealtime() - t0}ms")
+        }
+    }
+
+    // --- News bulletins ---
+
+    /**
+     * At a track start: if a :00/:30 bulletin is within [NewsSchedule.PREP_LEAD_MIN] (or its
+     * window is open) and not yet prepared, start preparing it. Idempotent per mark; a
+     * failed attempt (offline, no stories) is retried at the next track start while the
+     * window lasts.
+     */
+    private fun maybePrepareNews(phase: WindDownPhase) {
+        if (!newsEnabled || phase != WindDownPhase.NORMAL) return
+        val pack = newsPack ?: return
+        val due = newsSchedule.prepAt(LocalDateTime.now()) ?: return
+        if (newsPrepKey == due.key) return
+        newsPrepKey = due.key
+        newsPrepared = null
+        newsPrepJob = scope.launch(Dispatchers.Default) {
+            val t0 = SystemClock.elapsedRealtime()
+            val headlines = newsRepo.headlinesFor(due.slot)
+            val bodyText = buildBulletinBody(due.slot, headlines)
+            val prepared = if (bodyText == null) {
+                Log.d(TAG, "broadcast: news ${due.slot} — no stories (offline or nothing new)")
+                null
+            } else {
+                val (player, engine) = withContext(mainDispatcher) { newsVoice(pack) }
+                val body = if (engine.ensureLoaded(pack)) player.prepare(bodyText, announcerSpeed) else null
+                body?.let { PreparedNews(due, headlines, it) }
+            }
+            withContext(mainDispatcher) {
+                if (isBroadcast && newsPrepKey == due.key) {
+                    newsPrepared = prepared
+                    // Nothing to read: allow a retry at the next track start.
+                    if (prepared == null) newsPrepKey = null
+                    Log.d(TAG, "broadcast: news ${due.slot} ${if (prepared != null) "ready" else "not ready"} " +
+                        "in ${SystemClock.elapsedRealtime() - t0}ms (${headlines.size} stories)")
+                }
+            }
+        }
+    }
+
+    /** The news engine and player, created on first use, wired like the DJ's (VU meters, live volume). */
+    private fun newsVoice(pack: VoicePack): Pair<DjVoicePlayer, OfflineTtsEngine> {
+        val engine = newsEngine ?: OfflineTtsEngine().also { newsEngine = it }
+        val player = newsPlayer ?: DjVoicePlayer(engine).apply {
+            onLevel = mixer::reportDjPeak
+            volumeSource = { mixer.state.value.masterGain * announcerVolume }
+        }.also { newsPlayer = it }
+        return player to engine
+    }
+
+    private fun releaseNewsVoice() {
+        val engine = newsEngine
+        newsEngine = null
+        newsPlayer = null
+        if (engine != null) scope.launch(Dispatchers.Default) { engine.release() }
+    }
+
+    /**
+     * The track has just ended: if a prepared bulletin's window is open, make it this gap's
+     * segue — bulletin, then the planned jingle (if any), then the next-track intro. The
+     * link that was planned at track start is dropped. Uses the real clock now, so a
+     * pause/seek/skip can't make the window stale.
+     */
+    private fun injectNewsIfDue() {
+        val prepared = newsPrepared ?: return
+        if (!newsEnabled || startupFirst != null || windDownPhase() != WindDownPhase.NORMAL) return
+        val due = newsSchedule.dueAt(LocalDateTime.now())
+        if (due == null || due.key != prepared.due.key) return
+        newsSchedule.markRead(due)
+        newsPrepared = null
+        val hadJingle = seguePlan.any { it is SegueStep.Jingle }
+        val builder = scriptBuilder
+        val steps = buildList<SegueStep> {
+            add(SegueStep.News(prepared))
+            if (hadJingle) add(SegueStep.Jingle())
+            if (builder != null && djPlayer != null && voicePack != null) {
+                add(SegueStep.Say(builder.introLine(nextBroadcast)))
+            }
+        }
+        seguePlan = ArrayDeque(steps)
+        Log.d(TAG, "broadcast: segue (news) = " + steps.joinToString { it.describe() })
+        // The DJ engine is idle while the news engine talks: have the lines after the
+        // bulletin ready by the time it ends, as the normal plan does.
+        djPlayer?.let { p ->
+            scope.launch(Dispatchers.Default) {
+                steps.forEach { if (it is SegueStep.Say) p.preload(it.text, announcerSpeed) }
+            }
+        }
+    }
+
+    /** Read a prepared bulletin: the time line (worded now, from the real clock), then the body. */
+    private fun speakNews(news: PreparedNews) {
+        val player = newsPlayer ?: run { runNextSegueStep(); return }
+        djSpeaking = true
+        pushSnapshot()
+        val gain = { mixer.state.value.masterGain * announcerVolume }
+        fun finish() {
+            newsRepo.markRead(news.headlines)
+            djSpeaking = false
+            releaseNewsVoice()
+            // A skip during the bulletin already moved on; don't advance twice.
+            if (segueRunning) runNextSegueStep()
+        }
+        scope.launch(Dispatchers.Default) {
+            val timeLine = bulletinTimeLine(news.due.mark, LocalDateTime.now())
+            val ok = player.preload(timeLine, announcerSpeed)
+            withContext(mainDispatcher) {
+                Log.d(TAG, "broadcast: news ${news.due.slot} — \"$timeLine\" then ${news.headlines.size} stories")
+                if (ok) {
+                    player.playPreloaded(gain()) { player.playPrepared(news.body, gain()) { finish() } }
+                } else {
+                    player.playPrepared(news.body, gain()) { finish() }
+                }
+            }
         }
     }
 
@@ -1170,6 +1328,14 @@ class PlaybackConnection @Inject constructor(
         recentTrackHistory.clear()
         djPlayer?.stop()
         djPlayer?.clearCache()
+        newsPrepJob?.cancel()
+        newsPrepJob = null
+        newsPrepKey = null
+        newsPrepared = null
+        newsEnabled = false
+        newsPack = null
+        newsPlayer?.stop()
+        releaseNewsVoice()
         // Halt any leftover Channel-A playback so a restart's welcome doesn't
         // talk over the previous run's track.
         if (wasBroadcasting) runCatching { controller?.pause() }

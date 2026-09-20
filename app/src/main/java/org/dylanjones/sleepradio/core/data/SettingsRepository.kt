@@ -121,6 +121,15 @@ interface SettingsRepository {
 
     suspend fun setBroadcastDjHooks(enabled: Boolean)
 
+    /**
+     * News bulletins in the Broadcast: top stories around :00, softer stories around :30,
+     * read in the gap between tracks. Off by default — it is the only Broadcast feature
+     * that touches the network.
+     */
+    val broadcastNewsEnabled: Flow<Boolean>
+
+    suspend fun setBroadcastNewsEnabled(enabled: Boolean)
+
     // --- Studio-skin VU meter output-latency compensation (Phase 16) ---
 
     /** True = pick the delay by the live output route; false = use [vuDelayCustomMs]. Default true. */

@@ -79,4 +79,6 @@ data class BroadcastConfig(
      * Takes precedence over [aiCommentaryEnabled] for plain links. Off by default.
      */
     val djHooksEnabled: Boolean = false,
+    /** Read news bulletins around :00 / :30 (see `core.news.NewsSchedule`). Off by default. */
+    val newsEnabled: Boolean = false,
 )

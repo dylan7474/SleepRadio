@@ -378,6 +378,7 @@ fun PlayerRoute(
                     onJingleEnabled = broadcastVoiceViewModel::setJingleEnabled,
                     onJingleEvery = broadcastVoiceViewModel::setJingleEvery,
                     onDjHooksEnabled = broadcastVoiceViewModel::setDjHooksEnabled,
+                    onNewsEnabled = broadcastVoiceViewModel::setNewsEnabled,
                     onDownloadStock = broadcastVoiceViewModel::downloadStock,
                     onImport = {
                         importVoiceLauncher.launch(
@@ -690,6 +691,7 @@ private fun BroadcastVoiceDialog(
     onJingleEnabled: (Boolean) -> Unit,
     onJingleEvery: (Int) -> Unit,
     onDjHooksEnabled: (Boolean) -> Unit,
+    onNewsEnabled: (Boolean) -> Unit,
     onDownloadStock: () -> Unit,
     onImport: () -> Unit,
     onRemovePersonal: () -> Unit,
@@ -729,6 +731,20 @@ private fun BroadcastVoiceDialog(
                         subtitle = "Imported on this device",
                         onClick = { onSelect(BROADCAST_VOICE_PERSONAL) },
                     )
+                }
+
+                Spacer(Modifier.padding(4.dp))
+                SectionHeader("NEWS")
+                Text(
+                    "Reads a short bulletin between tracks around the top of the hour " +
+                        "(top stories) and half past (lighter stories). Needs a data " +
+                        "connection; with this off the Broadcast never goes online. " +
+                        "Never plays while the sleep timer is winding down.",
+                    fontSize = 11.sp,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("News bulletins", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Switch(checked = state.newsEnabled, onCheckedChange = onNewsEnabled)
                 }
 
                 Spacer(Modifier.padding(4.dp))

@@ -3,6 +3,8 @@ package org.dylanjones.sleepradio.core.news
 import org.dylanjones.sleepradio.core.broadcast.cardinalWords
 import org.dylanjones.sleepradio.core.broadcast.normalizeForSpeech
 import org.dylanjones.sleepradio.core.broadcast.spokenTime
+import java.time.Duration
+import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.random.Random
 
@@ -160,12 +162,57 @@ internal fun buildBulletin(
     headlines: List<String>,
     timeLine: String,
     rng: Random = Random.Default,
+): String? = buildBulletinBody(slot, headlines, rng)?.let { "$timeLine $it" }
+
+/** The bulletin without its time line: `<intro> <headline> … <outro>`; null when there's nothing to say. */
+internal fun buildBulletinBody(
+    slot: NewsSlot,
+    headlines: List<String>,
+    rng: Random = Random.Default,
 ): String? {
     if (headlines.isEmpty()) return null
     val intros = if (slot == NewsSlot.TOP_OF_HOUR) TOP_INTROS else SOFT_INTROS
-    val body = headlines.joinToString(" ") { normalizeForSpeech(speakableNews(it)) }
-    return "$timeLine ${intros[rng.nextInt(intros.size)]} $body $OUTRO"
+    val stories = headlines.map { normalizeForSpeech(speakableNews(it)) }
+    return "${intros[rng.nextInt(intros.size)]} ${signpost(stories, rng)} $OUTRO"
 }
+
+/**
+ * Join [stories] with spoken signposts — "First up," … "Also," … "And finally," — so
+ * that consecutive headlines don't blend into one run of sentences. A lone story gets
+ * none. The middle ones are drawn without repeats.
+ */
+internal fun signpost(stories: List<String>, rng: Random = Random.Default): String {
+    if (stories.size < 2) return stories.joinToString(" ")
+    val middle = MIDDLE_SIGNPOSTS.shuffled(rng).iterator()
+    return stories.mapIndexed { i, story ->
+        val lead = when (i) {
+            0 -> "First up,"
+            stories.lastIndex -> "And finally,"
+            else -> if (middle.hasNext()) middle.next() else "Also,"
+        }
+        "$lead $story"
+    }.joinToString(" ")
+}
+
+private val MIDDLE_SIGNPOSTS = listOf("Also,", "And also,", "Meanwhile,", "In other news,", "Elsewhere,")
+
+/**
+ * The bulletin's time line, anchored to the [mark] (:00/:30) it belongs to so it reads like
+ * a newsreader — "It's just gone half past five." — and stays literally true for a gap that
+ * lands a few minutes either side. Only when the gap is late enough that "just gone" would
+ * mislead does it fall back to the real clock, rounded like the DJ's.
+ */
+internal fun bulletinTimeLine(mark: LocalDateTime, now: LocalDateTime): String {
+    val minutesPast = Duration.between(mark, now).toMinutes()
+    val markWords = spokenTime(mark.toLocalTime())
+    return when {
+        minutesPast < 0 -> "It's coming up to $markWords."
+        minutesPast <= JUST_GONE_MAX_MIN -> "It's just gone $markWords."
+        else -> "It's ${spokenTime(now.toLocalTime())}."
+    }
+}
+
+private const val JUST_GONE_MAX_MIN = 5L
 
 /** Convenience for the test buttons: the time line for [now] using the DJ's spoken clock. */
 internal fun bulletinTimeLine(now: LocalTime): String = "It's ${spokenTime(now)}."

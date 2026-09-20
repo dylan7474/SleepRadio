@@ -58,7 +58,7 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
         private set
 
     /** A 16-bit mono clip ready to hand straight to an [AudioTrack]. */
-    private class Clip(val pcm: ShortArray, val sampleRate: Int)
+    internal class Clip(val pcm: ShortArray, val sampleRate: Int)
 
     /**
      * Synthesise [text] now (or reuse a cached clip) and hold the result for the
@@ -76,6 +76,25 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
         synchronized(cache) { cache[text] = clip }
         pending = clip
         return true
+    }
+
+    /** A synthesised clip held by the caller (not in the small LRU, so it can't be evicted). */
+    class Prepared internal constructor(internal val clip: Clip)
+
+    /**
+     * Synthesise [text] and return it for a later [playPrepared], leaving [preload]'s
+     * pending clip and cache alone — for a long clip (a news bulletin) made minutes
+     * before it plays. Blocks — call off the main thread. Null if synthesis failed.
+     */
+    fun prepare(text: String, speed: Float = 1.0f): Prepared? {
+        val audio = engine.synth(text, speed) ?: return null
+        return Prepared(toClip(audio))
+    }
+
+    /** Play a clip from [prepare]; [onDone] runs on the main thread when it finishes. */
+    fun playPrepared(prepared: Prepared, volume: Float = 1f, onDone: (() -> Unit)? = null) {
+        pending = prepared.clip
+        playPreloaded(volume, onDone)
     }
 
     fun clearCache() {
