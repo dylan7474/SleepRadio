@@ -1,7 +1,12 @@
 package org.dylanjones.sleepradio.core.data
 
 /** Number of assignable source-preset slots on the player. */
-const val PRESET_COUNT = 4
+/** Channel buttons shown at once; the row is a pager of [PRESET_PAGES] pages of this many. */
+const val PRESETS_PER_PAGE = 4
+const val PRESET_PAGES = 2
+
+/** Total preset slots ("channels"): 1-4 on the first page, 5-8 a swipe away. */
+const val PRESET_COUNT = PRESETS_PER_PAGE * PRESET_PAGES
 
 /** What a preset slot points at. See RETROSYNC_PLAN.md section 2. */
 enum class SourceType { ALBUM, MUSIC_FOLDER, AUDIOBOOK, RADIO, BROADCAST, PODCAST }

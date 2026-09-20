@@ -398,17 +398,19 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { settings.setJinglesTreeUri(treeUri) }
     }
 
-    /** Tap a preset slot: play it if assigned, otherwise open the picker for it. */
+    /**
+     * Tap a preset slot: open the picker if it's empty; play/pause the source if it is the one
+     * already loaded (re-tapping used to restart it — and for the Broadcast, talk a fresh welcome
+     * over the track); otherwise switch to it. See [presetTapAction].
+     */
     fun onPresetClicked(index: Int) {
-        val slot = uiState.value.presets.getOrNull(index)
-        when {
-            slot == null ->
-                local.value = local.value.copy(pickerForSlot = index)
-            // Re-tapping the broadcast preset while it's already on air would
-            // restart the station (and talk a fresh welcome over the track).
-            slot.type == SourceType.BROADCAST && uiState.value.playback.isBroadcast ->
-                Unit
-            else -> playSlot(slot)
+        val ui = uiState.value
+        val slot = ui.presets.getOrNull(index)
+        when (presetTapAction(slot, ui.nowPlayingRef, ui.playback, ui.broadcastStarting)) {
+            PresetTap.PICK_SOURCE -> local.value = local.value.copy(pickerForSlot = index)
+            PresetTap.IGNORE -> Unit
+            PresetTap.TOGGLE_PLAYBACK -> playback.playPause()
+            PresetTap.PLAY -> slot?.let(::playSlot)
         }
     }
 
