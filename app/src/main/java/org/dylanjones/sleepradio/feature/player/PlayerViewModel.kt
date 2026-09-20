@@ -151,6 +151,14 @@ class PlayerViewModel @Inject constructor(
      *  [uiState] so its ~25 Hz updates don't recompose the whole player. */
     val vu: StateFlow<VuLevels> = mixer.vu
 
+    /** Brightness of the lit lamps and windows on the keys (see [SettingsRepository.lampBrightness]). */
+    val lampBrightness: StateFlow<Float> =
+        settings.lampBrightness.stateIn(viewModelScope, SharingStarted.Eagerly, 1f)
+
+    fun setLampBrightness(value: Float) {
+        viewModelScope.launch { settings.setLampBrightness(value) }
+    }
+
     // --- VU meter sync (Phase 16) — collected only by the VU-sync dialog ---
     val vuSyncAuto = settings.vuSyncAuto
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)

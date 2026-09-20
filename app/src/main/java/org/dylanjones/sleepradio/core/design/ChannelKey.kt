@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -101,6 +102,13 @@ private val LabelLit = Color(0xFFFFDB9A)
 private val LabelEmpty = Color(0xFF6F6453)
 private const val FadeMs = 250
 
+/**
+ * How brightly the keys' lamps and lit windows shine, 0.2..1 (the "Lamp brightness" setting). Every
+ * key reads it, so it is provided once at the top of the screen; a lower value blends the lit
+ * artwork down towards its dim version.
+ */
+val LocalLampBrightness = compositionLocalOf { 1f }
+
 /** A symbol that can sit in a key's lit window instead of a number. */
 enum class KeyIcon { MOON, WAVE }
 
@@ -122,7 +130,7 @@ fun ChannelKey(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     empty: Boolean = false,
-    lamp: Float = 1f,
+    lamp: Float = LocalLampBrightness.current,
 ) {
     RadioKey(
         label = label,
@@ -165,7 +173,7 @@ fun ToggleKey(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
-    lamp: Float = 1f,
+    lamp: Float = LocalLampBrightness.current,
     bigLabel: String? = null,
 ) {
     RadioKey(
@@ -231,7 +239,7 @@ private fun RadioKey(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     labelEmpty: Boolean = false,
-    lamp: Float = 1f,
+    lamp: Float = LocalLampBrightness.current,
     bigLabel: String? = null,
     window: @Composable (color: Color, lit: Boolean, artWidth: Dp) -> Unit,
 ) {
@@ -248,7 +256,12 @@ private fun RadioKey(
     val press by animateFloatAsState(if (pressed) 1f else 0f, tween(80), label = "key-press")
 
     val numberColor by animateColorAsState(
-        when { lit -> NumberLit; paused -> NumberPaused; else -> NumberIdle }, tween(FadeMs), label = "number",
+        when {
+            lit && lamp >= 0.6f -> NumberLit       // dark numeral on a bright amber window
+            lit || paused -> NumberPaused          // light numeral when the window is dim
+            else -> NumberIdle
+        },
+        tween(FadeMs), label = "number",
     )
     val labelColor by animateColorAsState(
         when { lit -> LabelLit; paused -> LabelPaused; labelEmpty -> LabelEmpty; else -> LabelIdle },
@@ -304,7 +317,7 @@ private fun RadioKey(
                             style = TextStyle(
                                 platformStyle = PlatformTextStyle(includeFontPadding = false),
                                 lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
-                                shadow = if (lit) Shadow(Color(0xCCFFA632), Offset.Zero, 18f) else null,
+                                shadow = if (lit) Shadow(Color(0xFFFFA632).copy(alpha = 0.8f * lamp), Offset.Zero, 18f) else null,
                             ),
                             // The digits are taller than the window's line box: let them overflow it, centred.
                             modifier = Modifier.wrapContentSize(unbounded = true),
@@ -319,7 +332,7 @@ private fun RadioKey(
                         textAlign = TextAlign.Center,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        style = if (lit) TextStyle(shadow = Shadow(Color(0xCCFFA632), Offset.Zero, 14f)) else TextStyle.Default,
+                        style = if (lit) TextStyle(shadow = Shadow(Color(0xFFFFA632).copy(alpha = 0.8f * lamp), Offset.Zero, 14f)) else TextStyle.Default,
                     )
                 }
             }

@@ -93,6 +93,8 @@ current source fade out rather than disappear, so nothing shifts when you switch
 - Stereo detuned sines; sits outside the BAL crossfade
 
 **Mixer & timer**
+- **Lamp brightness** (menu): dims the lit lamps and windows on the radio keys for a dark bedroom, with a
+  live preview; saved and part of Backup & restore
 - **VOL** = master gain, **BAL** = equal‑power A ↔ B crossfade with a perceptual
   taper, so knob travel near each extreme gets finer control over the quiet channel
   instead of being crammed into a few degrees. Both knobs are remembered across restarts
@@ -105,14 +107,14 @@ current source fade out rather than disappear, so nothing shifts when you switch
 - Keeps the screen awake while you set things up; lets it sleep once the timer is running
 
 **Elsewhere**
-- Live audio‑reactive visualiser strip (`Visualizer` on the output mix; decorative
-  fallback if `RECORD_AUDIO` is declined) — replaced by the VU meters on the Studio skin
+- (The old live audio‑reactive visualiser strip is gone — the analogue VU meters replace it, and
+  the app no longer asks for the microphone except for the optional VU‑sync calibration)
 - **Studio skin**: single control row + two analogue L/R VU meters driven by the
   music and the DJ voice (not the ambient channels), with an output‑latency
   "sync" setting per output route and an optional mic auto‑calibration that
   beeps until it converges
 - Navigation drawer: Now playing · Ambient mix · Sleep timer · Radio stations ·
-  Broadcast voice · skin · VU meter sync · Backup & restore · About
+  Broadcast voice · VU meter sync · Lamp brightness · Backup & restore · About
 - **Backup & restore**: zips DataStore settings, source slots, audiobook/podcast
   progress, and any installed voice packs into one file you choose where to
   keep, and restores them back live. SAF folder grants (Music/Audiobooks/
@@ -177,7 +179,6 @@ core/design     AppSkin / SkinColors, the Studio skin, RotaryKnob, SkinComponent
 core/tts        OfflineTtsEngine (sherpa-onnx), DjVoicePlayer, VoicePack + install/resolve
 feature/player  PlayerRoute / PlayerViewModel / PlayerScreen + dialogs, VuMeters,
                 VuSyncDialog, BroadcastVoiceViewModel
-feature/root    RootViewModel (skin selection)
 media           MusicRepository (SAF folder walk + jingle folder), AudiobookRepository
 playback        PlaybackService (Media3, Channel A, + gain stage + VU level sampler),
                 PlaybackConnection (+ broadcast segue: links, jingles, time checks),

@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.semantics.Role
@@ -48,6 +49,7 @@ private object RoundKeyArt {
 private val GlyphIdle = Color(0xFFE8DDC9)
 private val GlyphLit = Color(0xFFFFE2A8)
 private val GlyphGlow = Color(0xFFFFB347)
+private val GlyphDimAmber = Color(0xFFC79A55)
 
 /**
  * A round 1970s radio pushbutton from bitmap artwork, for PLAY and previous / next. [size] is the
@@ -64,6 +66,7 @@ fun RoundKey(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    lamp: Float = LocalLampBrightness.current,
 ) {
     val outArt = ImageBitmap.imageResource(R.drawable.round_key_out)
     val inArt = ImageBitmap.imageResource(R.drawable.round_key_in)
@@ -87,9 +90,10 @@ fun RoundKey(
             }
             .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick),
     ) {
+        // Pressed-in picture underneath, lit picture blended over it by the lamp brightness.
         Image(outArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, alpha = 1f - down, filterQuality = FilterQuality.High)
-        Image(inArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, alpha = press * (1f - litLevel), filterQuality = FilterQuality.High)
-        Image(litArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, alpha = litLevel, filterQuality = FilterQuality.High)
+        Image(inArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, alpha = down, filterQuality = FilterQuality.High)
+        Image(litArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, alpha = litLevel * lamp.coerceIn(0f, 1f), filterQuality = FilterQuality.High)
 
         Canvas(
             Modifier
@@ -105,8 +109,8 @@ fun RoundKey(
             val path = glyphPath(glyph, cx, cy, g)
             if (litLevel > 0.5f) {
                 // lit: an amber symbol with a soft glow
-                drawPath(path, GlyphGlow.copy(alpha = 0.55f), style = Stroke(width = g * 0.38f, join = StrokeJoin.Round))
-                drawPath(path, GlyphLit)
+                drawPath(path, GlyphGlow.copy(alpha = 0.55f * lamp), style = Stroke(width = g * 0.38f, join = StrokeJoin.Round))
+                drawPath(path, lerp(GlyphDimAmber, GlyphLit, lamp))
             } else {
                 // engraved: a dark edge under the symbol
                 val drop = 2f

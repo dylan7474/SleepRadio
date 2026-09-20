@@ -185,6 +185,13 @@ class SettingsRepositoryImpl @Inject constructor(
         }
     }
 
+    override val lampBrightness: Flow<Float> =
+        dataStore.data.map { (it[KEY_LAMP_BRIGHTNESS] ?: 1f).takeIf { v -> v.isFinite() }?.coerceIn(0.2f, 1f) ?: 1f }
+
+    override suspend fun setLampBrightness(value: Float) {
+        dataStore.edit { it[KEY_LAMP_BRIGHTNESS] = value.coerceIn(0.2f, 1f) }
+    }
+
     override val broadcastNewsQuietStartMin: Flow<Int> =
         dataStore.data.map { it[KEY_BROADCAST_NEWS_QUIET_START] ?: (23 * 60) }
 
@@ -290,6 +297,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_BROADCAST_DJ_HOOKS = booleanPreferencesKey("broadcast_dj_hooks")
         val KEY_BROADCAST_NEWS_ENABLED = booleanPreferencesKey("broadcast_news_enabled")
         val KEY_BROADCAST_NEWS_QUIET_HOURS = booleanPreferencesKey("broadcast_news_quiet_hours")
+        val KEY_LAMP_BRIGHTNESS = floatPreferencesKey("lamp_brightness")
         val KEY_MIXER_VOLUME = floatPreferencesKey("mixer_volume")
         val KEY_MIXER_BALANCE = floatPreferencesKey("mixer_balance")
 
@@ -301,6 +309,7 @@ class SettingsRepositoryImpl @Inject constructor(
             KEY_BROADCAST_NEWS_SPEED.name,
             KEY_MIXER_VOLUME.name,
             KEY_MIXER_BALANCE.name,
+            KEY_LAMP_BRIGHTNESS.name,
         )
         val KEY_BROADCAST_NEWS_QUIET_START = intPreferencesKey("broadcast_news_quiet_start_min")
         val KEY_BROADCAST_NEWS_QUIET_END = intPreferencesKey("broadcast_news_quiet_end_min")

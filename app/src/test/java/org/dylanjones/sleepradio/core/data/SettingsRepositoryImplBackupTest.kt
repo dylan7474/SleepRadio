@@ -163,4 +163,24 @@ class SettingsRepositoryImplBackupTest {
         to.importAll(roundTripThroughJsonText(repo.exportAll()))
         assertEquals(1f, to.broadcastNewsSpeed.first(), 0f)
     }
+
+    @Test
+    fun `lamp brightness defaults to full, persists, clamps and survives backup even at exactly 1_0`() = runTest {
+        val src = File.createTempFile("settings_lamp_src", ".preferences_pb").also { it.deleteOnExit() }
+        val dst = File.createTempFile("settings_lamp_dst", ".preferences_pb").also { it.deleteOnExit() }
+        val repo = newRepo(src)
+        assertEquals(1f, repo.lampBrightness.first(), 0f)
+
+        repo.setLampBrightness(0.45f)
+        assertEquals(0.45f, repo.lampBrightness.first(), 1e-4f)
+        repo.setLampBrightness(0f)                       // below the floor: the lamps never go fully dark
+        assertEquals(0.2f, repo.lampBrightness.first(), 1e-4f)
+        repo.setLampBrightness(7f)
+        assertEquals(1f, repo.lampBrightness.first(), 0f)
+
+        // exactly 1.0 is the value JSON writes without a decimal point
+        val to = newRepo(dst)
+        to.importAll(roundTripThroughJsonText(repo.exportAll()))
+        assertEquals(1f, to.lampBrightness.first(), 0f)
+    }
 }

@@ -129,6 +129,14 @@ interface SettingsRepository {
 
     suspend fun setMixerLevels(levels: MixerLevels)
 
+    /**
+     * How brightly the lit lamps and windows on the keys shine, 0.2..1 (default 1). Lower is easier
+     * on the eyes in a dark bedroom.
+     */
+    val lampBrightness: Flow<Float>
+
+    suspend fun setLampBrightness(value: Float)
+
     /** Quiet hours start / end, minutes since midnight (defaults 23:00 and 06:00). */
     val broadcastNewsQuietStartMin: Flow<Int>
     val broadcastNewsQuietEndMin: Flow<Int>

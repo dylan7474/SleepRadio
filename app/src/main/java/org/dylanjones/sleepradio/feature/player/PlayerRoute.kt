@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -43,6 +44,8 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -85,6 +88,10 @@ import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_PERSONAL
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_STOCK
 import org.dylanjones.sleepradio.core.data.NEWS_VOICE_SAME
 import org.dylanjones.sleepradio.core.design.SkinBackground
+import org.dylanjones.sleepradio.core.design.ChannelKey
+import org.dylanjones.sleepradio.core.design.LocalLampBrightness
+import org.dylanjones.sleepradio.core.design.RoundGlyph
+import org.dylanjones.sleepradio.core.design.RoundKey
 import org.dylanjones.sleepradio.core.design.StudioSkin
 import org.dylanjones.sleepradio.core.tts.VoicePackInstaller
 import org.dylanjones.sleepradio.core.tts.rememberDebugTtsTest
@@ -98,6 +105,7 @@ fun PlayerRoute(
 ) {
     val state by playerViewModel.uiState.collectAsStateWithLifecycle()
     val skin = StudioSkin
+    val lampBrightness by playerViewModel.lampBrightness.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -201,6 +209,7 @@ fun PlayerRoute(
     var podcastAddUrlOpen by remember { mutableStateOf(false) }
     var broadcastVoiceOpen by remember { mutableStateOf(false) }
     var vuSyncOpen by remember { mutableStateOf(false) }
+    var lampOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
     var backupOpen by remember { mutableStateOf(false) }
 
@@ -231,6 +240,7 @@ fun PlayerRoute(
                 onPodcasts = { closeDrawer(); podcastsOpen = true },
                 onBroadcastVoice = { closeDrawer(); broadcastVoiceOpen = true },
                 onVuSync = { closeDrawer(); vuSyncOpen = true },
+                onLampBrightness = { closeDrawer(); lampOpen = true },
                 onAbout = { closeDrawer(); aboutOpen = true },
                 onBackup = { closeDrawer(); backupOpen = true },
                 onTtsTest = onTtsTest?.let { test -> { closeDrawer(); test() } },
@@ -238,7 +248,17 @@ fun PlayerRoute(
         },
     ) {
         SkinBackground(skin) {
+          CompositionLocalProvider(LocalLampBrightness provides lampBrightness) {
             PlayerScreen(state, actions, Modifier.fillMaxSize(), vu = playerViewModel.vu)
+          }
+
+            if (lampOpen) {
+                LampBrightnessDialog(
+                    current = lampBrightness,
+                    onCommit = playerViewModel::setLampBrightness,
+                    onDismiss = { lampOpen = false },
+                )
+            }
 
             if (sleepDialogOpen) {
                 SleepDurationDialog(
@@ -470,6 +490,7 @@ private fun AppDrawer(
     onPodcasts: () -> Unit,
     onBroadcastVoice: () -> Unit,
     onVuSync: () -> Unit,
+    onLampBrightness: () -> Unit,
     onAbout: () -> Unit,
     onBackup: () -> Unit,
     onTtsTest: (() -> Unit)? = null,
@@ -522,6 +543,11 @@ private fun AppDrawer(
                 label = { Text("VU meter sync") },
                 selected = false,
                 onClick = onVuSync,
+            )
+            NavigationDrawerItem(
+                label = { Text("Lamp brightness") },
+                selected = false,
+                onClick = onLampBrightness,
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             NavigationDrawerItem(
@@ -643,6 +669,63 @@ private fun BbcNewsCredit(fontSize: Int) {
             },
         )
     }
+}
+
+/**
+ * Lamp brightness: a slider with a live preview of a lit channel key and a lit PLAY button, so the
+ * effect is visible while dragging. The setting is saved when the slider is released.
+ */
+@Composable
+private fun LampBrightnessDialog(current: Float, onCommit: (Float) -> Unit, onDismiss: () -> Unit) {
+    var value by remember { mutableFloatStateOf(current) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        title = { Text("Lamp brightness") },
+        text = {
+            Column {
+                Text(
+                    "How brightly the lit lamps and windows on the keys shine. Turn it down for a dark bedroom.",
+                    fontSize = 13.sp,
+                )
+                Spacer(Modifier.padding(6.dp))
+                CompositionLocalProvider(LocalLampBrightness provides value) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ChannelKey(
+                            number = 1,
+                            label = "Preview",
+                            active = true,
+                            playing = true,
+                            contentDescription = "Preview of a lit channel key",
+                            onClick = {},
+                            onLongClick = {},
+                            modifier = Modifier.weight(1f).height(70.dp),
+                        )
+                        RoundKey(
+                            glyph = RoundGlyph.PAUSE,
+                            size = 48.dp,
+                            lit = true,
+                            contentDescription = "Preview of a lit play button",
+                            onClick = {},
+                        )
+                    }
+                }
+                Spacer(Modifier.padding(4.dp))
+                Text("Brightness  ${(value * 100).toInt()}%", fontSize = 13.sp)
+                Slider(
+                    value = value,
+                    onValueChange = { value = it },
+                    onValueChangeFinished = { onCommit(value) },
+                    valueRange = 0.2f..1f,
+                    steps = 15,
+                )
+            }
+        },
+    )
 }
 
 @Composable
