@@ -715,6 +715,7 @@ class PlayerViewModel @Inject constructor(
                                 jingleEvery = jingleEvery,
                                 djHooksEnabled = settings.broadcastDjHooks.first(),
                                 newsEnabled = newsOn && newsPack != null,
+                                newsQuietHours = settings.broadcastNewsQuietHours.first(),
                             ),
                             newsVoice = newsPack,
                         )

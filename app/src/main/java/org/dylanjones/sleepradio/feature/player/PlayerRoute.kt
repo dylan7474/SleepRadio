@@ -370,6 +370,7 @@ fun PlayerRoute(
                     onJingleEvery = broadcastVoiceViewModel::setJingleEvery,
                     onDjHooksEnabled = broadcastVoiceViewModel::setDjHooksEnabled,
                     onNewsEnabled = broadcastVoiceViewModel::setNewsEnabled,
+                    onNewsQuietHours = broadcastVoiceViewModel::setNewsQuietHours,
                     onDownloadStock = broadcastVoiceViewModel::downloadStock,
                     onImport = {
                         importVoiceLauncher.launch(
@@ -667,6 +668,7 @@ private fun BroadcastVoiceDialog(
     onJingleEvery: (Int) -> Unit,
     onDjHooksEnabled: (Boolean) -> Unit,
     onNewsEnabled: (Boolean) -> Unit,
+    onNewsQuietHours: (Boolean) -> Unit,
     onDownloadStock: () -> Unit,
     onImport: () -> Unit,
     onRemovePersonal: () -> Unit,
@@ -720,6 +722,18 @@ private fun BroadcastVoiceDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("News bulletins", fontSize = 13.sp, modifier = Modifier.weight(1f))
                     Switch(checked = state.newsEnabled, onCheckedChange = onNewsEnabled)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "No news 11 pm – 6 am",
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = state.newsQuietHours,
+                        onCheckedChange = onNewsQuietHours,
+                        enabled = state.newsEnabled,
+                    )
                 }
 
                 Spacer(Modifier.padding(4.dp))

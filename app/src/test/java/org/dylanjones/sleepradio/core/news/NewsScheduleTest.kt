@@ -5,6 +5,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.LocalDateTime
+import java.time.LocalTime
 
 class NewsScheduleTest {
 
@@ -93,5 +94,55 @@ class BulletinTimeLineTest {
     @Test fun `a late gap falls back to the real clock, not just gone`() {
         val line = bulletinTimeLine(mark, mark.plusMinutes(7))
         assertEquals("It's twenty-five minutes to six.", line)
+    }
+}
+
+class QuietHoursTest {
+    private fun at(h: Int, m: Int) = LocalDateTime.of(2026, 9, 20, h, m)
+    private fun night() = NewsSchedule().apply { quiet = NewsSchedule.OVERNIGHT }
+
+    @Test fun `overnight window wraps midnight, start inclusive and end exclusive`() {
+        val q = NewsSchedule.OVERNIGHT
+        assertEquals(true, LocalTime.of(23, 0) in q)
+        assertEquals(true, LocalTime.of(0, 0) in q)
+        assertEquals(true, LocalTime.of(5, 59) in q)
+        assertEquals(false, LocalTime.of(6, 0) in q)
+        assertEquals(false, LocalTime.of(22, 59) in q)
+        assertEquals(false, LocalTime.of(12, 0) in q)
+    }
+
+    @Test fun `a same-day window works too`() {
+        val q = QuietHours(LocalTime.of(13, 0), LocalTime.of(14, 0))
+        assertEquals(true, LocalTime.of(13, 30) in q)
+        assertEquals(false, LocalTime.of(14, 0) in q)
+    }
+
+    @Test fun `no news during quiet hours`() {
+        val s = night()
+        assertNull(s.dueAt(at(23, 1)))
+        assertNull(s.dueAt(at(23, 31)))
+        assertNull(s.dueAt(at(0, 1)))
+        assertNull(s.dueAt(at(3, 30)))
+        assertNull(s.dueAt(at(5, 31)))
+    }
+
+    @Test fun `no preparing either, so nothing is fetched overnight`() {
+        val s = night()
+        assertNull(s.prepAt(at(22, 45)))   // would prepare the 23:00 bulletin
+        assertNull(s.prepAt(at(2, 20)))
+    }
+
+    @Test fun `the marks either side of the quiet stretch are read`() {
+        val s = night()
+        assertEquals(NewsSlot.HALF_PAST, s.dueAt(at(22, 31))?.slot)     // 22:30, the last one
+        assertEquals(NewsSlot.TOP_OF_HOUR, s.dueAt(at(5, 59))?.slot)    // 06:00, the first one
+        assertEquals(NewsSlot.TOP_OF_HOUR, s.dueAt(at(6, 2))?.slot)
+        assertEquals(NewsSlot.TOP_OF_HOUR, s.prepAt(at(5, 45))?.slot)
+    }
+
+    @Test fun `no quiet hours means news any time`() {
+        val s = NewsSchedule()
+        assertEquals(NewsSlot.HALF_PAST, s.dueAt(at(3, 30))?.slot)
+        assertEquals(NewsSlot.TOP_OF_HOUR, s.dueAt(at(23, 1))?.slot)
     }
 }

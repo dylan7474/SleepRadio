@@ -771,6 +771,7 @@ class PlaybackConnection @Inject constructor(
         announceEveryTrack = config.announceEveryTrack
         newsEnabled = config.newsEnabled && newsVoice != null
         newsPack = newsVoice.takeIf { newsEnabled }
+        newsSchedule.quiet = if (config.newsQuietHours) NewsSchedule.OVERNIGHT else null
         announcerVolume = config.announcerVolume.coerceIn(0f, 1f)
         announcerSpeed = config.announcerSpeed.coerceIn(0.5f, 2f)
         // Hooks own the plain-link slot; the AI pass would only overwrite them.

@@ -173,6 +173,13 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_BROADCAST_NEWS_ENABLED] = enabled }
     }
 
+    override val broadcastNewsQuietHours: Flow<Boolean> =
+        dataStore.data.map { it[KEY_BROADCAST_NEWS_QUIET_HOURS] ?: true }
+
+    override suspend fun setBroadcastNewsQuietHours(enabled: Boolean) {
+        dataStore.edit { it[KEY_BROADCAST_NEWS_QUIET_HOURS] = enabled }
+    }
+
     override val vuSyncAuto: Flow<Boolean> =
         dataStore.data.map { it[KEY_VU_SYNC_AUTO] ?: true }
 
@@ -255,6 +262,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_BROADCAST_AI_COMMENTARY = booleanPreferencesKey("broadcast_ai_commentary")
         val KEY_BROADCAST_DJ_HOOKS = booleanPreferencesKey("broadcast_dj_hooks")
         val KEY_BROADCAST_NEWS_ENABLED = booleanPreferencesKey("broadcast_news_enabled")
+        val KEY_BROADCAST_NEWS_QUIET_HOURS = booleanPreferencesKey("broadcast_news_quiet_hours")
         val KEY_VU_SYNC_AUTO = booleanPreferencesKey("vu_sync_auto")
         val KEY_VU_DELAY_PHONE = intPreferencesKey("vu_delay_phone_ms")
         val KEY_VU_DELAY_BT = intPreferencesKey("vu_delay_bt_ms")

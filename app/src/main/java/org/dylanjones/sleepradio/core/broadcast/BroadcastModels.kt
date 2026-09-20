@@ -81,4 +81,6 @@ data class BroadcastConfig(
     val djHooksEnabled: Boolean = false,
     /** Read news bulletins around :00 / :30 (see `core.news.NewsSchedule`). Off by default. */
     val newsEnabled: Boolean = false,
+    /** With news on, read none from 11 pm to 6 am (`NewsSchedule.OVERNIGHT`). */
+    val newsQuietHours: Boolean = true,
 )

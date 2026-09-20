@@ -63,6 +63,7 @@ class BroadcastVoiceViewModel @Inject constructor(
         /** [org.dylanjones.sleepradio.core.data.NEWS_VOICE_SAME], stock or personal. */
         val newsVoice: String = NEWS_VOICE_SAME,
         val newsEnabled: Boolean = false,
+        val newsQuietHours: Boolean = true,
     )
 
     val uiState: StateFlow<UiState> =
@@ -83,12 +84,14 @@ class BroadcastVoiceViewModel @Inject constructor(
                 settings.broadcastDjHooks,
                 settings.broadcastNewsVoice,
                 settings.broadcastNewsEnabled,
-            ) { install, hooks, newsVoice, newsOn -> arrayOf(install, hooks, newsVoice, newsOn) },
+                settings.broadcastNewsQuietHours,
+            ) { install, hooks, newsVoice, newsOn, quiet -> arrayOf(install, hooks, newsVoice, newsOn, quiet) },
         ) { selected, chat, (vol, speed), (jinEnabled, jinEvery, jinSet), misc ->
             val install = misc[0] as VoicePackInstaller.InstallState
             val hooks = misc[1] as Boolean
             val newsVoice = misc[2] as String
             val newsOn = misc[3] as Boolean
+            val newsQuiet = misc[4] as Boolean
             UiState(
                 selected = selected,
                 stockInstalled = resolver.isInstalled(VoicePackResolver.ID_STOCK),
@@ -103,6 +106,7 @@ class BroadcastVoiceViewModel @Inject constructor(
                 djHooksEnabled = hooks,
                 newsVoice = newsVoice,
                 newsEnabled = newsOn,
+                newsQuietHours = newsQuiet,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
 
@@ -178,5 +182,9 @@ class BroadcastVoiceViewModel @Inject constructor(
 
     fun setNewsEnabled(enabled: Boolean) {
         viewModelScope.launch { settings.setBroadcastNewsEnabled(enabled) }
+    }
+
+    fun setNewsQuietHours(enabled: Boolean) {
+        viewModelScope.launch { settings.setBroadcastNewsQuietHours(enabled) }
     }
 }

@@ -130,6 +130,11 @@ interface SettingsRepository {
 
     suspend fun setBroadcastNewsEnabled(enabled: Boolean)
 
+    /** No news bulletins overnight (11 pm to 6 am). On by default — this is a sleep station. */
+    val broadcastNewsQuietHours: Flow<Boolean>
+
+    suspend fun setBroadcastNewsQuietHours(enabled: Boolean)
+
     // --- Studio-skin VU meter output-latency compensation (Phase 16) ---
 
     /** True = pick the delay by the live output route; false = use [vuDelayCustomMs]. Default true. */
