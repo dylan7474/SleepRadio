@@ -43,9 +43,11 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
      */
     @Volatile var volumeSource: (() -> Float)? = null
 
-    /** Called on the playback thread with the peak (0..1, post-volume) of each
-     *  ~40 ms slice as it's written — lets the Studio skin's VU meters show the
-     *  DJ voice, which plays on its own [AudioTrack] outside the ExoPlayer sink. */
+    /** Called on the playback thread with the peak (0..1) of each ~40 ms slice as
+     *  it's played — lets the Studio skin's VU meters show the DJ voice, which
+     *  plays on its own [AudioTrack] outside the ExoPlayer sink. Deliberately
+     *  PRE-volume: the music meters read the signal before the VOL knob, so a
+     *  post-volume DJ level made the needles barely move at a low VOL setting. */
     @Volatile var onLevel: ((Float) -> Unit)? = null
 
     /** Small LRU of synthesised clips — idents and time-check leads recur. */
@@ -282,7 +284,7 @@ class DjVoicePlayer(private val engine: OfflineTtsEngine) {
                     if (a > pk) pk = a
                     i++
                 }
-                val lvl = pk / 32768f * vol
+                val lvl = pk / 32768f
                 if (lvl > maxLvl) maxLvl = lvl
                 cb(lvl)
             }
