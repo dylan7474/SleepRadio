@@ -31,3 +31,13 @@ for spec in "dialog_frame 192 192" "dialog_button_out 128 96" "dialog_button_in 
     --screenshot="$1.png" "file://$PWD/$1.svg"
   python3 -c "from PIL import Image; Image.open('$1.png').convert('RGBA').save('../../app/src/main/res/drawable-nodpi/$1.webp','WEBP',lossless=True,quality=100,method=6)"
 done
+
+# ---- brass-and-copper instrument panel (top of the screen): plates, window, gauge, porthole, wheel ----
+python3 make_steam.py .
+for spec in "panel 192 192" "plate 240 183" "window 180 138" "tag 120 66" "rail 240 117" "porthole 360 360" "gauge 360 360" "wheel 300 300"; do
+  set -- $spec
+  google-chrome-stable --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
+    --force-device-scale-factor=1 --default-background-color=00000000 --window-size=$2,$3 \
+    --screenshot="steam_$1.png" "file://$PWD/steam_$1.svg"
+  python3 -c "from PIL import Image; Image.open('steam_$1.png').convert('RGBA').save('../../app/src/main/res/drawable-nodpi/steam_$1.webp','WEBP',lossless=True,quality=100,method=6)"
+done

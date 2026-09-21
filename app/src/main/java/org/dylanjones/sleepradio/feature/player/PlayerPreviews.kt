@@ -10,7 +10,7 @@ import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.StudioSkin
 import org.dylanjones.sleepradio.playback.PlaybackState
 
-private val previewState = PlayerUiState(
+internal val previewState = PlayerUiState(
     playback = PlaybackState(
         isConnected = true,
         isPlaying = true,
@@ -32,7 +32,7 @@ private val previewState = PlayerUiState(
     ),
 )
 
-private val noopActions = PlayerActions(
+internal val noopActions = PlayerActions(
     onMenu = {},
     onPresetClick = {},
     onPresetLongClick = {},
@@ -55,3 +55,23 @@ private fun StudioPlayerPreview() {
         PlayerScreen(previewState, noopActions, Modifier.fillMaxSize())
     }
 }
+
+/** Debug-lab helper: the no-op actions with a few overridden. */
+internal fun PlayerActions.copy2(
+    onSeek: (Long) -> Unit = this.onSeek,
+    onPlayPause: () -> Unit = this.onPlayPause,
+): PlayerActions = PlayerActions(
+    onMenu = onMenu,
+    onPresetClick = onPresetClick,
+    onPresetLongClick = onPresetLongClick,
+    onPlayPause = onPlayPause,
+    onNext = onNext,
+    onPrevious = onPrevious,
+    onSeek = onSeek,
+    onVolumeChange = onVolumeChange,
+    onBalanceChange = onBalanceChange,
+    onSleepTap = onSleepTap,
+    onSleepDurationPick = onSleepDurationPick,
+    onNoiseToggle = onNoiseToggle,
+    onNoiseColorPick = onNoiseColorPick,
+)

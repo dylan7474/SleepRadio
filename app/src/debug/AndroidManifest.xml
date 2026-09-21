@@ -5,6 +5,10 @@
         <activity
             android:name="org.dylanjones.sleepradio.debug.AiLabActivity"
             android:exported="true" />
+        <!-- Debug-only: the real player screen from made-up state, NO AUDIO — for checking looks on a device. -->
+        <activity
+            android:name="org.dylanjones.sleepradio.debug.PanelLabActivity"
+            android:exported="true" />
         <!-- Debug-only: does Gemini Nano work from a media foreground service with the screen off? -->
         <service
             android:name="org.dylanjones.sleepradio.debug.AiLabService"

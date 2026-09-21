@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
@@ -97,32 +98,48 @@ private val ButtonStyle = TextStyle(
 /**
  * Stretches [image] (drawn at 3x: one art pixel is 1/3 dp) over the whole box, keeping the four
  * corners and edges at their natural size and stretching only the middle. The insets are in art pixels.
+ * The optional outsets ([outL]…[outB], art pixels) let the picture's transparent shadow margin hang
+ * outside the box, so the visible body of the artwork lines up with the box itself.
  */
-private fun DrawScope.drawNinePatch(image: ImageBitmap, left: Int, top: Int, right: Int, bottom: Int) {
+internal fun DrawScope.drawNinePatch(
+    image: ImageBitmap,
+    left: Int,
+    top: Int,
+    right: Int,
+    bottom: Int,
+    outL: Int = 0,
+    outT: Int = 0,
+    outR: Int = 0,
+    outB: Int = 0,
+) {
     val k = density / 3f
-    val w = size.width.roundToInt()
-    val h = size.height.roundToInt()
+    val ol = outL * k
+    val ot = outT * k
+    val w = (size.width + ol + outR * k).roundToInt()
+    val h = (size.height + ot + outB * k).roundToInt()
     val dl = (left * k).roundToInt()
     val dt = (top * k).roundToInt()
     val dr = (right * k).roundToInt()
     val db = (bottom * k).roundToInt()
-    if (w < dl + dr || h < dt + db) {
-        drawImage(image, dstSize = IntSize(w, h), filterQuality = FilterQuality.High)
-        return
-    }
-    val sx = intArrayOf(0, left, image.width - right, image.width)
-    val sy = intArrayOf(0, top, image.height - bottom, image.height)
-    val dx = intArrayOf(0, dl, w - dr, w)
-    val dy = intArrayOf(0, dt, h - db, h)
-    for (iy in 0..2) for (ix in 0..2) {
-        drawImage(
-            image,
-            srcOffset = IntOffset(sx[ix], sy[iy]),
-            srcSize = IntSize(sx[ix + 1] - sx[ix], sy[iy + 1] - sy[iy]),
-            dstOffset = IntOffset(dx[ix], dy[iy]),
-            dstSize = IntSize(dx[ix + 1] - dx[ix], dy[iy + 1] - dy[iy]),
-            filterQuality = FilterQuality.High,
-        )
+    translate(left = -ol, top = -ot) {
+        if (w < dl + dr || h < dt + db) {
+            drawImage(image, dstSize = IntSize(w, h), filterQuality = FilterQuality.High)
+            return@translate
+        }
+        val sx = intArrayOf(0, left, image.width - right, image.width)
+        val sy = intArrayOf(0, top, image.height - bottom, image.height)
+        val dx = intArrayOf(0, dl, w - dr, w)
+        val dy = intArrayOf(0, dt, h - db, h)
+        for (iy in 0..2) for (ix in 0..2) {
+            drawImage(
+                image,
+                srcOffset = IntOffset(sx[ix], sy[iy]),
+                srcSize = IntSize(sx[ix + 1] - sx[ix], sy[iy + 1] - sy[iy]),
+                dstOffset = IntOffset(dx[ix], dy[iy]),
+                dstSize = IntSize(dx[ix + 1] - dx[ix], dy[iy + 1] - dy[iy]),
+                filterQuality = FilterQuality.High,
+            )
+        }
     }
 }
 

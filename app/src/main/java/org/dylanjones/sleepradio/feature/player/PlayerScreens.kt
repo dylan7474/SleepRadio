@@ -53,7 +53,6 @@ import org.dylanjones.sleepradio.core.design.RoundKey
 import org.dylanjones.sleepradio.core.design.ToggleKey
 import org.dylanjones.sleepradio.core.design.RotaryKnob
 import org.dylanjones.sleepradio.core.design.SkinPanel
-import org.dylanjones.sleepradio.core.design.Wordmark
 
 /** UI callbacks for the player screen. */
 class PlayerActions(
@@ -101,10 +100,13 @@ fun PlayerScreen(
             .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PlayerHeader(onMenu = actions.onMenu) { Wordmark() }
-        Spacer(Modifier.height(6.dp))
-        NowPlayingBlock(state = pb, starting = state.broadcastStarting, onSeek = actions.onSeek)
-        Spacer(Modifier.height(10.dp))
+        TopPanel(
+            state = pb,
+            starting = state.broadcastStarting,
+            onMenu = actions.onMenu,
+            onSeek = actions.onSeek,
+        )
+        Spacer(Modifier.height(14.dp))
 
         SkinPanel(
             Modifier

@@ -134,26 +134,3 @@ fun StaticKnob(
         )
     }
 }
-
-/** SLEEPRADIO / PLAYER wordmark. */
-@Composable
-fun Wordmark(modifier: Modifier = Modifier) {
-    val c = LocalAppSkin.current.colors
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        Text(
-            text = "SLEEPRADIO",
-            color = c.accent,
-            fontSize = 25.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 3.sp,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = "PLAYER",
-            color = c.textSecondary,
-            fontSize = 12.sp,
-            letterSpacing = 8.sp,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
