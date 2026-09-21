@@ -35,6 +35,7 @@ import org.dylanjones.sleepradio.core.data.AMBIENT_PATTERN_SLOTS
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
 import org.dylanjones.sleepradio.core.data.ChannelButtonMode
+import org.dylanjones.sleepradio.core.data.ScreenRotation
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.MixerLevels
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
@@ -158,6 +159,14 @@ class PlayerViewModel @Inject constructor(
 
     fun setChannelButtonMode(mode: ChannelButtonMode) {
         viewModelScope.launch { settings.setChannelButtonMode(mode) }
+    }
+
+    /** Screen rotation: follow the phone, or forced portrait / landscape (see [SettingsRepository.screenRotation]). */
+    val screenRotation: StateFlow<ScreenRotation> =
+        settings.screenRotation.stateIn(viewModelScope, SharingStarted.Eagerly, ScreenRotation.AUTO)
+
+    fun setScreenRotation(mode: ScreenRotation) {
+        viewModelScope.launch { settings.setScreenRotation(mode) }
     }
 
     /** Brightness of the lit lamps and windows on the keys (see [SettingsRepository.lampBrightness]). */

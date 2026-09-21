@@ -34,6 +34,19 @@ enum class ChannelButtonMode(val id: String) {
     }
 }
 
+/** Which way up the screen is held: follow the phone's own auto-rotate setting, or stay put. */
+enum class ScreenRotation(val id: String) {
+    /** Follow the phone's auto-rotate setting (and its rotation lock). */
+    AUTO("auto"),
+    PORTRAIT("portrait"),
+    LANDSCAPE("landscape");
+
+    companion object {
+        /** An unknown or missing saved value falls back to following the phone. */
+        fun fromId(id: String?): ScreenRotation = entries.firstOrNull { it.id == id } ?: AUTO
+    }
+}
+
 /** What a preset slot points at. See RETROSYNC_PLAN.md section 2. */
 enum class SourceType { ALBUM, MUSIC_FOLDER, AUDIOBOOK, RADIO, BROADCAST, PODCAST }
 

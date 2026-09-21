@@ -145,6 +145,11 @@ interface SettingsRepository {
 
     suspend fun setChannelButtonMode(mode: ChannelButtonMode)
 
+    /** Screen rotation: follow the phone's auto-rotate (default), or forced portrait / landscape. Backed up. */
+    val screenRotation: Flow<ScreenRotation>
+
+    suspend fun setScreenRotation(mode: ScreenRotation)
+
     /** Quiet hours start / end, minutes since midnight (defaults 23:00 and 06:00). */
     val broadcastNewsQuietStartMin: Flow<Int>
     val broadcastNewsQuietEndMin: Flow<Int>

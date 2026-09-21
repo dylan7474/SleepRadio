@@ -165,7 +165,7 @@ fun BrassPanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.(
 
 /** The riveted brass nameplate: a title and a small line under it. */
 @Composable
-fun BrassNameplate(title: String, subtitle: String, modifier: Modifier = Modifier) {
+fun BrassNameplate(title: String, subtitle: String, modifier: Modifier = Modifier, scale: Float = 1f) {
     val art = ImageBitmap.imageResource(R.drawable.steam_plate)
     Box(modifier.then(DrawSliceModifier(art, SteamArt.PLATE)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -173,9 +173,9 @@ fun BrassNameplate(title: String, subtitle: String, modifier: Modifier = Modifie
                 text = title,
                 color = PlateInk,
                 fontFamily = Serif,
-                fontSize = fixedSp(20f),
-                lineHeight = fixedSp(22f),
-                letterSpacing = fixedSp(3f),
+                fontSize = fixedSp(20f * scale),
+                lineHeight = fixedSp(22f * scale),
+                letterSpacing = fixedSp(3f * scale),
                 maxLines = 1,
                 style = TextStyle(shadow = Shadow(PlateShine, Offset(0f, 2f), 0f)),
             )
@@ -183,9 +183,9 @@ fun BrassNameplate(title: String, subtitle: String, modifier: Modifier = Modifie
                 text = subtitle,
                 color = PlateInk2,
                 fontFamily = Condensed,
-                fontSize = fixedSp(8f),
-                lineHeight = fixedSp(10f),
-                letterSpacing = fixedSp(3.4f),
+                fontSize = fixedSp(8f * scale),
+                lineHeight = fixedSp(10f * scale),
+                letterSpacing = fixedSp(3.4f * scale),
                 maxLines = 1,
                 style = TextStyle(shadow = Shadow(PlateShine, Offset(0f, 2f), 0f)),
             )
@@ -195,11 +195,11 @@ fun BrassNameplate(title: String, subtitle: String, modifier: Modifier = Modifie
 
 /** A small brass label plate (ARTIST, TRACK…). */
 @Composable
-fun BrassTag(text: String, modifier: Modifier = Modifier) {
+fun BrassTag(text: String, modifier: Modifier = Modifier, height: Dp = 16.dp) {
     val art = ImageBitmap.imageResource(R.drawable.steam_tag)
     Box(
         modifier
-            .height(16.dp)
+            .height(height)
             .then(DrawSliceModifier(art, SteamArt.TAG))
             .padding(horizontal = 9.dp),
         contentAlignment = Alignment.Center,
@@ -219,13 +219,13 @@ fun BrassTag(text: String, modifier: Modifier = Modifier) {
 
 /** A brass-framed dark glass window with amber text that scrolls when it is too long for the glass. */
 @Composable
-fun GlassWindow(text: String, modifier: Modifier = Modifier) {
+fun GlassWindow(text: String, modifier: Modifier = Modifier, height: Dp = 34.dp, textDp: Float = 19f) {
     val art = ImageBitmap.imageResource(R.drawable.steam_window)
     val lamp = LocalLampBrightness.current
     Box(
         modifier
             .fillMaxWidth()
-            .height(34.dp)
+            .height(height)
             .then(DrawSliceModifier(art, SteamArt.WINDOW))
             .padding(horizontal = 3.dp, vertical = 3.dp)
             .clipToBounds(),
@@ -235,8 +235,8 @@ fun GlassWindow(text: String, modifier: Modifier = Modifier) {
             text = text,
             color = lerp(AmberDim, AmberHot, lamp),
             fontFamily = Condensed,
-            fontSize = fixedSp(19f),
-            lineHeight = fixedSp(22f),
+            fontSize = fixedSp(textDp),
+            lineHeight = fixedSp(textDp * 22f / 19f),
             letterSpacing = fixedSp(0.9f),
             maxLines = 1,
             softWrap = false,

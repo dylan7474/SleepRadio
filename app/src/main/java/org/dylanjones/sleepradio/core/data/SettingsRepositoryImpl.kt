@@ -199,6 +199,13 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_CHANNEL_BUTTON_MODE] = mode.id }
     }
 
+    override val screenRotation: Flow<ScreenRotation> =
+        dataStore.data.map { ScreenRotation.fromId(it[KEY_SCREEN_ROTATION]) }
+
+    override suspend fun setScreenRotation(mode: ScreenRotation) {
+        dataStore.edit { it[KEY_SCREEN_ROTATION] = mode.id }
+    }
+
     override val broadcastNewsQuietStartMin: Flow<Int> =
         dataStore.data.map { it[KEY_BROADCAST_NEWS_QUIET_START] ?: (23 * 60) }
 
@@ -306,6 +313,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_BROADCAST_NEWS_QUIET_HOURS = booleanPreferencesKey("broadcast_news_quiet_hours")
         val KEY_LAMP_BRIGHTNESS = floatPreferencesKey("lamp_brightness")
         val KEY_CHANNEL_BUTTON_MODE = stringPreferencesKey("channel_button_mode")
+        val KEY_SCREEN_ROTATION = stringPreferencesKey("screen_rotation")
         val KEY_MIXER_VOLUME = floatPreferencesKey("mixer_volume")
         val KEY_MIXER_BALANCE = floatPreferencesKey("mixer_balance")
 

@@ -1,5 +1,9 @@
 package org.dylanjones.sleepradio.feature.player
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -43,6 +47,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
@@ -96,6 +101,7 @@ import org.dylanjones.sleepradio.core.design.RadioTextButton
 import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.ChannelKey
 import org.dylanjones.sleepradio.core.data.ChannelButtonMode
+import org.dylanjones.sleepradio.core.data.ScreenRotation
 import org.dylanjones.sleepradio.core.design.LocalChannelButtonMode
 import org.dylanjones.sleepradio.core.design.LocalLampBrightness
 import org.dylanjones.sleepradio.core.design.RoundGlyph
@@ -115,8 +121,20 @@ fun PlayerRoute(
     val skin = StudioSkin
     val lampBrightness by playerViewModel.lampBrightness.collectAsStateWithLifecycle()
     val channelMode by playerViewModel.channelButtonMode.collectAsStateWithLifecycle()
+    val rotation by playerViewModel.screenRotation.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+
+    // Apply the chosen screen rotation to the activity. "Auto" hands control back to the phone's own setting.
+    LaunchedEffect(rotation, context) {
+        var c: Context? = context
+        while (c is ContextWrapper && c !is Activity) c = c.baseContext
+        (c as? Activity)?.requestedOrientation = when (rotation) {
+            ScreenRotation.AUTO -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            ScreenRotation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            ScreenRotation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+    }
 
     // Keep the screen awake while the player is on screen, so the phone doesn't
     // dim mid-setup. Once a sleep timer is running, let it dim/sleep normally.
@@ -220,6 +238,7 @@ fun PlayerRoute(
     var vuSyncOpen by remember { mutableStateOf(false) }
     var lampOpen by remember { mutableStateOf(false) }
     var channelModeOpen by remember { mutableStateOf(false) }
+    var rotationOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
     var backupOpen by remember { mutableStateOf(false) }
 
@@ -252,6 +271,7 @@ fun PlayerRoute(
                 onVuSync = { closeDrawer(); vuSyncOpen = true },
                 onLampBrightness = { closeDrawer(); lampOpen = true },
                 onChannelButtons = { closeDrawer(); channelModeOpen = true },
+                onScreenRotation = { closeDrawer(); rotationOpen = true },
                 onAbout = { closeDrawer(); aboutOpen = true },
                 onBackup = { closeDrawer(); backupOpen = true },
                 onTtsTest = onTtsTest?.let { test -> { closeDrawer(); test() } },
@@ -265,6 +285,14 @@ fun PlayerRoute(
           ) {
             PlayerScreen(state, actions, Modifier.fillMaxSize(), vu = playerViewModel.vu)
           }
+
+            if (rotationOpen) {
+                ScreenRotationDialog(
+                    current = rotation,
+                    onPick = { playerViewModel.setScreenRotation(it) },
+                    onDismiss = { rotationOpen = false },
+                )
+            }
 
             if (channelModeOpen) {
                 ChannelButtonsDialog(
@@ -514,6 +542,7 @@ private fun AppDrawer(
     onVuSync: () -> Unit,
     onLampBrightness: () -> Unit,
     onChannelButtons: () -> Unit,
+    onScreenRotation: () -> Unit,
     onAbout: () -> Unit,
     onBackup: () -> Unit,
     onTtsTest: (() -> Unit)? = null,
@@ -608,6 +637,11 @@ private fun AppDrawer(
                 label = { Text("Channel buttons") },
                 selected = false,
                 onClick = onChannelButtons,
+            )
+            NavigationDrawerItem(
+                label = { Text("Screen rotation") },
+                selected = false,
+                onClick = onScreenRotation,
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             NavigationDrawerItem(
@@ -758,6 +792,37 @@ private fun ChannelButtonsDialog(current: ChannelButtonMode, onPick: (ChannelBut
                     title = "One big button",
                     subtitle = "A single large button at a time. Swipe sideways to move to the next channel. Easiest to see.",
                     onClick = { onPick(ChannelButtonMode.BIG) },
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun ScreenRotationDialog(current: ScreenRotation, onPick: (ScreenRotation) -> Unit, onDismiss: () -> Unit) {
+    RadioDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { RadioTextButton(onClick = onDismiss) { Text("Done") } },
+        title = { Text("Screen rotation") },
+        text = {
+            Column {
+                VoiceOptionRow(
+                    selected = current == ScreenRotation.AUTO,
+                    title = "Auto-rotate",
+                    subtitle = "Follow the phone's own rotation setting",
+                    onClick = { onPick(ScreenRotation.AUTO) },
+                )
+                VoiceOptionRow(
+                    selected = current == ScreenRotation.PORTRAIT,
+                    title = "Always portrait",
+                    subtitle = "Stay upright, even when the phone is turned",
+                    onClick = { onPick(ScreenRotation.PORTRAIT) },
+                )
+                VoiceOptionRow(
+                    selected = current == ScreenRotation.LANDSCAPE,
+                    title = "Always landscape",
+                    subtitle = "Stay sideways, even when the phone is held upright",
+                    onClick = { onPick(ScreenRotation.LANDSCAPE) },
                 )
             }
         },

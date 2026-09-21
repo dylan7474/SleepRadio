@@ -27,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -96,6 +97,11 @@ fun PlayerScreen(
     vu: StateFlow<VuLevels> = remember { MutableStateFlow(VuLevels.SILENT) },
 ) {
     val pb = state.playback
+    val config = LocalConfiguration.current
+    if (config.screenWidthDp > config.screenHeightDp) {
+        LandscapePlayer(state, actions, vu, modifier)
+        return
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -171,7 +177,7 @@ fun PlayerScreen(
  * opens on the page holding the playing channel.
  */
 @Composable
-private fun PresetRow(state: PlayerUiState, actions: PlayerActions, modifier: Modifier) {
+internal fun PresetRow(state: PlayerUiState, actions: PlayerActions, modifier: Modifier) {
     val mode = LocalChannelButtonMode.current
     val scope = rememberCoroutineScope()
     val colors = LocalAppSkin.current.colors
@@ -292,35 +298,46 @@ private fun AmbientTiles(
     modifier: Modifier,
 ) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        val minutesLeft = ((state.sleepRemainingMs + 59_999L) / 60_000L).coerceAtLeast(0L)
-        ToggleKey(
-            icon = KeyIcon.MOON,
-            label = "SLEEP\n${state.sleepDurationMin} MIN",
-            // While counting down: just the minutes left, as big as the window allows — no word.
-            bigLabel = if (state.sleepActive) "$minutesLeft" else null,
-            on = state.sleepActive,
-            contentDescription = if (state.sleepActive) {
-                "Sleep timer running, ${formatTime(state.sleepRemainingMs)} left. Double tap to cancel."
-            } else {
-                "Sleep timer, ${state.sleepDurationMin} minutes. Double tap to start, long press to change."
-            },
-            onClick = actions.onSleepTap,
-            onLongClick = actions.onSleepDurationPick,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-        )
-        val binauralOn = state.binaural != BinauralPreset.OFF
-        ToggleKey(
-            icon = KeyIcon.WAVE,
-            label = "NOISE\n" + ambientSummary(state.noiseEnabled, state.noiseColor, binauralOn),
-            on = state.noiseEnabled || binauralOn,
-            contentDescription = "Noise and binaural: " +
-                ambientSummary(state.noiseEnabled, state.noiseColor, binauralOn) +
-                ". Double tap to toggle noise, long press for the ambient mix.",
-            onClick = actions.onNoiseToggle,
-            onLongClick = actions.onNoiseColorPick,
-            modifier = Modifier.weight(1f).fillMaxHeight(),
-        )
+        SleepKey(state, actions, Modifier.weight(1f).fillMaxHeight())
+        NoiseKey(state, actions, Modifier.weight(1f).fillMaxHeight())
     }
+}
+
+/** The SLEEP key. While the timer runs it shows just the minutes left, as big as its window allows. */
+@Composable
+internal fun SleepKey(state: PlayerUiState, actions: PlayerActions, modifier: Modifier) {
+    val minutesLeft = ((state.sleepRemainingMs + 59_999L) / 60_000L).coerceAtLeast(0L)
+    ToggleKey(
+        icon = KeyIcon.MOON,
+        label = "SLEEP\n${state.sleepDurationMin} MIN",
+        bigLabel = if (state.sleepActive) "$minutesLeft" else null,
+        on = state.sleepActive,
+        contentDescription = if (state.sleepActive) {
+            "Sleep timer running, ${formatTime(state.sleepRemainingMs)} left. Double tap to cancel."
+        } else {
+            "Sleep timer, ${state.sleepDurationMin} minutes. Double tap to start, long press to change."
+        },
+        onClick = actions.onSleepTap,
+        onLongClick = actions.onSleepDurationPick,
+        modifier = modifier,
+    )
+}
+
+/** The NOISE key: noise and binaural beats. */
+@Composable
+internal fun NoiseKey(state: PlayerUiState, actions: PlayerActions, modifier: Modifier) {
+    val binauralOn = state.binaural != BinauralPreset.OFF
+    ToggleKey(
+        icon = KeyIcon.WAVE,
+        label = "NOISE\n" + ambientSummary(state.noiseEnabled, state.noiseColor, binauralOn),
+        on = state.noiseEnabled || binauralOn,
+        contentDescription = "Noise and binaural: " +
+            ambientSummary(state.noiseEnabled, state.noiseColor, binauralOn) +
+            ". Double tap to toggle noise, long press for the ambient mix.",
+        onClick = actions.onNoiseToggle,
+        onLongClick = actions.onNoiseColorPick,
+        modifier = modifier,
+    )
 }
 
 internal fun NoiseColor.label(): String = when (this) {

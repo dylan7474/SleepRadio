@@ -25,6 +25,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import org.dylanjones.sleepradio.core.design.BrassNameplate
 import org.dylanjones.sleepradio.core.design.BrassPanel
 import org.dylanjones.sleepradio.core.design.BrassTag
@@ -141,6 +142,75 @@ fun TopPanel(
     }
 }
 
+/**
+ * The landscape version of [TopPanel]: the same instruments laid along one strip, left to right —
+ * hand-wheel + nameplate over the status lamp, porthole, the two readout windows, gauge, then time
+ * and slide rule. Nothing is added or removed compared with the portrait panel; only the arrangement
+ * changes. [t] (0..1) says how much height there is to spare: the whole strip scales with it.
+ */
+@Composable
+fun LandscapeTopPanel(
+    state: PlaybackState,
+    starting: Boolean,
+    onMenu: () -> Unit,
+    onSeek: (Long) -> Unit,
+    t: Float,
+    modifier: Modifier = Modifier,
+) {
+    val readouts = readoutsFor(state, starting)
+    val status = statusTextFor(state, starting)
+    val seekable = !state.isRadio && state.durationMs > 0
+    val fraction = if (seekable) SteamMath.progressFraction(state.positionMs, state.durationMs) else 0f
+    val art = rememberAlbumArt(state.artworkUri, state.mediaUri)
+    val ghost by animateFloatAsState(if (!state.isRadio) 1f else INACTIVE_ALPHA, tween(FADE_MS), label = "seek-ghost")
+
+    val tagH = lerp(13.dp, 15.dp, t)
+    val winH = lerp(26.dp, 32.dp, t)
+    val dial = (tagH + 1.dp + winH) * 2 + 4.dp   // the porthole and gauge are as tall as the two readouts
+    val ruleH = lerp(38.dp, 46.dp, t)
+
+    BrassPanel(modifier.fillMaxWidth()) {
+        Row(
+            Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.width(150.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SteamWheel(onClick = onMenu, contentDescription = "Open menu", size = 38.dp)
+                    BrassNameplate("SLEEPRADIO", "WIRELESS PLAYER", Modifier.weight(1f).height(34.dp), scale = 0.62f)
+                }
+                StatusRow(status)
+            }
+            Spacer(Modifier.width(8.dp))
+            Porthole(art = art, size = dial)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1.1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    BrassTag(readouts.label1, height = tagH)
+                    GlassWindow(readouts.value1, height = winH, textDp = 17f)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    BrassTag(readouts.label2, height = tagH)
+                    GlassWindow(readouts.value2, height = winH, textDp = 17f)
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            SteamGauge(fraction = fraction, size = dial, modifier = Modifier.alpha(ghost))
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                TimeReadout(state, seekable, Modifier.alpha(ghost), sizeDp = lerp(26.dp, 30.dp, t).value)
+                SlideRule(
+                    fraction = fraction,
+                    enabled = seekable,
+                    onSeekFraction = { f -> onSeek(SteamMath.seekMs(f, state.durationMs)) },
+                    valueText = "${formatTime(state.positionMs)} of ${formatTime(state.durationMs)}",
+                    modifier = Modifier.height(ruleH).alpha(ghost),
+                )
+            }
+        }
+    }
+}
+
 /** The lamp and its words. The row is always laid out; only the lamp and the text change. */
 @Composable
 private fun StatusRow(status: String?) {
@@ -170,15 +240,15 @@ private fun StatusRow(status: String?) {
 
 /** The big amber elapsed time and the smaller total. */
 @Composable
-private fun TimeReadout(state: PlaybackState, seekable: Boolean, modifier: Modifier = Modifier) {
+private fun TimeReadout(state: PlaybackState, seekable: Boolean, modifier: Modifier = Modifier, sizeDp: Float = 30f) {
     val lamp = LocalLampBrightness.current
     val d = LocalDensity.current
     Row(modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.Bottom) {
         Text(
             text = if (seekable) formatTime(state.positionMs) else "0:00",
             color = Color(0xFFFFCB74),
-            fontSize = with(d) { 30.dp.toSp() },
-            lineHeight = with(d) { 32.dp.toSp() },
+            fontSize = with(d) { sizeDp.dp.toSp() },
+            lineHeight = with(d) { (sizeDp + 2f).dp.toSp() },
             fontFamily = SteamCondensed,
             letterSpacing = with(d) { 1.dp.toSp() },
             style = TextStyle(shadow = Shadow(Color(0xFFFFAA3C).copy(alpha = 0.8f * lamp), Offset.Zero, 20f)),
