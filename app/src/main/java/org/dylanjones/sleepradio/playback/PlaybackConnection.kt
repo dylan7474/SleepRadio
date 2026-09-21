@@ -731,6 +731,19 @@ class PlaybackConnection @Inject constructor(
         }
     }
 
+    /**
+     * NEXT as every remote and the on-screen key mean it: +1 minute in an audiobook or podcast episode,
+     * otherwise the next track (a fresh pick in a Broadcast).
+     */
+    fun transportNext() {
+        if (isAudiobook || isPodcast) skipBy(60_000L) else next()
+    }
+
+    /** PREVIOUS as every remote and the on-screen key mean it: −1 minute in an audiobook or podcast, else the previous track. */
+    fun transportPrevious() {
+        if (isAudiobook || isPodcast) skipBy(-60_000L) else previous()
+    }
+
     fun previous() {
         if (isBroadcast) controller?.seekTo(0) else controller?.seekToPreviousMediaItem()
     }

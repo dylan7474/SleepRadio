@@ -802,21 +802,11 @@ class PlayerViewModel @Inject constructor(
 
     fun playPause() = playback.playPause()
 
-    /** Audiobook / podcast episode: jump +1 min. Otherwise: next track in the queue. */
-    fun next() =
-        if (uiState.value.playback.isAudiobook || uiState.value.playback.isPodcast) {
-            playback.skipBy(60_000L)
-        } else {
-            playback.next()
-        }
+    /** Audiobook / podcast episode: jump +1 min. Otherwise: next track in the queue. Same as every remote's NEXT. */
+    fun next() = playback.transportNext()
 
-    /** Audiobook / podcast episode: jump −1 min. Otherwise: previous track in the queue. */
-    fun previous() =
-        if (uiState.value.playback.isAudiobook || uiState.value.playback.isPodcast) {
-            playback.skipBy(-60_000L)
-        } else {
-            playback.previous()
-        }
+    /** Audiobook / podcast episode: jump −1 min. Otherwise: previous track in the queue. Same as every remote's PREVIOUS. */
+    fun previous() = playback.transportPrevious()
 
     fun seekTo(positionMs: Long) = playback.seekTo(positionMs)
 

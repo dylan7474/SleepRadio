@@ -56,6 +56,7 @@ class PlaybackService : MediaSessionService() {
     interface Deps {
         fun mixer(): MixerController
         fun settings(): SettingsRepository
+        fun playback(): PlaybackConnection
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -146,7 +147,13 @@ class PlaybackService : MediaSessionService() {
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
-        mediaSession = MediaSession.Builder(this, player).build()
+        // Remote controls (Bluetooth, lock screen, notification) reach the app's own transport through
+        // [RemoteControlPlayer]. Fetched lazily: PlaybackConnection binds back to this very service.
+        val transport by lazy { deps.playback() }
+        mediaSession = MediaSession.Builder(
+            this,
+            RemoteControlPlayer(player, onNext = { transport.transportNext() }, onPrevious = { transport.transportPrevious() }),
+        ).build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
