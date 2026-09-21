@@ -34,6 +34,7 @@ import org.dylanjones.sleepradio.core.broadcast.Chattiness
 import org.dylanjones.sleepradio.core.data.AMBIENT_PATTERN_SLOTS
 import org.dylanjones.sleepradio.core.data.Audiobook
 import org.dylanjones.sleepradio.core.data.BROADCAST_VOICE_OFF
+import org.dylanjones.sleepradio.core.data.ChannelButtonMode
 import org.dylanjones.sleepradio.core.data.FolderAlbum
 import org.dylanjones.sleepradio.core.data.MixerLevels
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
@@ -150,6 +151,14 @@ class PlayerViewModel @Inject constructor(
     /** Live Channel-A L/R output level for the Studio skin's VU meters. Kept off
      *  [uiState] so its ~25 Hz updates don't recompose the whole player. */
     val vu: StateFlow<VuLevels> = mixer.vu
+
+    /** How the channel buttons are shown (see [SettingsRepository.channelButtonMode]). */
+    val channelButtonMode: StateFlow<ChannelButtonMode> =
+        settings.channelButtonMode.stateIn(viewModelScope, SharingStarted.Eagerly, ChannelButtonMode.GRID)
+
+    fun setChannelButtonMode(mode: ChannelButtonMode) {
+        viewModelScope.launch { settings.setChannelButtonMode(mode) }
+    }
 
     /** Brightness of the lit lamps and windows on the keys (see [SettingsRepository.lampBrightness]). */
     val lampBrightness: StateFlow<Float> =

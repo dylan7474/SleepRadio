@@ -183,4 +183,19 @@ class SettingsRepositoryImplBackupTest {
         to.importAll(roundTripThroughJsonText(repo.exportAll()))
         assertEquals(1f, to.lampBrightness.first(), 0f)
     }
+
+    @Test
+    fun `channel button mode defaults to grid, persists, and survives backup`() = runTest {
+        val src = File.createTempFile("settings_chmode_src", ".preferences_pb").also { it.deleteOnExit() }
+        val dst = File.createTempFile("settings_chmode_dst", ".preferences_pb").also { it.deleteOnExit() }
+        val repo = newRepo(src)
+        assertEquals(ChannelButtonMode.GRID, repo.channelButtonMode.first())
+
+        repo.setChannelButtonMode(ChannelButtonMode.BIG)
+        assertEquals(ChannelButtonMode.BIG, repo.channelButtonMode.first())
+
+        val to = newRepo(dst)
+        to.importAll(roundTripThroughJsonText(repo.exportAll()))
+        assertEquals(ChannelButtonMode.BIG, to.channelButtonMode.first())
+    }
 }

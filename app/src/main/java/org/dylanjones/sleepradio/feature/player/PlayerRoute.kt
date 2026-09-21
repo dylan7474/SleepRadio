@@ -95,6 +95,8 @@ import org.dylanjones.sleepradio.core.design.RadioSwitch
 import org.dylanjones.sleepradio.core.design.RadioTextButton
 import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.ChannelKey
+import org.dylanjones.sleepradio.core.data.ChannelButtonMode
+import org.dylanjones.sleepradio.core.design.LocalChannelButtonMode
 import org.dylanjones.sleepradio.core.design.LocalLampBrightness
 import org.dylanjones.sleepradio.core.design.RoundGlyph
 import org.dylanjones.sleepradio.core.design.RoundKey
@@ -112,6 +114,7 @@ fun PlayerRoute(
     val state by playerViewModel.uiState.collectAsStateWithLifecycle()
     val skin = StudioSkin
     val lampBrightness by playerViewModel.lampBrightness.collectAsStateWithLifecycle()
+    val channelMode by playerViewModel.channelButtonMode.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -216,6 +219,7 @@ fun PlayerRoute(
     var broadcastVoiceOpen by remember { mutableStateOf(false) }
     var vuSyncOpen by remember { mutableStateOf(false) }
     var lampOpen by remember { mutableStateOf(false) }
+    var channelModeOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
     var backupOpen by remember { mutableStateOf(false) }
 
@@ -247,6 +251,7 @@ fun PlayerRoute(
                 onBroadcastVoice = { closeDrawer(); broadcastVoiceOpen = true },
                 onVuSync = { closeDrawer(); vuSyncOpen = true },
                 onLampBrightness = { closeDrawer(); lampOpen = true },
+                onChannelButtons = { closeDrawer(); channelModeOpen = true },
                 onAbout = { closeDrawer(); aboutOpen = true },
                 onBackup = { closeDrawer(); backupOpen = true },
                 onTtsTest = onTtsTest?.let { test -> { closeDrawer(); test() } },
@@ -254,9 +259,20 @@ fun PlayerRoute(
         },
     ) {
         SkinBackground(skin) {
-          CompositionLocalProvider(LocalLampBrightness provides lampBrightness) {
+          CompositionLocalProvider(
+              LocalLampBrightness provides lampBrightness,
+              LocalChannelButtonMode provides channelMode,
+          ) {
             PlayerScreen(state, actions, Modifier.fillMaxSize(), vu = playerViewModel.vu)
           }
+
+            if (channelModeOpen) {
+                ChannelButtonsDialog(
+                    current = channelMode,
+                    onPick = { playerViewModel.setChannelButtonMode(it) },
+                    onDismiss = { channelModeOpen = false },
+                )
+            }
 
             if (lampOpen) {
                 LampBrightnessDialog(
@@ -497,6 +513,7 @@ private fun AppDrawer(
     onBroadcastVoice: () -> Unit,
     onVuSync: () -> Unit,
     onLampBrightness: () -> Unit,
+    onChannelButtons: () -> Unit,
     onAbout: () -> Unit,
     onBackup: () -> Unit,
     onTtsTest: (() -> Unit)? = null,
@@ -586,6 +603,11 @@ private fun AppDrawer(
                 label = { Text("Lamp brightness") },
                 selected = false,
                 onClick = onLampBrightness,
+            )
+            NavigationDrawerItem(
+                label = { Text("Channel buttons") },
+                selected = false,
+                onClick = onChannelButtons,
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             NavigationDrawerItem(
@@ -713,6 +735,35 @@ private fun BbcNewsCredit(fontSize: Int) {
  * Lamp brightness: a slider with a live preview of a lit channel key and a lit PLAY button, so the
  * effect is visible while dragging. The setting is saved when the slider is released.
  */
+/**
+ * Channel buttons: four at a time (2x2, two pages) or one big button at a time (swipe sideways),
+ * the latter for people who find the small buttons hard to see. Takes effect at once, behind the dialog.
+ */
+@Composable
+private fun ChannelButtonsDialog(current: ChannelButtonMode, onPick: (ChannelButtonMode) -> Unit, onDismiss: () -> Unit) {
+    RadioDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { RadioTextButton(onClick = onDismiss) { Text("Done") } },
+        title = { Text("Channel buttons") },
+        text = {
+            Column {
+                VoiceOptionRow(
+                    selected = current == ChannelButtonMode.GRID,
+                    title = "Four at a time",
+                    subtitle = "Eight channels as two pages of four buttons",
+                    onClick = { onPick(ChannelButtonMode.GRID) },
+                )
+                VoiceOptionRow(
+                    selected = current == ChannelButtonMode.BIG,
+                    title = "One big button",
+                    subtitle = "A single large button at a time. Swipe sideways to move to the next channel. Easiest to see.",
+                    onClick = { onPick(ChannelButtonMode.BIG) },
+                )
+            }
+        },
+    )
+}
+
 @Composable
 private fun LampBrightnessDialog(current: Float, onCommit: (Float) -> Unit, onDismiss: () -> Unit) {
     var value by remember { mutableFloatStateOf(current) }
@@ -1091,7 +1142,7 @@ private fun VoiceOptionRow(
         RadioLamp(selected = selected, onClick = onClick, enabled = enabled)
         Column(Modifier.padding(start = 4.dp)) {
             Text(title, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text(subtitle, fontSize = 12.sp, maxLines = 1)
+            Text(subtitle, fontSize = 12.sp, maxLines = 3)
         }
     }
 }

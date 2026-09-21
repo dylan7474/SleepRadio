@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -41,11 +42,13 @@ import org.dylanjones.sleepradio.core.audio.BinauralPreset
 import org.dylanjones.sleepradio.core.audio.NoiseColor
 import org.dylanjones.sleepradio.core.audio.VuLevels
 import org.dylanjones.sleepradio.core.data.PRESET_COUNT
+import org.dylanjones.sleepradio.core.data.ChannelButtonMode
 import org.dylanjones.sleepradio.core.data.PRESET_PAGES
 import org.dylanjones.sleepradio.core.data.PRESETS_PER_PAGE
 import org.dylanjones.sleepradio.core.data.SourceSlot
 import org.dylanjones.sleepradio.core.data.SourceType
 import org.dylanjones.sleepradio.core.design.LocalAppSkin
+import org.dylanjones.sleepradio.core.design.LocalChannelButtonMode
 import org.dylanjones.sleepradio.core.design.ChannelKey
 import org.dylanjones.sleepradio.core.design.KeyIcon
 import org.dylanjones.sleepradio.core.design.RoundGlyph
@@ -160,14 +163,16 @@ fun PlayerScreen(
 }
 
 /**
- * The channel buttons: [PRESET_PAGES] pages of [PRESETS_PER_PAGE], swiped left and right. Page 1
- * looks exactly as the old single row did, so nothing about the screen changes; the page markers
- * underneath always take the same fixed height. If the playing channel is on the page you are
- * NOT looking at, its marker shows ▶ / ❚❚ instead of a dot, so it is never lost off-screen.
+ * The channel buttons, swiped left and right. Two modes (the "Channel buttons" setting): four at a
+ * time in a 2 x 2 block (two pages of four), or ONE BIG button at a time (eight pages) for people who
+ * find the small buttons hard to see. Either way the block takes the same space, and the page markers
+ * underneath always take the same fixed height. If the playing channel is on a page you are NOT
+ * looking at, its marker shows ▶ / ❚❚ instead of a dot, so it is never lost off-screen. The pager
+ * opens on the page holding the playing channel.
  */
 @Composable
 private fun PresetRow(state: PlayerUiState, actions: PlayerActions, modifier: Modifier) {
-    val pagerState = rememberPagerState(pageCount = { PRESET_PAGES })
+    val mode = LocalChannelButtonMode.current
     val scope = rememberCoroutineScope()
     val colors = LocalAppSkin.current.colors
 
@@ -181,76 +186,98 @@ private fun PresetRow(state: PlayerUiState, actions: PlayerActions, modifier: Mo
         active[i] = tuningIn || isActivePreset(slot, state.nowPlayingRef, state.playback)
         playing[i] = active[i] && (tuningIn || isPresetPlaying(state.playback, state.broadcastStarting))
     }
+    val firstActive = (0 until PRESET_COUNT).firstOrNull { active[it] }
 
-    Column(modifier) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            pageSpacing = 10.dp,
-        ) { page ->
-            val first = page * PRESETS_PER_PAGE
-            // Four wide buttons in a 2 x 2 block (the artwork keeps its shape inside each cell).
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .semantics { contentDescription = "Channels ${first + 1} to ${first + PRESETS_PER_PAGE}" },
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                for (row in 0 until PRESETS_PER_PAGE / 2) {
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        for (col in 0 until 2) {
-                            val i = first + row * 2 + col
-                            PresetTile(
-                                index = i,
-                                slot = state.presets.getOrNull(i),
-                                active = active[i],
-                                playing = playing[i],
-                                broadcastReady = state.broadcastReady,
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                                onClick = { actions.onPresetClick(i) },
-                                onLongClick = { actions.onPresetLongClick(i) },
-                            )
+    // A new pager (opening on the playing channel's page) whenever the mode is switched.
+    key(mode) {
+        val pagerState = rememberPagerState(initialPage = mode.pageOf(firstActive ?: 0), pageCount = { mode.pageCount })
+        val big = mode == ChannelButtonMode.BIG
+        Column(modifier) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                pageSpacing = 10.dp,
+            ) { page ->
+                val channels = mode.channelsOnPage(page)
+                if (big) {
+                    // One big button filling the block; the artwork keeps its shape inside it.
+                    val i = channels.first
+                    PresetTile(
+                        index = i,
+                        slot = state.presets.getOrNull(i),
+                        active = active[i],
+                        playing = playing[i],
+                        broadcastReady = state.broadcastReady,
+                        modifier = Modifier.fillMaxSize(),
+                        onClick = { actions.onPresetClick(i) },
+                        onLongClick = { actions.onPresetLongClick(i) },
+                        big = true,
+                    )
+                } else {
+                    // Four wide buttons in a 2 x 2 block (the artwork keeps its shape inside each cell).
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .semantics { contentDescription = "Channels ${channels.first + 1} to ${channels.last + 1}" },
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        for (row in 0 until PRESETS_PER_PAGE / 2) {
+                            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                for (col in 0 until 2) {
+                                    val i = channels.first + row * 2 + col
+                                    PresetTile(
+                                        index = i,
+                                        slot = state.presets.getOrNull(i),
+                                        active = active[i],
+                                        playing = playing[i],
+                                        broadcastReady = state.broadcastReady,
+                                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                                        onClick = { actions.onPresetClick(i) },
+                                        onLongClick = { actions.onPresetLongClick(i) },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
-        // Page markers: always laid out at a fixed height.
-        Row(
-            Modifier.fillMaxWidth().height(16.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            repeat(PRESET_PAGES) { page ->
-                val here = pagerState.currentPage == page
-                val range = page * PRESETS_PER_PAGE until (page + 1) * PRESETS_PER_PAGE
-                val pageActive = range.any { active[it] }
-                val pagePlaying = range.any { playing[it] }
-                Box(
-                    Modifier
-                        .width(28.dp)
-                        .fillMaxHeight()
-                        .clickable { scope.launch { pagerState.animateScrollToPage(page) } }
-                        .semantics {
-                            contentDescription = "Channels ${range.first + 1} to ${range.last + 1}" +
-                                if (here) ", showing" else ""
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (pageActive && !here) {
-                        Text(
-                            text = if (pagePlaying) "▶" else "❚❚",
-                            color = colors.accent,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    } else {
-                        Box(
-                            Modifier
-                                .size(if (here) 8.dp else 6.dp)
-                                .clip(CircleShape)
-                                .background(if (here) colors.accent else colors.textDim),
-                        )
+            // Page markers: always laid out at a fixed height.
+            Row(
+                Modifier.fillMaxWidth().height(16.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                repeat(mode.pageCount) { page ->
+                    val here = pagerState.currentPage == page
+                    val range = mode.channelsOnPage(page)
+                    val pageActive = range.any { active[it] }
+                    val pagePlaying = range.any { playing[it] }
+                    Box(
+                        Modifier
+                            .width(if (big) 26.dp else 28.dp)
+                            .fillMaxHeight()
+                            .clickable { scope.launch { pagerState.animateScrollToPage(page) } }
+                            .semantics {
+                                contentDescription = (if (big) "Channel ${range.first + 1}" else "Channels ${range.first + 1} to ${range.last + 1}") +
+                                    if (here) ", showing" else ""
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (pageActive && !here) {
+                            Text(
+                                text = if (pagePlaying) "▶" else "❚❚",
+                                color = colors.accent,
+                                fontSize = if (big) 11.sp else 9.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        } else {
+                            Box(
+                                Modifier
+                                    .size(if (here) (if (big) 11.dp else 8.dp) else (if (big) 8.dp else 6.dp))
+                                    .clip(CircleShape)
+                                    .background(if (here) colors.accent else colors.textDim),
+                            )
+                        }
                     }
                 }
             }
@@ -323,6 +350,7 @@ private fun PresetTile(
     modifier: Modifier,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    big: Boolean = false,
 ) {
     val showReadyDot = slot?.type == SourceType.BROADCAST && broadcastReady && !active
     val description = if (slot == null) {
@@ -347,5 +375,6 @@ private fun PresetTile(
         onLongClick = onLongClick,
         modifier = modifier,
         empty = slot == null,
+        big = big,
     )
 }

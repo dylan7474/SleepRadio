@@ -192,6 +192,13 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.edit { it[KEY_LAMP_BRIGHTNESS] = value.coerceIn(0.2f, 1f) }
     }
 
+    override val channelButtonMode: Flow<ChannelButtonMode> =
+        dataStore.data.map { ChannelButtonMode.fromId(it[KEY_CHANNEL_BUTTON_MODE]) }
+
+    override suspend fun setChannelButtonMode(mode: ChannelButtonMode) {
+        dataStore.edit { it[KEY_CHANNEL_BUTTON_MODE] = mode.id }
+    }
+
     override val broadcastNewsQuietStartMin: Flow<Int> =
         dataStore.data.map { it[KEY_BROADCAST_NEWS_QUIET_START] ?: (23 * 60) }
 
@@ -298,6 +305,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val KEY_BROADCAST_NEWS_ENABLED = booleanPreferencesKey("broadcast_news_enabled")
         val KEY_BROADCAST_NEWS_QUIET_HOURS = booleanPreferencesKey("broadcast_news_quiet_hours")
         val KEY_LAMP_BRIGHTNESS = floatPreferencesKey("lamp_brightness")
+        val KEY_CHANNEL_BUTTON_MODE = stringPreferencesKey("channel_button_mode")
         val KEY_MIXER_VOLUME = floatPreferencesKey("mixer_volume")
         val KEY_MIXER_BALANCE = floatPreferencesKey("mixer_balance")
 

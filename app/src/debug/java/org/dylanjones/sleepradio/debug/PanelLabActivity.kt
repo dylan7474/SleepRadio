@@ -14,6 +14,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import org.dylanjones.sleepradio.core.data.SourceSlot
 import org.dylanjones.sleepradio.core.data.SourceType
+import org.dylanjones.sleepradio.core.data.ChannelButtonMode
+import org.dylanjones.sleepradio.core.design.LocalChannelButtonMode
 import org.dylanjones.sleepradio.core.design.LocalLampBrightness
 import org.dylanjones.sleepradio.core.design.SkinBackground
 import org.dylanjones.sleepradio.core.design.StudioSkin
@@ -32,7 +34,7 @@ import org.dylanjones.sleepradio.ui.theme.SleepRadioTheme
  *
  *   adb shell am start -n org.dylanjones.sleepradio/.debug.PanelLabActivity \
  *       --es scenario broadcast|broadcast_dj|radio|radio_buffering|book|podcast|idle|starting \
- *       [--ef lamp 0.5] [--ei pos 83]
+ *       [--ef lamp 0.5] [--ei pos 83] [--es mode grid|big]
  */
 class PanelLabActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,6 +43,7 @@ class PanelLabActivity : ComponentActivity() {
         val scenario = intent.getStringExtra("scenario") ?: "broadcast"
         val lamp = intent.getFloatExtra("lamp", 1f)
         val startSec = intent.getIntExtra("pos", 83)
+        val mode = ChannelButtonMode.fromId(intent.getStringExtra("mode"))
         setContent {
             SleepRadioTheme {
                 var positionMs by remember { mutableLongStateOf(startSec * 1000L) }
@@ -53,7 +56,10 @@ class PanelLabActivity : ComponentActivity() {
                     ),
                 )
                 SkinBackground(StudioSkin) {
-                    CompositionLocalProvider(LocalLampBrightness provides lamp) {
+                    CompositionLocalProvider(
+                        LocalLampBrightness provides lamp,
+                        LocalChannelButtonMode provides mode,
+                    ) {
                         PlayerScreen(
                             state = state,
                             actions = noopActions.copy2(

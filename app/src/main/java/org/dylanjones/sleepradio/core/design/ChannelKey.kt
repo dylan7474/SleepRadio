@@ -7,13 +7,16 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
@@ -51,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import org.dylanjones.sleepradio.R
+import org.dylanjones.sleepradio.core.data.ChannelButtonMode
 
 /** A rectangle in the sprite's own pixel space. */
 data class ArtRect(val x: Float, val y: Float, val w: Float, val h: Float) {
@@ -88,6 +92,11 @@ object ChannelKeyArt {
      */
     fun fillFontSizeDp(digits: Int, windowW: Float, windowH: Float): Float =
         minOf(windowH * 1.15f, windowW / (digits.coerceAtLeast(1) * 0.55f))
+
+    /** The one-big-button station-name size: about half the label window's height, so it reads at a glance. */
+    fun bigLabelFontDp(windowHeightDp: Float): Float = windowHeightDp * BIG_LABEL_HEIGHT_FRACTION
+
+    const val BIG_LABEL_HEIGHT_FRACTION = 0.5f
 }
 
 private val Condensed = FontFamily(Typeface.create("sans-serif-condensed", Typeface.BOLD))
@@ -108,6 +117,9 @@ private const val FadeMs = 250
  * artwork down towards its dim version.
  */
 val LocalLampBrightness = compositionLocalOf { 1f }
+
+/** How the channel buttons are shown (the "Channel buttons" setting); read by the preset row. */
+val LocalChannelButtonMode = compositionLocalOf { ChannelButtonMode.GRID }
 
 /** A symbol that can sit in a key's lit window instead of a number. */
 enum class KeyIcon { MOON, WAVE }
@@ -131,9 +143,12 @@ fun ChannelKey(
     modifier: Modifier = Modifier,
     empty: Boolean = false,
     lamp: Float = LocalLampBrightness.current,
+    /** The one-big-button mode: bigger station name (two lines) for easier reading. */
+    big: Boolean = false,
 ) {
     RadioKey(
         label = label,
+        bigScrollingLabel = big,
         active = active,
         lit = playing,
         contentDescription = contentDescription,
@@ -241,6 +256,7 @@ private fun RadioKey(
     labelEmpty: Boolean = false,
     lamp: Float = LocalLampBrightness.current,
     bigLabel: String? = null,
+    bigScrollingLabel: Boolean = false,
     window: @Composable (color: Color, lit: Boolean, artWidth: Dp) -> Unit,
 ) {
     val outArt = ImageBitmap.imageResource(R.drawable.channel_key_out)
@@ -321,6 +337,28 @@ private fun RadioKey(
                             ),
                             // The digits are taller than the window's line box: let them overflow it, centred.
                             modifier = Modifier.wrapContentSize(unbounded = true),
+                        )
+                    } else if (bigScrollingLabel) {
+                        // One-big-button mode: the name as large as the window comfortably allows, on one line;
+                        // a name too long for the glass scrolls slowly (like the panel's readout windows).
+                        val fontDp = ChannelKeyArt.bigLabelFontDp(ChannelKeyArt.LABEL.h * scale)
+                        val fontSize = with(density) { fontDp.dp.toSp() }
+                        Text(
+                            text = label.uppercase(),
+                            color = labelColor,
+                            fontFamily = Condensed,
+                            fontSize = fontSize,
+                            lineHeight = fontSize * 1.1f,
+                            letterSpacing = fontSize * 0.04f,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
+                            style = if (lit) TextStyle(shadow = Shadow(Color(0xFFFFA632).copy(alpha = 0.8f * lamp), Offset.Zero, 16f)) else TextStyle.Default,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 6.dp)
+                                .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1500, repeatDelayMillis = 1500, velocity = 36.dp),
                         )
                     } else Text(
                         text = label.uppercase(),

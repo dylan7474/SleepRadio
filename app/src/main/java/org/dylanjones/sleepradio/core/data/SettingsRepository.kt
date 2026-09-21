@@ -137,6 +137,14 @@ interface SettingsRepository {
 
     suspend fun setLampBrightness(value: Float)
 
+    /**
+     * How the channel buttons are shown: four at a time (default) or one big button at a time for
+     * people who find the small ones hard to see. Backed up with the other settings.
+     */
+    val channelButtonMode: Flow<ChannelButtonMode>
+
+    suspend fun setChannelButtonMode(mode: ChannelButtonMode)
+
     /** Quiet hours start / end, minutes since midnight (defaults 23:00 and 06:00). */
     val broadcastNewsQuietStartMin: Flow<Int>
     val broadcastNewsQuietEndMin: Flow<Int>

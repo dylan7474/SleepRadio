@@ -6,9 +6,11 @@
 set -e
 cd "$(dirname "$0")"
 python3 make_keys.py .
+# The channel keys are also shown as ONE BIG button (accessibility mode), so render them at 2x
+# (1120 x 472 px); the app scales the picture to fit, and ChannelKeyArt's geometry stays in 560 x 236 units.
 for s in out dim lit; do
   google-chrome-stable --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
-    --force-device-scale-factor=1 --default-background-color=00000000 --window-size=560,236 \
+    --force-device-scale-factor=2 --default-background-color=00000000 --window-size=560,236 \
     --screenshot="key_$s.png" "file://$PWD/key_$s.svg"
   python3 -c "from PIL import Image; Image.open('key_$s.png').convert('RGBA').save('../../app/src/main/res/drawable-nodpi/channel_key_$s.webp','WEBP',lossless=True,quality=100,method=6)"
 done

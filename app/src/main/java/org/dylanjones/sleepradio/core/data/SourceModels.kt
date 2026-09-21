@@ -8,6 +8,32 @@ const val PRESET_PAGES = 2
 /** Total preset slots ("channels"): 1-4 on the first page, 5-8 a swipe away. */
 const val PRESET_COUNT = PRESETS_PER_PAGE * PRESET_PAGES
 
+/** How the eight channel buttons are shown (a display setting; the channels themselves don't change). */
+enum class ChannelButtonMode(val id: String) {
+    /** Four wide buttons at a time in a 2x2 block; two swipeable pages. */
+    GRID("grid"),
+
+    /** One big button at a time, swiped sideways through all eight — easiest to see. */
+    BIG("big");
+
+    /** Channels shown on each page. */
+    val perPage: Int get() = if (this == BIG) 1 else PRESETS_PER_PAGE
+
+    /** Pages the pager has. */
+    val pageCount: Int get() = PRESET_COUNT / perPage
+
+    /** The page that holds channel [index] (0-based). */
+    fun pageOf(index: Int): Int = (index / perPage).coerceIn(0, pageCount - 1)
+
+    /** The channel indexes on [page]. */
+    fun channelsOnPage(page: Int): IntRange = (page * perPage) until ((page + 1) * perPage)
+
+    companion object {
+        /** An unknown or missing saved value falls back to the normal grid. */
+        fun fromId(id: String?): ChannelButtonMode = entries.firstOrNull { it.id == id } ?: GRID
+    }
+}
+
 /** What a preset slot points at. See RETROSYNC_PLAN.md section 2. */
 enum class SourceType { ALBUM, MUSIC_FOLDER, AUDIOBOOK, RADIO, BROADCAST, PODCAST }
 

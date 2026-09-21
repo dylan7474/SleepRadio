@@ -1,5 +1,6 @@
 package org.dylanjones.sleepradio.core.design
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -29,5 +30,18 @@ class ChannelKeyArtTest {
         assertTrue(3 * 0.55f * ChannelKeyArt.fillFontSizeDp(3, w, h) <= w + 0.01f)           // ...within the width
         assertTrue(5 * 0.55f * ChannelKeyArt.fillFontSizeDp(5, w, h) <= w + 0.01f)           // even a silly 5 digits
         assertTrue(ChannelKeyArt.fillFontSizeDp(0, w, h) > 0f)                               // empty text can't divide by zero
+    }
+
+    @Test fun `the big-key name is about half the window height, well above the normal label size`() {
+        val scale = 0.53f                                        // dp per art pixel at a typical phone size
+        val windowH = ChannelKeyArt.LABEL.h * scale
+        val font = ChannelKeyArt.bigLabelFontDp(windowH)
+        assertEquals(windowH * 0.5f, font, 1e-4f)
+        assertTrue("$font dp", font > 1.5f * (0.060f * ChannelKeyArt.WIDTH * scale))   // more than 1.5x the normal 17-18 dp
+    }
+
+    @Test fun `the big-key name fits the window height on one line`() {
+        val windowH = ChannelKeyArt.LABEL.h * 0.53f
+        assertTrue(ChannelKeyArt.bigLabelFontDp(windowH) * 1.1f < windowH)                 // one line, with its line height
     }
 }
