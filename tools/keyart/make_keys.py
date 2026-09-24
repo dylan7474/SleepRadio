@@ -17,7 +17,7 @@ WIN_X = PLATE['x'] + PLATE['w'] + 14
 WIN = dict(x=WIN_X, y=FY + 30, w=(LAMP['cx'] - LAMP_D // 2 - 14) - WIN_X, h=FH - 60)
 TRAVEL = 10                # how far a latched button sits lower
 
-DEFS = """
+DEFS_TEMPLATE = """
 <defs>
   <linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="#fbf6ea"/><stop offset=".14" stop-color="#d8cfbd"/>
@@ -83,7 +83,30 @@ DEFS = """
   </filter>
   <clipPath id="faceClip"><rect x="{FX}" y="{FY}" width="{FW}" height="{FH}" rx="{RF}"/></clipPath>
 </defs>
-""".replace("{FX}", str(FX)).replace("{FY}", str(FY)).replace("{FW}", str(FW)).replace("{FH}", str(FH)).replace("{RF}", str(R - T + 3))
+"""
+
+
+def defs():
+    """The shared defs, with the face clip for the current geometry."""
+    return (DEFS_TEMPLATE.replace("{FX}", str(FX)).replace("{FY}", str(FY)).replace("{FW}", str(FW))
+            .replace("{FH}", str(FH)).replace("{RF}", str(R - T + 3)))
+
+
+def use_tall_geometry():
+    """Switch to the TALL key used by the full-screen channel button in portrait: the same key
+    turned upright, with the number plate at the top, a big name window in the middle and the lamp
+    at the bottom. The canvas's shape is about a phone screen's panel (0.62 : 1)."""
+    global W, H, BW, BH, R, FX, FY, FW, FH, PLATE, LAMP, WIN
+    W, H = 420, 680
+    BW, BH = W - 2 * PAD_L, H - PAD_T - 32      # same margins as the wide key (shadow + travel)
+    R = 40
+    FX, FY, FW, FH = X0 + T, Y0 + T, BW - 2 * T, BH - 2 * T
+    PLATE = dict(x=FX + (FW - 150) // 2, y=FY + 26, w=150, h=130)
+    lamp_d = 80
+    LAMP = dict(cx=W // 2, cy=FY + FH - 26 - lamp_d // 2, d=lamp_d)
+    win_y = PLATE['y'] + PLATE['h'] + 5 + 24
+    win_bottom = LAMP['cy'] - lamp_d // 2 - 7 - 24
+    WIN = dict(x=FX + 22, y=win_y, w=FW - 44, h=win_bottom - win_y)
 
 
 def rr(x, y, w, h, r, **a):
@@ -95,7 +118,7 @@ def sprite(state):
     lit, dim = state == "lit", state == "dim"
     latched = lit or dim
     dy = TRAVEL if latched else 0
-    o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">', DEFS]
+    o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">', defs()]
 
     # ---- the fixed shadow the key stands on (same in every state; a latched key covers it) ----
     o.append(rr(X0 + 4, Y0 + 20, BW - 8, BH, R, fill="#000", opacity=".55", filter="url(#b9)"))
@@ -171,9 +194,12 @@ def sprite(state):
 
 if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else "."
-    for s in ("out", "dim", "lit"):
-        open(os.path.join(out, f"key_{s}.svg"), "w").write(sprite(s))
-    regions = dict(canvas=[W, H], plate=PLATE, lamp=LAMP, window=WIN, travel=TRAVEL,
-                   body=dict(x=X0, y=Y0, w=BW, h=BH))
-    json.dump(regions, open(os.path.join(out, "regions.json"), "w"), indent=1)
-    print(json.dumps(regions))
+    for prefix in ("", "tall_"):
+        if prefix:
+            use_tall_geometry()
+        for s in ("out", "dim", "lit"):
+            open(os.path.join(out, f"{prefix}key_{s}.svg"), "w").write(sprite(s))
+        regions = dict(canvas=[W, H], plate=PLATE, lamp=LAMP, window=WIN, travel=TRAVEL,
+                       body=dict(x=X0, y=Y0, w=BW, h=BH))
+        json.dump(regions, open(os.path.join(out, f"{prefix}regions.json"), "w"), indent=1)
+        print(json.dumps(regions))

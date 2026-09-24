@@ -34,7 +34,7 @@ import org.dylanjones.sleepradio.ui.theme.SleepRadioTheme
  *
  *   adb shell am start -n org.dylanjones.sleepradio/.debug.PanelLabActivity \
  *       --es scenario broadcast|broadcast_dj|radio|radio_buffering|book|podcast|idle|starting \
- *       [--ef lamp 0.5] [--ei pos 83] [--es mode grid|big]
+ *       [--ef lamp 0.5] [--ei pos 83] [--es mode grid|big|full]
  */
 class PanelLabActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

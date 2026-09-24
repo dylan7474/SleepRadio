@@ -14,10 +14,16 @@ enum class ChannelButtonMode(val id: String) {
     GRID("grid"),
 
     /** One big button at a time, swiped sideways through all eight — easiest to see. */
-    BIG("big");
+    BIG("big"),
+
+    /**
+     * Full screen: one channel button fills most of the screen (upright in portrait) with the name as
+     * large as it fits, for poor eyesight. The track information goes; the menu, SLEEP and NOISE stay.
+     */
+    FULL("full");
 
     /** Channels shown on each page. */
-    val perPage: Int get() = if (this == BIG) 1 else PRESETS_PER_PAGE
+    val perPage: Int get() = if (this == GRID) PRESETS_PER_PAGE else 1
 
     /** Pages the pager has. */
     val pageCount: Int get() = PRESET_COUNT / perPage

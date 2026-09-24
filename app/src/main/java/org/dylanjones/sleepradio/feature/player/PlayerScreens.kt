@@ -98,7 +98,12 @@ fun PlayerScreen(
 ) {
     val pb = state.playback
     val config = LocalConfiguration.current
-    if (config.screenWidthDp > config.screenHeightDp) {
+    val landscape = config.screenWidthDp > config.screenHeightDp
+    if (LocalChannelButtonMode.current == ChannelButtonMode.FULL) {
+        FullScreenPlayer(state, actions, landscape, modifier)
+        return
+    }
+    if (landscape) {
         LandscapePlayer(state, actions, vu, modifier)
         return
     }
@@ -169,15 +174,21 @@ fun PlayerScreen(
 }
 
 /**
- * The channel buttons, swiped left and right. Two modes (the "Channel buttons" setting): four at a
- * time in a 2 x 2 block (two pages of four), or ONE BIG button at a time (eight pages) for people who
- * find the small buttons hard to see. Either way the block takes the same space, and the page markers
+ * The channel buttons, swiped left and right. The "Channel buttons" setting: four at a time in a
+ * 2 x 2 block (two pages of four), or ONE BIG button at a time (eight pages) for people who find the
+ * small buttons hard to see — in the full-screen mode ([FullScreenPlayer]) upright when [tall]. Either way the block takes the same space, and the page markers
  * underneath always take the same fixed height. If the playing channel is on a page you are NOT
  * looking at, its marker shows ▶ / ❚❚ instead of a dot, so it is never lost off-screen. The pager
  * opens on the page holding the playing channel.
  */
 @Composable
-internal fun PresetRow(state: PlayerUiState, actions: PlayerActions, modifier: Modifier) {
+internal fun PresetRow(
+    state: PlayerUiState,
+    actions: PlayerActions,
+    modifier: Modifier,
+    /** The full-screen mode in portrait: each page is one upright key. */
+    tall: Boolean = false,
+) {
     val mode = LocalChannelButtonMode.current
     val scope = rememberCoroutineScope()
     val colors = LocalAppSkin.current.colors
@@ -197,7 +208,7 @@ internal fun PresetRow(state: PlayerUiState, actions: PlayerActions, modifier: M
     // A new pager (opening on the playing channel's page) whenever the mode is switched.
     key(mode) {
         val pagerState = rememberPagerState(initialPage = mode.pageOf(firstActive ?: 0), pageCount = { mode.pageCount })
-        val big = mode == ChannelButtonMode.BIG
+        val big = mode != ChannelButtonMode.GRID
         Column(modifier) {
             HorizontalPager(
                 state = pagerState,
@@ -218,6 +229,8 @@ internal fun PresetRow(state: PlayerUiState, actions: PlayerActions, modifier: M
                         onClick = { actions.onPresetClick(i) },
                         onLongClick = { actions.onPresetLongClick(i) },
                         big = true,
+                        full = mode == ChannelButtonMode.FULL,
+                        tall = tall,
                     )
                 } else {
                     // Four wide buttons in a 2 x 2 block (the artwork keeps its shape inside each cell).
@@ -368,6 +381,8 @@ private fun PresetTile(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     big: Boolean = false,
+    full: Boolean = false,
+    tall: Boolean = false,
 ) {
     val showReadyDot = slot?.type == SourceType.BROADCAST && broadcastReady && !active
     val description = if (slot == null) {
@@ -393,5 +408,7 @@ private fun PresetTile(
         modifier = modifier,
         empty = slot == null,
         big = big,
+        full = full,
+        tall = tall,
     )
 }

@@ -15,6 +15,15 @@ for s in out dim lit; do
   python3 -c "from PIL import Image; Image.open('key_$s.png').convert('RGBA').save('../../app/src/main/res/drawable-nodpi/channel_key_$s.webp','WEBP',lossless=True,quality=100,method=6)"
 done
 
+# The TALL key (make_keys.py's use_tall_geometry): the full-screen channel button in portrait, where
+# it fills most of the screen, so render it at 3x (1260 x 2040 px). ChannelKeyArt.TALL matches tall_regions.json.
+for s in out dim lit; do
+  google-chrome-stable --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
+    --force-device-scale-factor=3 --default-background-color=00000000 --window-size=420,680 \
+    --screenshot="tall_key_$s.png" "file://$PWD/tall_key_$s.svg"
+  python3 -c "from PIL import Image; Image.open('tall_key_$s.png').convert('RGBA').save('../../app/src/main/res/drawable-nodpi/channel_key_tall_$s.webp','WEBP',lossless=True,quality=100,method=6)"
+done
+
 # ---- round pushbuttons (PLAY, previous, next) ----
 python3 make_round.py .
 for s in out in lit; do

@@ -213,5 +213,9 @@ class SettingsRepositoryImplBackupTest {
         val to = newRepo(dst)
         to.importAll(roundTripThroughJsonText(repo.exportAll()))
         assertEquals(ChannelButtonMode.BIG, to.channelButtonMode.first())
+
+        repo.setChannelButtonMode(ChannelButtonMode.FULL)
+        to.importAll(roundTripThroughJsonText(repo.exportAll()))
+        assertEquals(ChannelButtonMode.FULL, to.channelButtonMode.first())
     }
 }

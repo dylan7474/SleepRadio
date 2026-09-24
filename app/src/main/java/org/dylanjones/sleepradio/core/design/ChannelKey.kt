@@ -97,7 +97,78 @@ object ChannelKeyArt {
     fun bigLabelFontDp(windowHeightDp: Float): Float = windowHeightDp * BIG_LABEL_HEIGHT_FRACTION
 
     const val BIG_LABEL_HEIGHT_FRACTION = 0.5f
+
+    /** The normal wide key. */
+    val WIDE = KeyArt(
+        WIDTH, HEIGHT, NUMBER, LABEL, LAMP,
+        R.drawable.channel_key_out, R.drawable.channel_key_dim, R.drawable.channel_key_lit,
+    )
+
+    /**
+     * The TALL key: the same key stood upright, for the full-screen channel button in portrait (see
+     * `make_keys.py`'s `use_tall_geometry` and `tall_regions.json`). Number window at the top, a big
+     * name window in the middle, the lamp at the bottom.
+     */
+    val TALL = KeyArt(
+        width = 420f, height = 680f,
+        number = ArtRect(135f, 42f, 150f, 130f),
+        label = ArtRect(48f, 201f, 324f, 300f),
+        lamp = ArtRect(210f - 40f, 572f - 40f, 80f, 80f),
+        out = R.drawable.channel_key_tall_out, dim = R.drawable.channel_key_tall_dim, lit = R.drawable.channel_key_tall_lit,
+    )
+
+    /** Average advance of the bold condensed face per character, in em, with the label's letter spacing. */
+    const val CONDENSED_EM_PER_CHAR = 0.59f
+
+    /** Line height of the tall key's name, as a multiple of the font size. */
+    const val TALL_LINE_HEIGHT = 1.08f
+
+    /**
+     * The full-screen station-name size (dp): as large as fits [windowW] x [windowH] dp with the name
+     * wrapped at spaces onto at most [maxLines] lines (3 in the tall key, 2 in the wide one), no word
+     * broken, never scrolling; capped at 1/[maxLines] of the window's height, so a short name doesn't
+     * turn into one giant word.
+     */
+    fun fitLabelFontDp(label: String, windowW: Float, windowH: Float, maxLines: Int = 3): Float {
+        val words = label.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        var size = windowH / maxLines
+        if (words.isEmpty()) return size
+        while (size > 4f) {
+            val maxChars = (windowW / (size * CONDENSED_EM_PER_CHAR)).toInt()
+            val lines = wrapLines(words, maxChars)
+            if (lines != null && lines <= maxLines && lines * size * TALL_LINE_HEIGHT <= windowH) return size
+            size *= 0.96f
+        }
+        return size
+    }
+
+    /** How many lines [words] take wrapped at [maxChars] characters, or null if a word doesn't fit. */
+    private fun wrapLines(words: List<String>, maxChars: Int): Int? {
+        var lines = 1
+        var used = 0
+        for (w in words) {
+            if (w.length > maxChars) return null
+            used = when {
+                used == 0 -> w.length
+                used + 1 + w.length <= maxChars -> used + 1 + w.length
+                else -> { lines++; w.length }
+            }
+        }
+        return lines
+    }
 }
+
+/** One channel-key artwork: its size and windows in sprite pixels, and its three state pictures. */
+class KeyArt(
+    val width: Float,
+    val height: Float,
+    val number: ArtRect,
+    val label: ArtRect,
+    val lamp: ArtRect,
+    val out: Int,
+    val dim: Int,
+    val lit: Int,
+)
 
 private val Condensed = FontFamily(Typeface.create("sans-serif-condensed", Typeface.BOLD))
 private val CondensedMedium = FontFamily(Typeface.create("sans-serif-condensed", Typeface.NORMAL))
@@ -145,10 +216,16 @@ fun ChannelKey(
     lamp: Float = LocalLampBrightness.current,
     /** The one-big-button mode: bigger station name (two lines) for easier reading. */
     big: Boolean = false,
+    /** The full-screen mode: the name wrapped and as large as it fits, never scrolling. */
+    full: Boolean = false,
+    /** ...and in portrait, on the upright key. */
+    tall: Boolean = false,
 ) {
     RadioKey(
         label = label,
-        bigScrollingLabel = big,
+        art = if (tall) ChannelKeyArt.TALL else ChannelKeyArt.WIDE,
+        bigScrollingLabel = big && !full,
+        fitLabelLines = when { !full -> 0; tall -> 3; else -> 2 },
         active = active,
         lit = playing,
         contentDescription = contentDescription,
@@ -157,8 +234,8 @@ fun ChannelKey(
         modifier = modifier,
         labelEmpty = empty,
         lamp = lamp,
-    ) { color, lit, artWidth ->
-        val size = with(LocalDensity.current) { (artWidth * 0.215f).toSp() }
+    ) { color, lit, windowHeight ->
+        val size = with(LocalDensity.current) { (windowHeight * NUMBER_OF_WINDOW).toSp() }
         Text(
             text = "$number",
             color = color,
@@ -201,10 +278,14 @@ fun ToggleKey(
         onLongClick = onLongClick,
         modifier = modifier,
         lamp = lamp,
-    ) { color, _, artWidth ->
-        KeyIconGlyph(icon, color, artWidth * 0.14f)
+    ) { color, _, windowHeight ->
+        KeyIconGlyph(icon, color, windowHeight * ICON_OF_WINDOW)
     }
 }
+
+/** The channel number's font size and the SLEEP/NOISE icon's size, as fractions of the number window's height. */
+private const val NUMBER_OF_WINDOW = 0.926f
+private const val ICON_OF_WINDOW = 0.603f
 
 @Composable
 private fun KeyIconGlyph(icon: KeyIcon, color: Color, size: Dp) {
@@ -257,11 +338,14 @@ private fun RadioKey(
     lamp: Float = LocalLampBrightness.current,
     bigLabel: String? = null,
     bigScrollingLabel: Boolean = false,
-    window: @Composable (color: Color, lit: Boolean, artWidth: Dp) -> Unit,
+    /** When > 0: the name wrapped onto up to this many lines, as large as fits (the full-screen mode). */
+    fitLabelLines: Int = 0,
+    art: KeyArt = ChannelKeyArt.WIDE,
+    window: @Composable (color: Color, lit: Boolean, windowHeight: Dp) -> Unit,
 ) {
-    val outArt = ImageBitmap.imageResource(R.drawable.channel_key_out)
-    val dimArt = ImageBitmap.imageResource(R.drawable.channel_key_dim)
-    val litArt = ImageBitmap.imageResource(R.drawable.channel_key_lit)
+    val outArt = ImageBitmap.imageResource(art.out)
+    val dimArt = ImageBitmap.imageResource(art.dim)
+    val litArt = ImageBitmap.imageResource(art.lit)
 
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -299,13 +383,14 @@ private fun RadioKey(
         contentAlignment = Alignment.Center,
     ) {
         // dp per artwork pixel: fit the artwork inside the space we are given, keeping its shape.
-        val scale = minOf(maxWidth.value / ChannelKeyArt.WIDTH, maxHeight.value / ChannelKeyArt.HEIGHT)
+        val scale = minOf(maxWidth.value / art.width, maxHeight.value / art.height)
         val density = LocalDensity.current
-        val artW = (ChannelKeyArt.WIDTH * scale).dp
-        val artH = (ChannelKeyArt.HEIGHT * scale).dp
+        val artW = (art.width * scale).dp
+        val artH = (art.height * scale).dp
         val travelPx = with(density) { (ChannelKeyArt.TRAVEL * scale).dp.toPx() }
         val pressPx = with(density) { (ChannelKeyArt.PRESS_EXTRA * scale).dp.toPx() }
-        val labelSize = with(density) { (artW * 0.060f).toSp() }
+        // The small two-line name: 6% of the wide key's width (the label window is 262 of its 560 px).
+        val labelSize = with(density) { (art.label.w * scale * (0.060f * ChannelKeyArt.WIDTH / ChannelKeyArt.LABEL.w)).dp.toSp() }
 
         Box(Modifier.size(artW, artH).graphicsLayer { translationY = press * pressPx }) {
             Image(outArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, alpha = 1f - latch, filterQuality = FilterQuality.High)
@@ -314,11 +399,11 @@ private fun RadioKey(
 
             // The live words move down with the artwork when it latches in.
             Box(Modifier.fillMaxSize().graphicsLayer { translationY = latch * travelPx }) {
-                ArtText(ChannelKeyArt.NUMBER, scale) { window(numberColor, lit, artW) }
-                ArtText(ChannelKeyArt.LABEL, scale) {
+                ArtText(art.number, scale) { window(numberColor, lit, (art.number.h * scale).dp) }
+                ArtText(art.label, scale) {
                     if (bigLabel != null) {
                         // Just the value, as large as the window allows (e.g. minutes left).
-                        val fontDp = ChannelKeyArt.fillFontSizeDp(bigLabel.length, ChannelKeyArt.LABEL.w * scale, ChannelKeyArt.LABEL.h * scale)
+                        val fontDp = ChannelKeyArt.fillFontSizeDp(bigLabel.length, art.label.w * scale, art.label.h * scale)
                         val fontSize = with(density) { fontDp.dp.toSp() }
                         Text(
                             text = bigLabel,
@@ -338,10 +423,34 @@ private fun RadioKey(
                             // The digits are taller than the window's line box: let them overflow it, centred.
                             modifier = Modifier.wrapContentSize(unbounded = true),
                         )
+                    } else if (fitLabelLines > 0) {
+                        // Full-screen mode: the name as large as fits the window, wrapped at spaces
+                        // onto up to fitLabelLines lines, never scrolling.
+                        val padDp = 8f
+                        val fontDp = ChannelKeyArt.fitLabelFontDp(
+                            label.uppercase(), art.label.w * scale - 2 * padDp, art.label.h * scale, fitLabelLines,
+                        )
+                        val fontSize = with(density) { fontDp.dp.toSp() }
+                        Text(
+                            text = label.uppercase(),
+                            color = labelColor,
+                            fontFamily = Condensed,
+                            fontSize = fontSize,
+                            lineHeight = fontSize * ChannelKeyArt.TALL_LINE_HEIGHT,
+                            letterSpacing = fontSize * 0.04f,
+                            textAlign = TextAlign.Center,
+                            maxLines = fitLabelLines,
+                            overflow = TextOverflow.Ellipsis,
+                            style = TextStyle(
+                                platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                shadow = if (lit) Shadow(Color(0xFFFFA632).copy(alpha = 0.8f * lamp), Offset.Zero, 24f) else null,
+                            ),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = padDp.dp),
+                        )
                     } else if (bigScrollingLabel) {
                         // One-big-button mode: the name as large as the window comfortably allows, on one line;
                         // a name too long for the glass scrolls slowly (like the panel's readout windows).
-                        val fontDp = ChannelKeyArt.bigLabelFontDp(ChannelKeyArt.LABEL.h * scale)
+                        val fontDp = ChannelKeyArt.bigLabelFontDp(art.label.h * scale)
                         val fontSize = with(density) { fontDp.dp.toSp() }
                         Text(
                             text = label.uppercase(),

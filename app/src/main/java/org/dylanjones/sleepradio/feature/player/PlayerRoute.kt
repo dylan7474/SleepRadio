@@ -770,8 +770,9 @@ private fun BbcNewsCredit(fontSize: Int) {
  * effect is visible while dragging. The setting is saved when the slider is released.
  */
 /**
- * Channel buttons: four at a time (2x2, two pages) or one big button at a time (swipe sideways),
- * the latter for people who find the small buttons hard to see. Takes effect at once, behind the dialog.
+ * Channel buttons: four at a time (2x2, two pages), one big button at a time (swipe sideways), or one
+ * button filling the screen — the last two for people who find the small buttons hard to see. Takes
+ * effect at once, behind the dialog.
  */
 @Composable
 private fun ChannelButtonsDialog(current: ChannelButtonMode, onPick: (ChannelButtonMode) -> Unit, onDismiss: () -> Unit) {
@@ -790,8 +791,15 @@ private fun ChannelButtonsDialog(current: ChannelButtonMode, onPick: (ChannelBut
                 VoiceOptionRow(
                     selected = current == ChannelButtonMode.BIG,
                     title = "One big button",
-                    subtitle = "A single large button at a time. Swipe sideways to move to the next channel. Easiest to see.",
+                    subtitle = "A single large button at a time. Swipe sideways to move to the next channel.",
                     onClick = { onPick(ChannelButtonMode.BIG) },
+                )
+                VoiceOptionRow(
+                    selected = current == ChannelButtonMode.FULL,
+                    title = "Full screen",
+                    subtitle = "One button fills the screen, with the name in very large letters. Easiest to see. " +
+                        "Swipe sideways for the next channel; the menu stays top left.",
+                    onClick = { onPick(ChannelButtonMode.FULL) },
                 )
             }
         },

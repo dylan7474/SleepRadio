@@ -11,6 +11,13 @@ class ChannelButtonModeTest {
         assertEquals(1, ChannelButtonMode.BIG.perPage)
     }
 
+    @Test fun `full screen is eight pages of one, like big`() {
+        assertEquals(8, ChannelButtonMode.FULL.pageCount)
+        assertEquals(1, ChannelButtonMode.FULL.perPage)
+        assertEquals((0 until 8).toList(), (0 until 8).map(ChannelButtonMode.FULL::pageOf))
+        assertEquals(ChannelButtonMode.FULL, ChannelButtonMode.fromId("full"))
+    }
+
     @Test fun `every channel sits on exactly one page in both modes`() {
         for (mode in ChannelButtonMode.entries) {
             val seen = (0 until mode.pageCount).flatMap { mode.channelsOnPage(it).toList() }
