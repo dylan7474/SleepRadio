@@ -86,7 +86,8 @@ private val placeholderFreqs = listOf("94.7", "101.3", "88.5", "106.1", "98.9", 
 /**
  * The player layout — the same for every source type, so switching between them never moves
  * anything: header, now-playing block, preset row, half-height SLEEP/NOISE tiles, a pair of
- * analogue VU meters, and one control row (RWD · VOL · PAUSE · BAL · FFWD). See
+ * analogue VU meters, and one control row (RWD · VOL · PAUSE · BAL · FFWD; just VOL · BAL in the
+ * one-big-button mode). See
  * RETROSYNC_PLAN.md §3.
  */
 @Composable
@@ -136,38 +137,47 @@ fun PlayerScreen(
         }
 
         Spacer(Modifier.height(12.dp))
+        // The one-big-button mode keeps just VOL and BAL: tapping the big key plays/pauses, and the
+        // transport keys only get in the way. The row keeps its height (the knobs are its tallest part).
+        val transport = LocalChannelButtonMode.current == ChannelButtonMode.GRID
         Row(
             Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = if (transport) Arrangement.SpaceBetween else Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val skipTransport = pb.isAudiobook || pb.isPodcast
-            RoundKey(
-                glyph = RoundGlyph.PREVIOUS,
-                size = 48.dp,
-                lit = false,
-                contentDescription = if (skipTransport) "Back one minute" else "Previous",
-                onClick = actions.onPrevious,
-                enabled = skipTransport || pb.hasPrevious,
-            )
+            if (transport) {
+                RoundKey(
+                    glyph = RoundGlyph.PREVIOUS,
+                    size = 48.dp,
+                    lit = false,
+                    contentDescription = if (skipTransport) "Back one minute" else "Previous",
+                    onClick = actions.onPrevious,
+                    enabled = skipTransport || pb.hasPrevious,
+                )
+            }
             RotaryKnob("VOL", state.volume, actions.onVolumeChange, size = 52.dp)
-            // PLAY: the symbol shows the action (pause while playing) and the ring lights while playing.
-            RoundKey(
-                glyph = if (pb.isPlaying) RoundGlyph.PAUSE else RoundGlyph.PLAY,
-                size = 62.dp,
-                lit = pb.isPlaying,
-                contentDescription = if (pb.isPlaying) "Pause" else "Play",
-                onClick = actions.onPlayPause,
-            )
+            if (transport) {
+                // PLAY: the symbol shows the action (pause while playing) and the ring lights while playing.
+                RoundKey(
+                    glyph = if (pb.isPlaying) RoundGlyph.PAUSE else RoundGlyph.PLAY,
+                    size = 62.dp,
+                    lit = pb.isPlaying,
+                    contentDescription = if (pb.isPlaying) "Pause" else "Play",
+                    onClick = actions.onPlayPause,
+                )
+            }
             RotaryKnob("BAL", state.balance, actions.onBalanceChange, size = 52.dp)
-            RoundKey(
-                glyph = RoundGlyph.NEXT,
-                size = 48.dp,
-                lit = false,
-                contentDescription = if (skipTransport) "Forward one minute" else "Next",
-                onClick = actions.onNext,
-                enabled = skipTransport || pb.hasNext,
-            )
+            if (transport) {
+                RoundKey(
+                    glyph = RoundGlyph.NEXT,
+                    size = 48.dp,
+                    lit = false,
+                    contentDescription = if (skipTransport) "Forward one minute" else "Next",
+                    onClick = actions.onNext,
+                    enabled = skipTransport || pb.hasNext,
+                )
+            }
         }
         Spacer(Modifier.height(4.dp))
     }

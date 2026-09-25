@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
@@ -46,6 +47,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -117,6 +120,19 @@ object ChannelKeyArt {
         out = R.drawable.channel_key_tall_out, dim = R.drawable.channel_key_tall_dim, lit = R.drawable.channel_key_tall_lit,
     )
 
+    /**
+     * The BROAD key: the wide key stretched for the full-screen channel button in landscape (see
+     * `make_keys.py`'s `use_broad_geometry` and `broad_regions.json`). A slimmer number plate, the
+     * lamp, and a name window taller and half as wide again as the normal key's.
+     */
+    val BROAD = KeyArt(
+        width = 680f, height = 236f,
+        number = ArtRect(40f, 40f, 112f, 130f),
+        label = ArtRect(166f, 30f, 398f, 150f),
+        lamp = ArtRect(609f - 31f, 105f - 31f, 62f, 62f),
+        out = R.drawable.channel_key_broad_out, dim = R.drawable.channel_key_broad_dim, lit = R.drawable.channel_key_broad_lit,
+    )
+
     /** Average advance of the bold condensed face per character, in em, with the label's letter spacing. */
     const val CONDENSED_EM_PER_CHAR = 0.59f
 
@@ -125,33 +141,40 @@ object ChannelKeyArt {
 
     /**
      * The full-screen station-name size (dp): as large as fits [windowW] x [windowH] dp with the name
-     * wrapped at spaces onto at most [maxLines] lines (3 in the tall key, 2 in the wide one), no word
+     * wrapped at spaces onto at most [maxLines] lines (3 in the tall key, 2 in the broad one), no word
      * broken, never scrolling; capped at 1/[maxLines] of the window's height, so a short name doesn't
-     * turn into one giant word.
+     * turn into one giant word. [textWidth] is the width (dp) of one line of text at a font size (dp):
+     * the app measures the real face (wide capitals like B, D, O and W are well over the average);
+     * by default an estimate from [CONDENSED_EM_PER_CHAR].
      */
-    fun fitLabelFontDp(label: String, windowW: Float, windowH: Float, maxLines: Int = 3): Float {
+    fun fitLabelFontDp(
+        label: String,
+        windowW: Float,
+        windowH: Float,
+        maxLines: Int = 3,
+        textWidth: (text: String, fontDp: Float) -> Float = { text, fontDp -> text.length * fontDp * CONDENSED_EM_PER_CHAR },
+    ): Float {
         val words = label.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
         var size = windowH / maxLines
         if (words.isEmpty()) return size
         while (size > 4f) {
-            val maxChars = (windowW / (size * CONDENSED_EM_PER_CHAR)).toInt()
-            val lines = wrapLines(words, maxChars)
+            val lines = wrapLines(words) { textWidth(it, size) <= windowW }
             if (lines != null && lines <= maxLines && lines * size * TALL_LINE_HEIGHT <= windowH) return size
             size *= 0.96f
         }
         return size
     }
 
-    /** How many lines [words] take wrapped at [maxChars] characters, or null if a word doesn't fit. */
-    private fun wrapLines(words: List<String>, maxChars: Int): Int? {
+    /** How many lines [words] take wrapped greedily at spaces, or null if a word alone doesn't [fits] a line. */
+    private fun wrapLines(words: List<String>, fits: (String) -> Boolean): Int? {
         var lines = 1
-        var used = 0
+        var line = ""
         for (w in words) {
-            if (w.length > maxChars) return null
-            used = when {
-                used == 0 -> w.length
-                used + 1 + w.length <= maxChars -> used + 1 + w.length
-                else -> { lines++; w.length }
+            if (!fits(w)) return null
+            line = when {
+                line.isEmpty() -> w
+                fits("$line $w") -> "$line $w"
+                else -> { lines++; w }
             }
         }
         return lines
@@ -218,12 +241,16 @@ fun ChannelKey(
     big: Boolean = false,
     /** The full-screen mode: the name wrapped and as large as it fits, never scrolling. */
     full: Boolean = false,
-    /** ...and in portrait, on the upright key. */
+    /** ...and in portrait, on the upright key (in landscape it uses the broad key). */
     tall: Boolean = false,
 ) {
     RadioKey(
         label = label,
-        art = if (tall) ChannelKeyArt.TALL else ChannelKeyArt.WIDE,
+        art = when {
+            tall -> ChannelKeyArt.TALL
+            full -> ChannelKeyArt.BROAD
+            else -> ChannelKeyArt.WIDE
+        },
         bigScrollingLabel = big && !full,
         fitLabelLines = when { !full -> 0; tall -> 3; else -> 2 },
         active = active,
@@ -427,12 +454,18 @@ private fun RadioKey(
                         // Full-screen mode: the name as large as fits the window, wrapped at spaces
                         // onto up to fitLabelLines lines, never scrolling.
                         val padDp = 8f
-                        val fontDp = ChannelKeyArt.fitLabelFontDp(
-                            label.uppercase(), art.label.w * scale - 2 * padDp, art.label.h * scale, fitLabelLines,
-                        )
+                        val measurer = rememberTextMeasurer()
+                        val text = label.uppercase()
+                        val fontDp = remember(text, art, scale, fitLabelLines, density) {
+                            ChannelKeyArt.fitLabelFontDp(text, art.label.w * scale - 2 * padDp, art.label.h * scale, fitLabelLines) { line, dp ->
+                                val sp = with(density) { dp.dp.toSp() }
+                                val style = TextStyle(fontFamily = Condensed, fontSize = sp, letterSpacing = sp * 0.04f)
+                                with(density) { measurer.measure(line, style, softWrap = false, maxLines = 1).size.width.toDp().value }
+                            }
+                        }
                         val fontSize = with(density) { fontDp.dp.toSp() }
                         Text(
-                            text = label.uppercase(),
+                            text = text,
                             color = labelColor,
                             fontFamily = Condensed,
                             fontSize = fontSize,
@@ -444,8 +477,14 @@ private fun RadioKey(
                             style = TextStyle(
                                 platformStyle = PlatformTextStyle(includeFontPadding = false),
                                 shadow = if (lit) Shadow(Color(0xFFFFA632).copy(alpha = 0.8f * lamp), Offset.Zero, 24f) else null,
+                                // Greedy wrapping, as fitLabelFontDp assumes.
+                                lineBreak = LineBreak.Simple,
+                                // Lines exactly lineHeight apart, without the font's extra leading above
+                                // the first and below the last...
+                                lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
                             ),
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = padDp.dp),
+                            // ...and never clipped to the window's height, which would drop the last line.
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = padDp.dp).wrapContentHeight(unbounded = true),
                         )
                     } else if (bigScrollingLabel) {
                         // One-big-button mode: the name as large as the window comfortably allows, on one line;

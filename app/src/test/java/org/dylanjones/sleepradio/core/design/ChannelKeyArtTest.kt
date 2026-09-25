@@ -60,11 +60,26 @@ class ChannelKeyArtTest {
         assertTrue("the name window is most of the key", tall.label.h > tall.height * 0.4f)
     }
 
+    // ---- the broad key (full-screen channel button, landscape) ----
+
+    @Test fun `broad key windows sit inside the sprite, latched too, left to right, with a bigger name window`() {
+        val broad = ChannelKeyArt.BROAD
+        for (r in listOf(broad.number, broad.label, broad.lamp)) {
+            assertTrue("$r", r.x >= 0f && r.y >= 0f && r.right <= broad.width && r.bottom <= broad.height)
+            assertTrue("$r latched", r.bottom + ChannelKeyArt.TRAVEL + ChannelKeyArt.PRESS_EXTRA <= broad.height)
+        }
+        assertTrue(broad.number.right < broad.label.x)
+        assertTrue(broad.label.right < broad.lamp.x)
+        // Same height as the wide key, so at the same size the name window is simply bigger.
+        assertEquals(ChannelKeyArt.HEIGHT, broad.height, 0f)
+        assertTrue(broad.label.w > ChannelKeyArt.LABEL.w * 1.4f && broad.label.h > ChannelKeyArt.LABEL.h * 1.2f)
+    }
+
     @Test fun `the hand-copied geometry matches what make_keys wrote`() {
         fun regions(name: String): String = File("../tools/keyart/$name").readText().replace(Regex("\\s"), "")
         fun num(json: String, block: String, key: String): Float =
             Regex("\"$block\":\\{[^}]*\"$key\":(-?[0-9.]+)").find(json)!!.groupValues[1].toFloat()
-        for ((json, art) in listOf(regions("regions.json") to ChannelKeyArt.WIDE, regions("tall_regions.json") to tall)) {
+        for ((json, art) in listOf(regions("regions.json") to ChannelKeyArt.WIDE, regions("tall_regions.json") to tall, regions("broad_regions.json") to ChannelKeyArt.BROAD)) {
             val canvas = Regex("\"canvas\":\\[([0-9.]+),([0-9.]+)]").find(json)!!.groupValues
             assertEquals(canvas[1].toFloat(), art.width, 0f)
             assertEquals(canvas[2].toFloat(), art.height, 0f)

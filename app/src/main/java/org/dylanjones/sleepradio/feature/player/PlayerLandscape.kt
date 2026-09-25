@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.lerp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import org.dylanjones.sleepradio.core.audio.VuLevels
+import org.dylanjones.sleepradio.core.data.ChannelButtonMode
+import org.dylanjones.sleepradio.core.design.LocalChannelButtonMode
 import org.dylanjones.sleepradio.core.design.RotaryKnob
 import org.dylanjones.sleepradio.core.design.RoundGlyph
 import org.dylanjones.sleepradio.core.design.RoundKey
@@ -40,7 +42,8 @@ private val MarkerRowHeight = 16.dp
  *  - a brass instrument strip across the top ([LandscapeTopPanel]);
  *  - in the middle the channel block (2 x 2 keys, or one big key, same outline either way) with
  *    SLEEP and its VU meter on the left and NOISE and its VU meter on the right;
- *  - the transport along the bottom: VOL · PREVIOUS · PLAY · NEXT · BAL.
+ *  - the transport along the bottom: VOL · PREVIOUS · PLAY · NEXT · BAL (just VOL · BAL in the
+ *    one-big-button mode).
  *
  * Height is what is scarce (a 360 dp phone loses more of it to the system bars), so everything is
  * sized from the height that is actually available.
@@ -97,35 +100,39 @@ internal fun LandscapePlayer(
             val small = lerp(40.dp, 48.dp, t)
             val big = lerp(50.dp, 60.dp, t)
             val knob = lerp(38.dp, 48.dp, t)
+            // The one-big-button mode keeps just VOL and BAL (see PlayerScreen); the row keeps its height.
+            val transport = LocalChannelButtonMode.current == ChannelButtonMode.GRID
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RotaryKnob("VOL", state.volume, actions.onVolumeChange, size = knob)
-                RoundKey(
-                    glyph = RoundGlyph.PREVIOUS,
-                    size = small,
-                    lit = false,
-                    contentDescription = if (skipTransport) "Back one minute" else "Previous",
-                    onClick = actions.onPrevious,
-                    enabled = skipTransport || pb.hasPrevious,
-                )
-                RoundKey(
-                    glyph = if (pb.isPlaying) RoundGlyph.PAUSE else RoundGlyph.PLAY,
-                    size = big,
-                    lit = pb.isPlaying,
-                    contentDescription = if (pb.isPlaying) "Pause" else "Play",
-                    onClick = actions.onPlayPause,
-                )
-                RoundKey(
-                    glyph = RoundGlyph.NEXT,
-                    size = small,
-                    lit = false,
-                    contentDescription = if (skipTransport) "Forward one minute" else "Next",
-                    onClick = actions.onNext,
-                    enabled = skipTransport || pb.hasNext,
-                )
+                if (transport) {
+                    RoundKey(
+                        glyph = RoundGlyph.PREVIOUS,
+                        size = small,
+                        lit = false,
+                        contentDescription = if (skipTransport) "Back one minute" else "Previous",
+                        onClick = actions.onPrevious,
+                        enabled = skipTransport || pb.hasPrevious,
+                    )
+                    RoundKey(
+                        glyph = if (pb.isPlaying) RoundGlyph.PAUSE else RoundGlyph.PLAY,
+                        size = big,
+                        lit = pb.isPlaying,
+                        contentDescription = if (pb.isPlaying) "Pause" else "Play",
+                        onClick = actions.onPlayPause,
+                    )
+                    RoundKey(
+                        glyph = RoundGlyph.NEXT,
+                        size = small,
+                        lit = false,
+                        contentDescription = if (skipTransport) "Forward one minute" else "Next",
+                        onClick = actions.onNext,
+                        enabled = skipTransport || pb.hasNext,
+                    )
+                }
                 RotaryKnob("BAL", state.balance, actions.onBalanceChange, size = knob)
             }
         }

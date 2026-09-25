@@ -109,6 +109,21 @@ def use_tall_geometry():
     WIN = dict(x=FX + 22, y=win_y, w=FW - 44, h=win_bottom - win_y)
 
 
+def use_broad_geometry():
+    """Switch to the BROAD key used by the full-screen channel button in landscape: the wide key
+    stretched to a phone lying on its side (2.9 : 1), with the name window taking most of the face
+    (taller and much wider than the normal key's) between a slimmer number plate and the lamp."""
+    global W, H, BW, BH, R, FX, FY, FW, FH, PLATE, LAMP, WIN
+    W, H = 680, 236
+    BW, BH = W - 2 * PAD_L, 198
+    R = 34
+    FX, FY, FW, FH = X0 + T, Y0 + T, BW - 2 * T, BH - 2 * T
+    PLATE = dict(x=FX + 14, y=FY + 24, w=112, h=FH - 48)
+    LAMP = dict(cx=FX + FW - 14 - LAMP_D // 2, cy=FY + FH // 2, d=LAMP_D)
+    win_x = PLATE['x'] + PLATE['w'] + 14
+    WIN = dict(x=win_x, y=FY + 14, w=(LAMP['cx'] - LAMP_D // 2 - 14) - win_x, h=FH - 28)
+
+
 def rr(x, y, w, h, r, **a):
     attrs = " ".join(f'{k.replace("_", "-")}="{v}"' for k, v in a.items())
     return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{r}" {attrs}/>'
@@ -194,9 +209,11 @@ def sprite(state):
 
 if __name__ == "__main__":
     out = sys.argv[1] if len(sys.argv) > 1 else "."
-    for prefix in ("", "tall_"):
-        if prefix:
+    for prefix in ("", "tall_", "broad_"):
+        if prefix == "tall_":
             use_tall_geometry()
+        elif prefix == "broad_":
+            use_broad_geometry()
         for s in ("out", "dim", "lit"):
             open(os.path.join(out, f"{prefix}key_{s}.svg"), "w").write(sprite(s))
         regions = dict(canvas=[W, H], plate=PLATE, lamp=LAMP, window=WIN, travel=TRAVEL,

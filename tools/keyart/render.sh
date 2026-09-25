@@ -24,6 +24,15 @@ for s in out dim lit; do
   python3 -c "from PIL import Image; Image.open('tall_key_$s.png').convert('RGBA').save('../../app/src/main/res/drawable-nodpi/channel_key_tall_$s.webp','WEBP',lossless=True,quality=100,method=6)"
 done
 
+# The BROAD key (make_keys.py's use_broad_geometry): the full-screen channel button in landscape, where
+# it spans most of the screen's width, so render it at 3x (2040 x 708 px). ChannelKeyArt.BROAD matches broad_regions.json.
+for s in out dim lit; do
+  google-chrome-stable --headless=new --no-sandbox --disable-gpu --hide-scrollbars \
+    --force-device-scale-factor=3 --default-background-color=00000000 --window-size=680,236 \
+    --screenshot="broad_key_$s.png" "file://$PWD/broad_key_$s.svg"
+  python3 -c "from PIL import Image; Image.open('broad_key_$s.png').convert('RGBA').save('../../app/src/main/res/drawable-nodpi/channel_key_broad_$s.webp','WEBP',lossless=True,quality=100,method=6)"
+done
+
 # ---- round pushbuttons (PLAY, previous, next) ----
 python3 make_round.py .
 for s in out in lit; do
