@@ -47,6 +47,51 @@ class BroadcastSelectorTest {
     }
 
     @Test
+    fun `an artist is not heard again within the gap`() {
+        val sel = BroadcastSelector(pool(48, artists = 12), rng = Random(7))
+        val picks = List(300) { sel.next()!!.artist }
+        picks.windowed(6).forEach { assertEquals(6, it.toSet().size) }
+    }
+
+    @Test
+    fun `names differing only in case or The are one artist`() {
+        val pool = List(5) { BroadcastTrack("a$it", "A$it", "The Beatles", "x") } +
+            List(5) { BroadcastTrack("b$it", "B$it", "beatles", "x") } +
+            List(10) { BroadcastTrack("c$it", "C$it", "Other $it", "x") }
+        val sel = BroadcastSelector(pool, rng = Random(1))
+        val picks = List(300) { sel.next()!!.artist.lowercase().removePrefix("the ") }
+        picks.zipWithNext().forEach { (a, b) -> assertNotEquals(a, b) }
+    }
+
+    @Test
+    fun `all of an artists tracks play before any plays again`() {
+        val sel = BroadcastSelector(pool(70, artists = 7), rng = Random(3))
+        val plays = HashMap<String, MutableList<String>>()
+        repeat(70 * 3) { sel.next()!!.let { plays.getOrPut(it.artist) { mutableListOf() }.add(it.uri) } }
+        plays.values.forEach { p ->
+            p.chunked(10).filter { it.size == 10 }.forEach { assertEquals(10, it.toSet().size) }
+        }
+    }
+
+    @Test
+    fun `a big catalogue is heard more but does not take over`() {
+        val big = List(144) { BroadcastTrack("big$it", "Big $it", "Big Act", "x") }
+        val small = (0 until 8).flatMap { j -> List(4) { BroadcastTrack("s${j}_$it", "S", "Small $j", "x") } }
+        val sel = BroadcastSelector(big + small, rng = Random(11))
+        val picks = List(4000) { sel.next()!!.artist }
+        val share = picks.count { it == "Big Act" } / picks.size.toDouble()
+        assertTrue("big share $share", share > (1 - share) / 8 && share < 0.3)   // by track count it would be 0.82
+        picks.zipWithNext().forEach { (a, b) -> assertNotEquals(a, b) }
+        (0 until 8).forEach { j -> assertTrue(picks.count { it == "Small $j" } > 100) }
+    }
+
+    @Test
+    fun `each start is a fresh shuffle`() {
+        val firsts = (1..30).map { BroadcastSelector(pool(100, artists = 5), rng = Random(it)).next()!!.uri }.toSet()
+        assertTrue(firsts.size > 10)
+    }
+
+    @Test
     fun `same seed is deterministic`() {
         val a = BroadcastSelector(pool(12), rng = Random(42))
         val b = BroadcastSelector(pool(12), rng = Random(42))

@@ -27,7 +27,10 @@ current source fade out rather than disappear, so nothing shifts when you switch
 
 **Broadcast Radio — the auto‑DJ**
 - Assign a preset to **📻 SleepRadio broadcast**: it self‑selects tracks from your
-  music folder (recency‑ and artist‑spaced shuffle) and plays them back to back
+  music folder and plays them back to back. The shuffle picks the artist first
+  (weighted by the square root of their track count, so a big catalogue can't take
+  over, and never one of the last 5 artists), then a song from that artist's own
+  shuffled bag; every start is a fresh shuffle
 - An **offline text‑to‑speech presenter** (Piper / sherpa‑onnx, fully on‑device)
   reads a short link in the gap before some tracks — a time‑of‑day welcome, then
   "that was … / coming up …", the occasional station ident, and a spoken time
